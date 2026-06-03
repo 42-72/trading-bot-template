@@ -1,11 +1,11 @@
 {
-    "brand_name": "YourBrand",
-    "brand_domain": "yourbrand.com",
+    "brand_name": "CharlesTraders",
+    "brand_domain": "charlestraders.com",
     "brand_hostname": {
-        "staging": "staging.yourbrand.com/dashboard",
-        "production": "yourbrand.com/dashboard"
+        "staging": "staging.charlestraders.com/dashboard",
+        "production": "charlestraders.com/dashboard"
     },
-    "domain_name": "YourBrand.com",
+    "domain_name": "CharlesTraders.com",
     "colors": {
         "primary": "#3b82f6",
         "secondary": "#64748b",
@@ -73,10 +73,10 @@
         },
         "hostname": {
             "production": {
-                "com": "bot.yourbrand.com"
+                "com": "charlestraders.com"
             },
             "staging": {
-                "com": "staging-bot.yourbrand.com"
+                "com": "staging.charlestraders.com"
             }
         },
         "auth2_url": {
