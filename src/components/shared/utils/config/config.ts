@@ -8,7 +8,8 @@ import brandConfig from '../../../../../brand.config.json';
 
 // Production app domains
 export const PRODUCTION_DOMAINS = {
-    COM: brandConfig.platform.hostname.production.com,
+    COM:      brandConfig.platform.hostname.production.com,
+    PAGES_DEV: brandConfig.platform.hostname.production.pages_dev,
 } as const;
 
 // Staging app domains

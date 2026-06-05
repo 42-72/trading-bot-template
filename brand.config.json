@@ -73,7 +73,8 @@
         },
         "hostname": {
             "production": {
-                "com": "charlestraders.com"
+                "com": "charlestraders.com",
+                "pages_dev": "charlestraders-bot.pages.dev"
             },
             "staging": {
                 "com": "staging.charlestraders.com"
