@@ -58,14 +58,14 @@
         "css_variable_prefix": "--brand"
     },
     "platform": {
-        "name": "Trading Bot",
+        "name": "CharlesTraders",
         "logo": {
             "type": "component",
             "component_name": "BrandLogo",
-            "alt_text": "Trading Bot",
+            "alt_text": "CharlesTraders",
             "link_url": "/",
             "show_text": false,
-            "text": "Trading Bot"
+            "text": "CharlesTraders"
         },
         "footer": {
             "enable_language_settings": false,
