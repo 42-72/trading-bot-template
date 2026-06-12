@@ -134,24 +134,12 @@ const AppHeader = observer(() => {
         (position: 'left' | 'right' = 'right') => {
             // Show account switcher and logout when user is fully authenticated
             if (activeLoginid && !is_account_regenerating) {
-                if (position === 'left' && !isDesktop) {
-                    // For mobile left section - only account switcher
+                if (position === 'right') {
                     return (
                         <div className='auth-actions'>
                             <div className='account-info'>
                                 <AccountSwitcher activeAccount={activeAccount} />
                             </div>
-                        </div>
-                    );
-                } else if (position === 'right') {
-                    // For right section - transfer button (and account switcher on desktop)
-                    return (
-                        <div className='auth-actions'>
-                            {isDesktop && (
-                                <div className='account-info'>
-                                    <AccountSwitcher activeAccount={activeAccount} />
-                                </div>
-                            )}
                             <Button
                                 primary
                                 disabled={client?.is_logging_out || !authData?.currency}
@@ -209,7 +197,6 @@ const AppHeader = observer(() => {
         },
         [
             isAuthorizing,
-            isDesktop,
             activeLoginid,
             client,
             activeAccount,
