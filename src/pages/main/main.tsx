@@ -44,11 +44,14 @@ import { useDevice } from '@deriv-com/ui';
 import RunPanel from '../../components/run-panel';
 import ChartModal from '../chart/chart-modal';
 import ComingSoon from '../coming-soon';
+import DTraderRedirect from '../dtrader-redirect';
 import Dashboard from '../dashboard';
 import RunStrategy from '../dashboard/run-strategy';
 import './main.scss';
 
 const ChartWrapper = lazy(() => import('../chart/chart-wrapper'));
+
+const DTRADER_URL = 'https://charlestraders.com';
 
 const AppWrapper = observer(() => {
     const { connectionStatus } = useApiBase();
@@ -335,6 +338,9 @@ const AppWrapper = observer(() => {
 
     const handleTabChange = React.useCallback(
         (tab_index: number) => {
+            if (tab_index === DBOT_TABS.DTRADER) {
+                window.open(DTRADER_URL, '_blank', 'noopener');
+            }
             setActiveTab(tab_index);
             const el_id = TAB_IDS[tab_index];
             if (el_id) {
@@ -440,7 +446,7 @@ const AppWrapper = observer(() => {
                                 }
                                 id='id-dtrader'
                             >
-                                <ComingSoon tab_name='DTrader' />
+                                <DTraderRedirect />
                             </div>
                             <div
                                 label={
