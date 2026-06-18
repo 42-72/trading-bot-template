@@ -51,7 +51,7 @@ import './main.scss';
 
 const ChartWrapper = lazy(() => import('../chart/chart-wrapper'));
 
-const DTRADER_URL = 'https://charlestraders.com';
+const DTRADER_URL = 'https://dtrader.charlestraders.com';
 
 const AppWrapper = observer(() => {
     const { connectionStatus } = useApiBase();
