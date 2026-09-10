@@ -278,6 +278,32 @@
 
 }
 
+.brand-wordmark {
+    display: inline-flex;
+    align-items: baseline;
+    font-size: 1.8rem; /* root is 62.5%, so this is 18px — same as the old SVG */
+    font-weight: 900; /* was 700 */
+    letter-spacing: -1px;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.brand-wordmark__charles {
+    color: #22c55e;
+    text-shadow: 0 0 20px #22c55e80;
+}
+
+.brand-wordmark__traders {
+    color: #ef4444;
+    text-shadow: 0 0 20px #ef444480;
+}
+
+@media (max-width: 480px) {
+    .brand-wordmark {
+        font-size: 1.5rem;
+    }
+}
+
 .deriv-accordion--underline {
     border-bottom: none;
 }
