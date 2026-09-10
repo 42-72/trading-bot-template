@@ -15,3 +15,7 @@ performVersionCheck();
 // Removed AnalyticsInitializer() call - analytics dependency removed
 
 ReactDOM.createRoot(document.getElementById('root')!).render(<AuthWrapper />);
+
+const splash = document.getElementById('mw-boot-splash');
+document.documentElement.classList.remove('mw-boot');
+splash?.remove();

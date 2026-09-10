@@ -35,9 +35,104 @@
                 font-size: 62.5%;
             }
         </style>
+        <style>
+            html.mw-boot,
+            html.mw-boot body {
+                background: #0e0e0e !important;
+                overflow: hidden;
+            }
+            html.mw-boot #root,
+            html.mw-boot #modal_root,
+            html.mw-boot #popup_root {
+                visibility: hidden !important;
+                opacity: 0 !important;
+                pointer-events: none !important;
+            }
+
+            #mw-boot-splash {
+                position: fixed;
+                inset: 0;
+                z-index: 2147483646;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: 1.6rem;
+                background: #0e0e0e;
+                font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            }
+
+            #mw-boot-splash .wm {
+                font-size: 3.2rem;
+                font-weight: 900;
+                letter-spacing: -1px;
+                line-height: 1;
+                white-space: nowrap;
+            }
+            #mw-boot-splash .wm-charles {
+                color: #22c55e;
+                text-shadow: 0 0 20px #22c55e80;
+            }
+            #mw-boot-splash .wm-traders {
+                color: #ef4444;
+                text-shadow: 0 0 20px #ef444480;
+            }
+
+            #mw-boot-splash .tag {
+                font-size: 1.2rem;
+                letter-spacing: 0.14em;
+                text-transform: uppercase;
+                color: #94a3b8;
+            }
+
+            #mw-boot-splash .bar {
+                width: 16rem;
+                height: 3px;
+                border-radius: 999px;
+                background: rgba(255, 255, 255, 0.08);
+                overflow: hidden;
+            }
+            #mw-boot-splash .bar::after {
+                content: '';
+                display: block;
+                width: 40%;
+                height: 100%;
+                border-radius: inherit;
+                background: linear-gradient(90deg, #22c55e, #22d3ee);
+                animation: mw-boot-progress 1.2s ease-in-out infinite;
+            }
+
+            @keyframes mw-boot-progress {
+                0% {
+                    transform: translateX(-120%);
+                }
+                100% {
+                    transform: translateX(320%);
+                }
+            }
+            @media (prefers-reduced-motion: reduce) {
+                #mw-boot-splash .bar::after {
+                    animation: none;
+                    width: 100%;
+                }
+            }
+        </style>
+        <script>
+            document.documentElement.classList.add('mw-boot');
+            setTimeout(function () {
+                document.documentElement.classList.remove('mw-boot');
+                var s = document.getElementById('mw-boot-splash');
+                if (s) s.remove();
+            }, 8000);
+        </script>
     </head>
 
     <body class="body theme theme--dark">
+        <div id="mw-boot-splash" role="status" aria-live="polite" aria-label="Loading CharlesTraders">
+            <div class="wm"><span class="wm-charles">Charles</span><span class="wm-traders">Traders</span></div>
+            <div class="tag">Automate your trades</div>
+            <div class="bar" aria-hidden="true"></div>
+        </div>
         <!-- Google Tag Manager (noscript) -->
         <noscript
             ><iframe
