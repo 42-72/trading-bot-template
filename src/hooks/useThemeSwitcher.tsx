@@ -14,12 +14,12 @@ const useThemeSwitcher = () => {
         const body = document.querySelector('body');
         if (!body) return;
         if (body.classList.contains('theme--dark')) {
-            localStorage.setItem('theme', 'light');
+            localStorage.setItem('ct-theme', 'light');
             body.classList.remove('theme--dark');
             body.classList.add('theme--light');
             setDarkMode(false);
         } else {
-            localStorage.setItem('theme', 'dark');
+            localStorage.setItem('ct-theme', 'dark');
             body.classList.remove('theme--light');
             body.classList.add('theme--dark');
             setDarkMode(true);
