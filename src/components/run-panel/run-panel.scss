@@ -197,7 +197,8 @@
 
         flex-direction: column;
         position: fixed;
-        bottom: 0;
+        bottom: 0; /* fallback where dvh is unsupported - the calc below is dropped as invalid */
+        bottom: calc(100vh - 100dvh); /* closes the large/small mobile-viewport gap; 0 on desktop */
         width: 100%;
         background-color: var(--general-main-1);
         border-top: solid 2px var(--general-section-1);
