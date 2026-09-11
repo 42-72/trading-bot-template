@@ -88,6 +88,13 @@ interface PickerBuilder {
     build: () => { setVisible: (visible: boolean) => void };
 }
 
+// Bot library strategy files (src/assets/bots/*.xml) are bundled as raw text via
+// the `.xml` raw-loader rule in rsbuild.config.ts, not fetched at runtime.
+declare module '*.xml' {
+    const content: string;
+    export default content;
+}
+
 declare global {
     interface Window {
         __webpack_public_path__: string;

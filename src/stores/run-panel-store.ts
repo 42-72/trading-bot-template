@@ -69,6 +69,7 @@ export default class RunPanelStore {
             showRealAccountDialog: action,
             showClearStatDialog: action,
             showIncompatibleStrategyDialog: action,
+            showReplaceStrategyDialog: action,
             showContractUpdateErrorDialog: action,
             registerBotListeners: action,
             registerReactions: action,
@@ -423,6 +424,25 @@ export default class RunPanelStore {
         this.dialog_options = {
             title: localize('Import error'),
             message: localize('This strategy is currently not compatible with Deriv Bot.'),
+        };
+        this.is_dialog_open = true;
+    };
+
+    // Warn before a bot-library load silently discards whatever is already in the
+    // workspace. on_confirm runs the actual load; declining just closes the dialog.
+    showReplaceStrategyDialog = (on_confirm: () => void) => {
+        this.onOkButtonClick = () => {
+            this.onCloseDialog();
+            on_confirm();
+        };
+        this.onCancelButtonClick = this.onCloseDialog;
+        this.dialog_options = {
+            title: localize('Replace current strategy?'),
+            message: localize(
+                'Loading this bot will replace the strategy currently in Bot Builder. Any unsaved changes will be lost.'
+            ),
+            ok_button_text: localize('Replace'),
+            cancel_button_text: localize('Cancel'),
         };
         this.is_dialog_open = true;
     };

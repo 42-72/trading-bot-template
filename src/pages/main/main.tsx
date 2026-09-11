@@ -47,6 +47,7 @@ import ComingSoon from '../coming-soon';
 import DTraderRedirect from '../dtrader-redirect';
 import Dashboard from '../dashboard';
 import RunStrategy from '../dashboard/run-strategy';
+import Tbots from '../tbots';
 import './main.scss';
 
 const ChartWrapper = lazy(() => import('../chart/chart-wrapper'));
@@ -416,7 +417,7 @@ const AppWrapper = observer(() => {
                                 }
                                 id='id-tbots'
                             >
-                                <ComingSoon tab_name='Tbots' />
+                                <Tbots />
                             </div>
                             <div
                                 label={
