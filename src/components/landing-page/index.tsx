@@ -37,6 +37,24 @@ const FACTS = [
     'Works on mobile',
 ];
 
+// Synchronous check: does ANY token exist that could still resolve to a logged-in
+// session? If not, the visitor is definitively logged out right now — there is no
+// pending API call that will ever change that (see api-base.ts's
+// handleTokenExchangeIfNeeded, which only ever authorizes when an account id is
+// already present). Only when a token exists is waiting on isAuthorizing correct.
+const hasStoredAuthToken = () => {
+    try {
+        return Boolean(
+            localStorage.getItem('authToken') ||
+                localStorage.getItem('active_loginid') ||
+                sessionStorage.getItem('auth_info')
+        );
+    } catch {
+        // Storage inaccessible (private browsing, etc.) — nothing to validate either way.
+        return false;
+    }
+};
+
 const LandingPage = observer(() => {
     const { isAuthorizing, activeLoginid } = useApiBase();
     const { handleLogin, handleSignup } = useAuthActions();
@@ -78,9 +96,14 @@ const LandingPage = observer(() => {
         };
     }, [pairIndex, prefersReducedMotion]);
 
-    const isLoggedOut = !isAuthorizing && !activeLoginid;
+    // "Still checking" (a token exists, not yet validated) and "checked, logged out"
+    // (no token, or validation resolved to no active login) are different states —
+    // only the first is a reason to wait.
+    const hasStoredToken = hasStoredAuthToken();
+    const isStillChecking = hasStoredToken && isAuthorizing;
+    const isConfirmedLoggedIn = hasStoredToken && !isAuthorizing && Boolean(activeLoginid);
 
-    if (isDismissed || !isLoggedOut) return null;
+    if (isDismissed || isStillChecking || isConfirmedLoggedIn) return null;
 
     const activePair = HEADLINE_PAIRS[pairIndex];
 
