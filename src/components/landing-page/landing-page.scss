@@ -23,7 +23,7 @@
         // Centre is weakened (not fully opaque) so rain reads through the middle; the
         // mid stop sits further out than the old wash so the fade band is tighter around
         // the text block instead of a broad gradual wash.
-        background: radial-gradient(ellipse at center, rgba(14, 14, 14, 0.86) 0%, #0e0e0ecc 60%, transparent 75%);
+        background: radial-gradient(ellipse at center, rgba(14, 14, 14, 0.86) 0%, #0e0e0ecc 60%, transparent 85%);
     }
 
     &__sr-title {
@@ -189,10 +189,14 @@
         // the risk line below.
         &-item--caution {
             padding-inline-start: 0;
+        }
 
-            &::before {
-                content: none;
-            }
+        // Scoped through the parent, same as the base `li::before` rule above, so this
+        // out-specifies it instead of losing to it — a bare `.landing-page__facts-item
+        // --caution::before` has lower specificity than `.landing-page__facts li::before`
+        // and was silently overridden.
+        .landing-page__facts-item--caution::before {
+            content: none;
         }
     }
 
@@ -209,9 +213,13 @@
     }
 
     &__dismiss {
-        padding: 0;
-        background: none;
+        padding: 0.3rem 0.8rem;
+        // Same backdrop approach as the badge: at narrow widths this link falls past
+        // the vignette's transparent stop into clear rain (measured 2.52:1 at 381px,
+        // vs. 5.05:1 at 462px) — it's the only route into the app without signing up.
+        background: rgba(14, 14, 14, 0.92);
         border: 0;
+        border-radius: 999px;
         color: #7b8794;
         font-size: 1.3rem;
         text-decoration: underline;
