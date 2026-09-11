@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import clsx from 'clsx';
 import { observer } from 'mobx-react-lite';
-import { generateOAuthURL } from '@/components/shared';
 import Button from '@/components/shared_ui/button';
 import useActiveAccount from '@/hooks/api/account/useActiveAccount';
 import { useApiBase } from '@/hooks/useApiBase';
+import { useAuthActions } from '@/hooks/useAuthActions';
 import { useLogout } from '@/hooks/useLogout';
 import { useStore } from '@/hooks/useStore';
 import { navigateToTransfer } from '@/utils/transfer-utils';
@@ -38,6 +38,7 @@ const AppHeader = observer(() => {
     });
 
     const handleLogout = useLogout();
+    const { handleLogin, handleSignup } = useAuthActions();
 
     // Clear OAuth-pending flag once the account is set (auth succeeded)
     // or after a generous timeout in case something goes wrong.
@@ -82,44 +83,6 @@ const AppHeader = observer(() => {
 
         return () => clearTimeout(timer);
     }, [isAuthorizing, activeLoginid, setIsAuthorizing, authTimeout, isOAuthPending]);
-
-    const handleSignup = useCallback(async () => {
-        try {
-            setIsAuthorizing(true);
-            const oauthUrl = await generateOAuthURL('registration');
-            if (oauthUrl) {
-                window.location.replace(oauthUrl);
-            } else {
-                console.error('Failed to generate OAuth URL for signup');
-                setIsAuthorizing(false);
-            }
-        } catch (error) {
-            console.error('Signup redirection failed:', error);
-            setIsAuthorizing(false);
-        }
-    }, [setIsAuthorizing]);
-
-    const handleLogin = useCallback(async () => {
-        try {
-            // Set authorizing state immediately when login is clicked
-            setIsAuthorizing(true);
-
-            // Generate OAuth URL with CSRF token and PKCE parameters
-            const oauthUrl = await generateOAuthURL();
-
-            if (oauthUrl) {
-                // Redirect to OAuth URL
-                window.location.replace(oauthUrl);
-            } else {
-                console.error('Failed to generate OAuth URL');
-                setIsAuthorizing(false);
-            }
-        } catch (error) {
-            console.error('Login redirection failed:', error);
-            // Reset authorizing state if redirection fails
-            setIsAuthorizing(false);
-        }
-    }, [setIsAuthorizing]);
 
     const handleTransfer = useCallback(() => {
         const transferCurrency = authData?.currency;

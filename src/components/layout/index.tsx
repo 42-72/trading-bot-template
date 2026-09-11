@@ -5,6 +5,7 @@ import { Outlet } from 'react-router-dom';
 import { api_base } from '@/external/bot-skeleton';
 import { useStore } from '@/hooks/useStore';
 import { useDevice } from '@deriv-com/ui';
+import LandingPage from '../landing-page';
 import { crypto_currencies_display_order, fiat_currencies_display_order } from '../shared';
 import Footer from './footer';
 import AppHeader from './header';
@@ -148,6 +149,7 @@ const Layout = observer(() => {
                 'quick-strategy-active': is_quick_strategy_active && !isDesktop,
             })}
         >
+            {!isCallbackPage && <LandingPage />}
             {!isCallbackPage && <AppHeader isAuthenticating={isAuthenticating || !isInitialAuthCheckComplete} />}
             <Body>
                 <Outlet />
