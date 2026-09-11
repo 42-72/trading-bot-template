@@ -7,7 +7,7 @@
 
     position: relative;
     height: 100%; /* fills .main-body's flex space - no vh arithmetic to drift out of sync */
-    overflow: hidden;
+    overflow: hidden auto; /* horizontal stays clipped; vertical scrolls so Run stays reachable if the header ever grows past 5.6rem */
 
     .toolbar__section {
         justify-content: end;

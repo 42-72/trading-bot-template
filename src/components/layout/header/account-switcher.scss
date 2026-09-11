@@ -162,6 +162,9 @@
         margin: 0;
         font-size: 1.4rem;
         color: var(--status-success);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
 
         &--no-currency {
             @include typeface(--small-left-normal-grey);
