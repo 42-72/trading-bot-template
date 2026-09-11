@@ -31,11 +31,10 @@ const HEADLINE_PAIRS = [
 ];
 
 const FACTS = [
-    'Powered by Deriv',
-    'Free demo account with virtual funds',
-    'No-code bot builder',
-    'Import your own strategies',
-    'Works on mobile',
+    { text: 'Powered by Deriv' },
+    { text: 'Free demo account with virtual funds' },
+    { text: 'Import your own strategies' },
+    { text: 'Trade at your own risk', isCaution: true },
 ];
 
 // Synchronous check: does ANY token exist that could still resolve to a logged-in
@@ -162,7 +161,12 @@ const LandingPage = observer(() => {
 
                 <ul className='landing-page__facts'>
                     {FACTS.map(fact => (
-                        <li key={fact}>{fact}</li>
+                        <li
+                            key={fact.text}
+                            className={fact.isCaution ? 'landing-page__facts-item--caution' : undefined}
+                        >
+                            {fact.text}
+                        </li>
                     ))}
                 </ul>
 

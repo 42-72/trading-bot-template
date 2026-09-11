@@ -58,6 +58,11 @@
         padding: 0.6rem 1.4rem;
         border-radius: 999px;
         border: 1px solid #94a3b82e;
+        // Masks the rain behind the badge rather than brightening the text — measured
+        // worst case was 4.35:1 (below the floor) where the vignette is thinnest, near
+        // the top of the hero. With the rain masked, effective background is ~#0e0e0e,
+        // putting #7b8794 at ~5.3:1.
+        background: rgba(14, 14, 14, 0.92);
         color: #7b8794;
         font-size: 1.2rem;
         letter-spacing: 0.06em;
@@ -175,6 +180,18 @@
                 transform: translateY(-50%);
                 border-radius: 50%;
                 background: #22c55e;
+            }
+        }
+
+        // The caution item is not a capability claim — no green marker, so it doesn't
+        // read as though risk is being sold as a feature. Text stays the same colour
+        // as the rest of the row so it doesn't become a second warning competing with
+        // the risk line below.
+        &-item--caution {
+            padding-inline-start: 0;
+
+            &::before {
+                content: none;
             }
         }
     }
