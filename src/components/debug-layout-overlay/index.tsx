@@ -42,6 +42,9 @@ const buildReport = (): string => {
     } else {
         lines.push('visualViewport: unsupported');
     }
+    lines.push(
+        `--vv-bottom-gap=${getComputedStyle(document.documentElement).getPropertyValue('--vv-bottom-gap').trim() || '(unset)'}`
+    );
 
     lines.push('--- rects ---');
     lines.push(rectLine('.deriv-header', document.querySelector('.deriv-header')));
