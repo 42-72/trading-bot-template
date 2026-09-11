@@ -6,8 +6,8 @@
     --translate-panel-reset: 0px;
 
     position: relative;
-    height: 100%; /* fills .main-body's flex space - no vh arithmetic to drift out of sync */
-    overflow: hidden auto; /* horizontal stays clipped; vertical scrolls so Run stays reachable if the header ever grows past 5.6rem */
+    height: calc(100vh - var(--header-height, 5.6rem));
+    overflow: hidden;
 
     .toolbar__section {
         justify-content: end;

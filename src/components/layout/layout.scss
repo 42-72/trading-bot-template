@@ -1,14 +1,20 @@
 @use 'components/shared/styles/mixins' as *;
 
 .layout {
+    /* Declared once - .bot-dashboard's height: calc() reads this too, rather
+       than repeating the header height as a second magic number. The app shell
+       stays on the LARGE viewport (100vh) deliberately: .controls__section is
+       position: fixed, which also resolves against the large viewport, so this
+       keeps both in agreement instead of measuring two different viewports. */
+    --header-height: 5.6rem;
+
     display: flex;
     flex-direction: column;
-    height: 100vh; /* fallback for browsers without dvh */
-    height: 100dvh; /* wins where supported */
+    height: 100vh;
 
     .deriv-header {
         background: var(--general-main-1);
-        height: 5.6rem;
+        height: var(--header-height);
     }
 
     &.quick-strategy-active {

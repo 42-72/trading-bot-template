@@ -197,12 +197,13 @@
 
         flex-direction: column;
         position: fixed;
-        bottom: 0; /* fallback where dvh is unsupported - the calc below is dropped as invalid */
-        bottom: calc(100vh - 100dvh); /* closes the large/small mobile-viewport gap; 0 on desktop */
+        bottom: 0; /* fallback where env() is unsupported */
+        bottom: env(safe-area-inset-bottom, 0);
+        padding-bottom: env(safe-area-inset-bottom, 0);
         width: 100%;
         background-color: var(--general-main-1);
         border-top: solid 2px var(--general-section-1);
-        z-index: 8;
+        z-index: 20;
 
         /* Fix for iOS devices to respect safe area */
         @supports (-webkit-touch-callout: none) {
