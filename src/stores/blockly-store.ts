@@ -12,13 +12,13 @@ export default class BlocklyStore {
             is_loading: observable,
             active_tab: observable,
             _has_saved_bots: observable,
-            has_user_edited_workspace: observable,
+            pristine_workspace_xml: observable,
             has_active_bot: computed,
             has_saved_bots: computed,
             setLoading: action,
             setActiveTab: action,
             checkForSavedBots: action,
-            setHasUserEditedWorkspace: action,
+            setPristineWorkspaceXml: action,
         });
         this.root_store = root_store;
     }
@@ -26,12 +26,14 @@ export default class BlocklyStore {
     is_loading = false;
     active_tab = tabs_title.WORKSPACE;
 
-    // True once a genuine user edit (block create/delete/change/move, variable
-    // create/delete/rename) has happened since the workspace was last (re)loaded.
-    // Reset to false by app-store's onMount (default/recent-file load on first run)
-    // and by load() in scratch/utils (every subsequent explicit strategy load).
-    // UI-only events (selection, scroll, zoom, drag-in-progress) never set this.
-    has_user_edited_workspace = false;
+    // Snapshot of the workspace XML taken right after it was last (re)loaded - see
+    // DBot.initWorkspace() (default/recent-file load on first run) and load() in
+    // scratch/utils (every subsequent explicit strategy load), both of which write
+    // this at their end regardless of how the workspace got populated. isWorkspaceDirty
+    // compares the live workspace against this rather than inferring edits from
+    // Blockly change events, which fire for programmatic housekeeping (e.g. cleanUp's
+    // block repositioning) as well as real user edits and can't be reliably told apart.
+    pristine_workspace_xml = '';
 
     // Computed property to check if there's an active bot
     get has_active_bot(): boolean {
@@ -97,7 +99,26 @@ export default class BlocklyStore {
         this.is_loading = is_loading;
     };
 
-    setHasUserEditedWorkspace = (has_user_edited_workspace: boolean): void => {
-        this.has_user_edited_workspace = has_user_edited_workspace;
+    setPristineWorkspaceXml = (xml: string): void => {
+        this.pristine_workspace_xml = xml;
+    };
+
+    // Strips attributes Blockly regenerates on every serialization (block/variable
+    // ids, canvas position) and collapses whitespace, so only attributes that
+    // represent actual user intent - block type, field values, connections,
+    // collapsed/disabled state - are compared.
+    private normaliseXml = (xml: string): string =>
+        xml
+            .replace(/\s(?:id|x|y)="[^"]*"/g, '')
+            .replace(/>\s+</g, '><')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+    isWorkspaceDirty = (): boolean => {
+        const workspace = window.Blockly?.derivWorkspace;
+        if (!workspace) return false;
+
+        const current_xml = window.Blockly.Xml.domToText(window.Blockly.Xml.workspaceToDom(workspace));
+        return this.normaliseXml(current_xml) !== this.normaliseXml(this.pristine_workspace_xml);
     };
 }

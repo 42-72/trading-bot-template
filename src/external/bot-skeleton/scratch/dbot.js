@@ -199,6 +199,13 @@ class DBot {
                 this.workspace.cleanUp(0, is_mobile ? 60 : 56);
                 this.workspace.clearUndo();
 
+                // Snapshot after cleanUp/clearUndo so their block repositioning isn't
+                // mistaken for a user edit - see blockly-store.ts's isWorkspaceDirty.
+                const { blockly_store } = DBotStore.instance;
+                blockly_store.setPristineWorkspaceXml(
+                    window.Blockly.Xml.domToText(window.Blockly.Xml.workspaceToDom(this.workspace))
+                );
+
                 window.dispatchEvent(new Event('resize'));
                 window.addEventListener('dragover', DBot.handleDragOver);
                 window.addEventListener('drop', e => DBot.handleDropOver(e, handleFileChange));

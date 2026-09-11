@@ -223,8 +223,11 @@ export const load = async ({
                 workspace.clearUndo();
                 workspace.current_strategy_id = strategy_id || window.Blockly.utils.idGenerator.genUid();
                 await saveWorkspaceToRecent(xml, from);
-                // A freshly loaded strategy has no user edits yet.
-                blockly_store.setHasUserEditedWorkspace(false);
+                // Snapshot the freshly loaded strategy so isWorkspaceDirty compares
+                // against this rather than a stale or absent baseline.
+                blockly_store.setPristineWorkspaceXml(
+                    window.Blockly.Xml.domToText(window.Blockly.Xml.workspaceToDom(workspace))
+                );
             }
         }
 

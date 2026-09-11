@@ -48,10 +48,10 @@ export const useLoadBotFromLibrary = () => {
             };
 
             // Bot Builder always has *something* in the workspace (the default
-            // starter strategy, or the last recent file) - blockly_store's flag is
-            // what actually tracks whether the user has touched it since, so an
-            // untouched workspace loads straight through with no warning.
-            if (blockly_store.has_user_edited_workspace) {
+            // starter strategy, or the last recent file) - isWorkspaceDirty compares
+            // the live XML against the snapshot taken when it was last (re)loaded, so
+            // an untouched workspace loads straight through with no warning.
+            if (blockly_store.isWorkspaceDirty()) {
                 showReplaceStrategyDialog(performLoad);
             } else {
                 await performLoad();

@@ -60,9 +60,6 @@ export default class AppStore {
 
         blockly_store.setContainerSize();
         blockly_store.setLoading(false);
-        // initWorkspace just loaded the default strategy (or the user's last recent
-        // file) - that's not a user edit.
-        blockly_store.setHasUserEditedWorkspace(false);
 
         this.registerCurrencyReaction.call(this);
         this.registerOnAccountSwitch.call(this);
