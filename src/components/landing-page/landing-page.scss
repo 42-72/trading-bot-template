@@ -11,7 +11,7 @@
         position: absolute;
         inset: 0;
         z-index: 0;
-        opacity: 0.15;
+        opacity: 0.35;
         pointer-events: none;
     }
 
@@ -20,7 +20,10 @@
         inset: 0;
         z-index: 0;
         pointer-events: none;
-        background: radial-gradient(ellipse at center, #0e0e0e 0%, #0e0e0ecc 45%, transparent 75%);
+        // Centre is weakened (not fully opaque) so rain reads through the middle; the
+        // mid stop sits further out than the old wash so the fade band is tighter around
+        // the text block instead of a broad gradual wash.
+        background: radial-gradient(ellipse at center, rgba(14, 14, 14, 0.86) 0%, #0e0e0ecc 60%, transparent 75%);
     }
 
     &__sr-title {
@@ -55,14 +58,16 @@
         padding: 0.6rem 1.4rem;
         border-radius: 999px;
         border: 1px solid #94a3b82e;
-        color: #94a3b8;
+        color: #64748b;
         font-size: 1.2rem;
         letter-spacing: 0.06em;
         text-transform: uppercase;
+        animation: landing-enter 500ms ease-out both;
     }
 
     &__wordmark.brand-wordmark {
         font-size: clamp(3.2rem, 8vw, 5.6rem);
+        animation: landing-enter 500ms ease-out 70ms both;
     }
 
     &__headline {
@@ -71,23 +76,27 @@
         align-items: center;
         gap: 1rem;
         min-height: 9rem;
+        animation: landing-enter 500ms ease-out 140ms both;
     }
 
     &__title {
         max-width: 56rem;
-        min-height: 2.4em;
+        min-height: 1.2em;
         font-size: clamp(2.4rem, 5vw, 3.6rem);
         font-weight: 800;
         line-height: 1.2;
         color: #f8fafc;
         overflow-wrap: break-word;
+    }
 
-        &::after {
-            content: '|';
-            margin-inline-start: 0.2rem;
-            color: #22c55e;
-            animation: landing-caret-blink 1s step-end infinite;
-        }
+    &__caret {
+        display: inline-block;
+        width: 0.07em;
+        height: 1em;
+        margin-left: 0.08em;
+        vertical-align: -0.1em;
+        background: #22c55e;
+        animation: landing-caret-blink 1s ease-in-out infinite;
     }
 
     &__description {
@@ -104,6 +113,7 @@
         flex-wrap: wrap;
         justify-content: center;
         gap: 1.2rem;
+        animation: landing-enter 500ms ease-out 210ms both;
     }
 
     &__cta {
@@ -145,7 +155,11 @@
         padding: 0;
         list-style: none;
         font-size: 1.3rem;
-        color: #94a3b8;
+        // #64748b (as used on badge/dismiss) measures ~4.06:1 on #0e0e0e — below the
+        // 4.5:1 floor this row is required to hold. #7b8794 is the dimmest shade in the
+        // same family that still clears it (~5.3:1).
+        color: #7b8794;
+        animation: landing-enter 500ms ease-out 280ms both;
 
         li {
             position: relative;
@@ -171,17 +185,21 @@
         padding-top: 1.6rem;
         border-top: 1px solid #94a3b82e;
         font-size: 1.1rem;
+        // Left at #94a3b8 (~7.5:1 on #0e0e0e) — comfortably above the 4.5:1 floor this
+        // text is required to hold, and above the #64748b lower bound.
         color: #94a3b8;
+        animation: landing-enter 500ms ease-out 350ms both;
     }
 
     &__dismiss {
         padding: 0;
         background: none;
         border: 0;
-        color: #94a3b8;
+        color: #64748b;
         font-size: 1.3rem;
         text-decoration: underline;
         cursor: pointer;
+        animation: landing-enter 500ms ease-out 420ms both;
 
         &:hover {
             color: #f8fafc;
@@ -211,14 +229,43 @@
     }
 }
 
+@keyframes landing-enter {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
-    .landing-page__title::after {
+    .landing-page__caret {
         animation: none;
         opacity: 0;
     }
 
     .landing-page__description {
         animation: none;
+    }
+
+    .landing-page__badge,
+    .landing-page__wordmark,
+    .landing-page__headline,
+    .landing-page__ctas,
+    .landing-page__facts,
+    .landing-page__risk,
+    .landing-page__dismiss {
+        animation: none;
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@media (max-width: 599px) {
+    .landing-page__title {
+        min-height: 2.4em;
     }
 }
 

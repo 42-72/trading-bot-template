@@ -11,7 +11,7 @@ const DIGITS = '0123456789';
 const BG_COLOR = '#0e0e0e';
 const TRAIL_FILL = 'rgba(14, 14, 14, 0.08)'; // must match the page background or a grey haze builds up
 const HEAD_COLOR = '#e8fdf8';
-const BODY_COLOR = 'rgba(34, 197, 94, 0.55)';
+const BODY_COLOR = 'rgba(34, 197, 94, 0.75)';
 
 const randomDigit = () => DIGITS[(Math.random() * DIGITS.length) | 0];
 const getColumnWidth = () => (window.innerWidth < NARROW_BREAKPOINT ? COLUMN_WIDTH_NARROW : COLUMN_WIDTH);

@@ -134,7 +134,10 @@ const LandingPage = observer(() => {
                 </div>
 
                 <div className='landing-page__headline' aria-hidden='true'>
-                    <div className='landing-page__title'>{activePair.title.slice(0, typedLength)}</div>
+                    <div className='landing-page__title'>
+                        {activePair.title.slice(0, typedLength)}
+                        <span className='landing-page__caret' />
+                    </div>
                     <p key={pairIndex} className='landing-page__description'>
                         {activePair.description}
                     </p>
