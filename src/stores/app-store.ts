@@ -203,6 +203,7 @@ export default class AppStore {
             dashboard,
             load_modal,
             run_panel,
+            blockly_store,
             setLoading,
             setContractUpdateConfig,
             handleFileChange,
