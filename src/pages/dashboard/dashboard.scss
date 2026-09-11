@@ -6,7 +6,7 @@
     --translate-panel-reset: 0px;
 
     position: relative;
-    height: calc(100vh - 4.4rem);
+    height: 100%; /* fills .main-body's flex space - no vh arithmetic to drift out of sync */
     overflow: hidden;
 
     .toolbar__section {
