@@ -31,7 +31,15 @@ export const WS_SERVERS = {
 export const isProduction = () => {
     const hostname = window.location.hostname;
     const productionDomains = Object.values(PRODUCTION_DOMAINS) as string[];
-    return productionDomains.includes(hostname);
+    if (productionDomains.includes(hostname)) return true;
+
+    // Cloudflare Pages branch previews (e.g. feat-landing-page.charlestraders-bot.pages.dev,
+    // <hash>.charlestraders-bot.pages.dev) are the same project as PAGES_DEV, just a preview
+    // subdomain of it — treat them as production so they hit the production WS endpoint
+    // instead of falling through to staging, which refuses the connection. Scoped to this
+    // project's own pages.dev subdomains only, not pages.dev generally.
+    const pagesDevSuffix = `.${PRODUCTION_DOMAINS.PAGES_DEV}`;
+    return hostname.endsWith(pagesDevSuffix);
 };
 
 export const isLocal = () => /localhost(:\d+)?$/i.test(window.location.hostname);
