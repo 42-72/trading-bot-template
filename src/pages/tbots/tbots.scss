@@ -43,31 +43,6 @@
             font-size: 1.8rem;
         }
 
-        &__meta {
-            display: flex;
-            flex-direction: column;
-            gap: 0.4rem;
-            margin: 0;
-
-            div {
-                display: flex;
-                justify-content: space-between;
-                gap: 0.8rem;
-            }
-
-            dt {
-                color: var(--text-less-prominent);
-                font-size: 1.2rem;
-            }
-
-            dd {
-                margin: 0;
-                color: var(--text-general);
-                font-size: 1.2rem;
-                text-align: right;
-            }
-        }
-
         &__description {
             margin: 0;
             color: var(--text-general);

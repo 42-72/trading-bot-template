@@ -61,20 +61,6 @@ export default class AppStore {
         blockly_store.setContainerSize();
         blockly_store.setLoading(false);
 
-        // Snapshot for isWorkspaceDirty. Never let this block boot - a failed
-        // snapshot degrades to a spurious "replace strategy?" dialog later, which is
-        // safe; it must never be able to break app startup.
-        try {
-            const workspace = window.Blockly?.derivWorkspace;
-            if (workspace) {
-                blockly_store.setPristineWorkspaceXml(
-                    window.Blockly.Xml.domToText(window.Blockly.Xml.workspaceToDom(workspace))
-                );
-            }
-        } catch (error) {
-            console.error('Failed to snapshot pristine workspace XML:', error); // eslint-disable-line no-console
-        }
-
         this.registerCurrencyReaction.call(this);
         this.registerOnAccountSwitch.call(this);
 
@@ -203,7 +189,6 @@ export default class AppStore {
             dashboard,
             load_modal,
             run_panel,
-            blockly_store,
             setLoading,
             setContractUpdateConfig,
             handleFileChange,

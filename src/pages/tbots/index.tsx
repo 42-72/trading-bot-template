@@ -17,21 +17,6 @@ const Tbots = () => {
                             <h3 className='tbots__card__name'>{bot.name}</h3>
                         </div>
 
-                        <dl className='tbots__card__meta'>
-                            <div>
-                                <dt>
-                                    <Localize i18n_default_text='Market' />
-                                </dt>
-                                <dd>{bot.market}</dd>
-                            </div>
-                            <div>
-                                <dt>
-                                    <Localize i18n_default_text='Trade type' />
-                                </dt>
-                                <dd>{bot.tradeType}</dd>
-                            </div>
-                        </dl>
-
                         <p className='tbots__card__description'>{bot.description}</p>
 
                         <Button primary className='tbots__card__action' onClick={() => loadBot(bot)}>
