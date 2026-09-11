@@ -78,6 +78,28 @@
         &__action {
             align-self: flex-start;
             margin-top: auto;
+
+            // Same gradient CTA as the landing page Sign up button, scoped to this
+            // exact class pairing so it doesn't leak into other dc-btn--primary
+            // buttons elsewhere in the app.
+            &.dc-btn--primary {
+                background: linear-gradient(135deg, #16a34a 0%, #22c55e 50%, #14b8a6 100%);
+                color: #0e0e0e;
+                border: none;
+                border-radius: 999px;
+                font-weight: 800;
+                box-shadow: 0 10px 24px #14b8a63d;
+                transition: all 0.3s;
+
+                &:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 14px 30px #14b8a652;
+                }
+
+                &:active {
+                    transform: translateY(0);
+                }
+            }
         }
     }
 }
