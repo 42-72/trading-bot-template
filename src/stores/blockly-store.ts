@@ -118,6 +118,11 @@ export default class BlocklyStore {
         const workspace = window.Blockly?.derivWorkspace;
         if (!workspace) return false;
 
+        // No snapshot to compare against (e.g. it failed to write) - assume dirty.
+        // A spurious "replace strategy?" dialog is safe; silently replacing whatever
+        // is actually in the workspace is not.
+        if (!this.pristine_workspace_xml) return true;
+
         const current_xml = window.Blockly.Xml.domToText(window.Blockly.Xml.workspaceToDom(workspace));
         return this.normaliseXml(current_xml) !== this.normaliseXml(this.pristine_workspace_xml);
     };

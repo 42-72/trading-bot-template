@@ -224,10 +224,15 @@ export const load = async ({
                 workspace.current_strategy_id = strategy_id || window.Blockly.utils.idGenerator.genUid();
                 await saveWorkspaceToRecent(xml, from);
                 // Snapshot the freshly loaded strategy so isWorkspaceDirty compares
-                // against this rather than a stale or absent baseline.
-                blockly_store.setPristineWorkspaceXml(
-                    window.Blockly.Xml.domToText(window.Blockly.Xml.workspaceToDom(workspace))
-                );
+                // against this rather than a stale or absent baseline. Never let this
+                // block a load - a failed snapshot degrades to a spurious dialog later.
+                try {
+                    blockly_store.setPristineWorkspaceXml(
+                        window.Blockly.Xml.domToText(window.Blockly.Xml.workspaceToDom(workspace))
+                    );
+                } catch (error) {
+                    console.error('Failed to snapshot pristine workspace XML:', error); // eslint-disable-line no-console
+                }
             }
         }
 
