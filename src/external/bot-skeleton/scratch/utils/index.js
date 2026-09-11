@@ -147,7 +147,7 @@ export const load = async ({
     show_snackbar = true,
 }) => {
     if (!DBotStore?.instance || !workspace) return;
-    const { setLoading, load_modal } = DBotStore.instance;
+    const { setLoading, load_modal, blockly_store } = DBotStore.instance;
     const { setOpenButtonDisabled, setLoadedLocalFile } = load_modal;
 
     setLoading(true);
@@ -223,6 +223,8 @@ export const load = async ({
                 workspace.clearUndo();
                 workspace.current_strategy_id = strategy_id || window.Blockly.utils.idGenerator.genUid();
                 await saveWorkspaceToRecent(xml, from);
+                // A freshly loaded strategy has no user edits yet.
+                blockly_store.setHasUserEditedWorkspace(false);
             }
         }
 

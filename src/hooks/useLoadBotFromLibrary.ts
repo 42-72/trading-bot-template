@@ -14,7 +14,7 @@ import { localize } from '@deriv-com/translations';
  * reviews the loaded blocks and presses Run themselves.
  */
 export const useLoadBotFromLibrary = () => {
-    const { dashboard, run_panel } = useStore();
+    const { dashboard, run_panel, blockly_store } = useStore();
     const { setActiveTab } = dashboard;
     const { showReplaceStrategyDialog } = run_panel;
 
@@ -47,14 +47,17 @@ export const useLoadBotFromLibrary = () => {
                 }
             };
 
-            const has_existing_strategy = Boolean(workspace?.getAllBlocks(false)?.length);
-            if (has_existing_strategy) {
+            // Bot Builder always has *something* in the workspace (the default
+            // starter strategy, or the last recent file) - blockly_store's flag is
+            // what actually tracks whether the user has touched it since, so an
+            // untouched workspace loads straight through with no warning.
+            if (blockly_store.has_user_edited_workspace) {
                 showReplaceStrategyDialog(performLoad);
             } else {
                 await performLoad();
             }
         },
-        [setActiveTab, showReplaceStrategyDialog]
+        [setActiveTab, showReplaceStrategyDialog, blockly_store]
     );
 
     return { loadBot };

@@ -13,6 +13,10 @@ import BotBuilderTourHandler from '../tutorials/dbot-tours/bot-builder-tour';
 import QuickStrategy1 from './quick-strategy';
 import WorkspaceWrapper from './workspace-wrapper';
 
+// Blockly event types that represent a genuine user edit. Excludes UI-only events
+// such as 'selected', 'click', 'viewport_change' (scroll/zoom) and in-progress 'drag'.
+const GENUINE_EDIT_EVENT_TYPES = ['create', 'delete', 'change', 'move', 'var_create', 'var_delete', 'var_rename'];
+
 const BotBuilder = observer(() => {
     const { dashboard, app, run_panel, toolbar, quick_strategy, blockly_store } = useStore();
     const { active_tab, active_tour, is_preview_on_popup } = dashboard;
@@ -21,6 +25,7 @@ const BotBuilder = observer(() => {
     const { is_loading } = blockly_store;
     const is_blockly_listener_registered = React.useRef(false);
     const is_blockly_delete_listener_registered = React.useRef(false);
+    const is_edit_listener_registered = React.useRef(false);
     const { isDesktop } = useDevice();
     const { onMount, onUnmount } = app;
     const el_ref = React.useRef<HTMLInputElement | null>(null);
@@ -75,6 +80,25 @@ const BotBuilder = observer(() => {
 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [is_loading]);
+
+    // Marks the workspace as user-edited so a bot-library load knows whether to warn
+    // before replacing it. Only genuine edits count - selection, scroll/zoom (viewport
+    // change), and in-progress drag are UI noise, not edits. Reset back to false
+    // whenever a strategy is (re)loaded - see blockly-store.ts.
+    React.useEffect(() => {
+        const workspace = window.Blockly?.derivWorkspace;
+        if (workspace && !is_edit_listener_registered.current) {
+            is_edit_listener_registered.current = true;
+            workspace.addChangeListener(handleWorkspaceEdit);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [is_loading]);
+
+    const handleWorkspaceEdit = (e: TBlocklyEvents) => {
+        if (GENUINE_EDIT_EVENT_TYPES.includes(e.type)) {
+            blockly_store.setHasUserEditedWorkspace(true);
+        }
+    };
 
     const handleBlockDelete = (e: TBlocklyEvents) => {
         const { is_reset_button_clicked, setResetButtonState } = toolbar;

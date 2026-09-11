@@ -12,17 +12,26 @@ export default class BlocklyStore {
             is_loading: observable,
             active_tab: observable,
             _has_saved_bots: observable,
+            has_user_edited_workspace: observable,
             has_active_bot: computed,
             has_saved_bots: computed,
             setLoading: action,
             setActiveTab: action,
             checkForSavedBots: action,
+            setHasUserEditedWorkspace: action,
         });
         this.root_store = root_store;
     }
 
     is_loading = false;
     active_tab = tabs_title.WORKSPACE;
+
+    // True once a genuine user edit (block create/delete/change/move, variable
+    // create/delete/rename) has happened since the workspace was last (re)loaded.
+    // Reset to false by app-store's onMount (default/recent-file load on first run)
+    // and by load() in scratch/utils (every subsequent explicit strategy load).
+    // UI-only events (selection, scroll, zoom, drag-in-progress) never set this.
+    has_user_edited_workspace = false;
 
     // Computed property to check if there's an active bot
     get has_active_bot(): boolean {
@@ -86,5 +95,9 @@ export default class BlocklyStore {
 
     setLoading = (is_loading: boolean): void => {
         this.is_loading = is_loading;
+    };
+
+    setHasUserEditedWorkspace = (has_user_edited_workspace: boolean): void => {
+        this.has_user_edited_workspace = has_user_edited_workspace;
     };
 }

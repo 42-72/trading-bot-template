@@ -35,7 +35,7 @@ const Tbots = () => {
                         <p className='tbots__card__description'>{bot.description}</p>
 
                         <Button primary className='tbots__card__action' onClick={() => loadBot(bot)}>
-                            <Localize i18n_default_text='Load in Bot Builder' />
+                            <Localize i18n_default_text='Load bot' />
                         </Button>
                     </div>
                 ))}
