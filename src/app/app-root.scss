@@ -1,5 +1,6 @@
 .app-root {
-    height: 100vh;
+    height: 100vh; /* fallback for browsers without dvh */
+    height: 100dvh; /* wins where supported */
     width: 100vw;
     display: flex;
     align-items: center;
