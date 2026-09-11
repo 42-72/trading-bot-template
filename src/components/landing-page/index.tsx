@@ -3,6 +3,7 @@ import { observer } from 'mobx-react-lite';
 import { useApiBase } from '@/hooks/useApiBase';
 import { useAuthActions } from '@/hooks/useAuthActions';
 import { Localize, localize } from '@deriv-com/translations';
+import DigitRain from './DigitRain';
 import './landing-page.scss';
 
 const DISMISS_KEY = 'ct-landing-dismissed';
@@ -118,6 +119,9 @@ const LandingPage = observer(() => {
 
     return (
         <div className='landing-page'>
+            <DigitRain />
+            <div className='landing-page__vignette' aria-hidden='true' />
+
             <h1 className='landing-page__sr-title'>{localize('CharlesTraders — automated trading on Deriv')}</h1>
 
             <div className='landing-page__content'>

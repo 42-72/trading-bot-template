@@ -6,9 +6,22 @@
     display: flex;
     padding: 4rem 2rem;
     background-color: #0e0e0e;
-    background-image:
-        radial-gradient(circle at 25% 0%, #22c55e14 0%, transparent 55%),
-        radial-gradient(circle at 75% 20%, #22d3ee0f 0%, transparent 50%);
+
+    &__rain {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        opacity: 0.15;
+        pointer-events: none;
+    }
+
+    &__vignette {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        background: radial-gradient(ellipse at center, #0e0e0e 0%, #0e0e0ecc 45%, transparent 75%);
+    }
 
     &__sr-title {
         position: absolute;
@@ -23,6 +36,8 @@
     }
 
     &__content {
+        position: relative;
+        z-index: 1;
         width: 100%;
         max-width: 64rem;
         margin: auto;
@@ -60,6 +75,7 @@
 
     &__title {
         max-width: 56rem;
+        min-height: 2.4em;
         font-size: clamp(2.4rem, 5vw, 3.6rem);
         font-weight: 800;
         line-height: 1.2;
@@ -76,6 +92,7 @@
 
     &__description {
         max-width: 52rem;
+        min-height: 1.8em;
         font-size: clamp(1.4rem, 2.4vw, 1.8rem);
         color: #94a3b8;
         overflow-wrap: break-word;
