@@ -1,6 +1,23 @@
 <!doctype html>
 <html lang="en" dir="auto" class="dark">
     <head>
+        <!-- Applies the persisted theme (ct-theme) to <html> before first paint, so a
+             light-mode visitor doesn't see a dark flash on reload. Dark stays the default:
+             this only ever REMOVES the dark class, it never adds theme--light itself (that
+             needs <body>, which doesn't exist yet here - see the matching script at the top
+             of <body>). If localStorage is unavailable, the static dark classes authored
+             below stand as-is. -->
+        <script>
+            (function () {
+                try {
+                    if (localStorage.getItem('ct-theme') === 'light') {
+                        document.documentElement.classList.remove('dark');
+                    }
+                } catch (e) {
+                    /* localStorage unavailable - keep the authored dark default */
+                }
+            })();
+        </script>
         <!-- Google Tag Manager -->
         <script>
             (function (w, d, s, l, i) {
@@ -128,6 +145,23 @@
     </head>
 
     <body class="body theme theme--dark">
+        <!-- Companion to the <head> script: .theme--light/.theme--dark (see _themes.scss)
+             are scoped to a descendant of <html>, so they have to be set here, not in <head>
+             where <body> doesn't exist yet. Still the very first thing in <body>, before the
+             splash markup below it, so this runs before anything paints. The splash itself
+             (#mw-boot-splash) is styled with its own hardcoded colors, not these classes -
+             it stays dark regardless of theme, on purpose. -->
+        <script>
+            (function () {
+                try {
+                    var isLight = localStorage.getItem('ct-theme') === 'light';
+                    document.body.classList.toggle('theme--light', isLight);
+                    document.body.classList.toggle('theme--dark', !isLight);
+                } catch (e) {
+                    /* localStorage unavailable - keep the authored dark default */
+                }
+            })();
+        </script>
         <div id="mw-boot-splash" role="status" aria-live="polite" aria-label="Loading CharlesTraders">
             <div class="wm"><span class="wm-charles">Charles</span><span class="wm-traders">Traders</span></div>
             <div class="tag">Automate your trades</div>

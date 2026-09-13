@@ -235,6 +235,16 @@
         // Header
         --header-background-mt5: #{constants.$color-blue-8};
         --header-background-others: #{constants.$color-green-7};
+
+        // White-label light-mode contrast fixes (feat/theme-toggle). Each of
+        // these was a hardcoded hex picked for dark backgrounds and measured
+        // to fail 4.5:1 against this theme's own background tokens - see the
+        // A2/A3 audit. Values below are ratio-checked replacements; consumers
+        // read these instead of the raw hex.
+        --tbots-card-accent: #0369a1; // 5.3:1 on --general-section-1 (was #7dd3fc, 1.5:1)
+        --field-warn-text: #{constants.$color-grey-7}; // 5.1:1 on --general-main-1 (was $color-grey-1, 2.85:1)
+        --account-type-virtual: #8a5a00; // 5.9:1 on --general-main-1 (was $color-yellow, 1.86:1)
+        --brand-secondary-strong: #4a6366; // 6.4:1 on --general-main-1 (was #85acb0, 2.46:1)
     }
 
     .theme--dark {
@@ -376,5 +386,13 @@
         // Header
         --header-background-mt5: #{constants.$color-blue-8};
         --header-background-others: #{constants.$color-green-7};
+
+        // White-label light-mode contrast fixes (feat/theme-toggle) - dark
+        // mode keeps exactly the original hardcoded values these replaced,
+        // unchanged. See the matching comment in .theme--light.
+        --tbots-card-accent: #7dd3fc;
+        --field-warn-text: #{constants.$color-grey-1};
+        --account-type-virtual: #{constants.$color-yellow};
+        --brand-secondary-strong: #{constants.$color-green};
     }
 }

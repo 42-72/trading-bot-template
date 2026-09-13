@@ -25,7 +25,7 @@ const JournalStatsModal = ({ is_dark_theme = false, is_modal_open, title, toggle
             <LegacyInfo1pxIcon
                 onClick={toggleModal}
                 iconSize='xs'
-                fill='#85ACB0'
+                fill='var(--brand-secondary-strong)'
                 className={`info-icon`}
                 data-testid='dt_ic_info_icon'
             />

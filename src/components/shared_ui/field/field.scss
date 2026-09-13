@@ -22,7 +22,7 @@
 
         @include typeface(--small-left-normal-black);
 
-        color: $color-grey-1;
+        color: var(--field-warn-text);
     }
 }
 

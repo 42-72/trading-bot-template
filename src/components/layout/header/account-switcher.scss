@@ -145,7 +145,7 @@
 
     &--is-virtual {
         .acc-info__account-type {
-            color: $color-yellow;
+            color: var(--account-type-virtual);
         }
     }
 
@@ -764,7 +764,7 @@
         font-size: 1.4rem;
 
         &--virtual {
-            color: $color-yellow;
+            color: var(--account-type-virtual);
         }
     }
 
