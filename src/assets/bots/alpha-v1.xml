@@ -47,7 +47,7 @@
       <block type="text_print" id="Pc7|fxqq^GS#~E![)0:q" disabled="true">
         <value name="TEXT">
           <shadow type="text" id="%S~G_]0/Vd|W4l~tRg)~">
-            <field name="TEXT">Dollar 1 — good luck</field>
+            <field name="TEXT">Dollar One — good luck</field>
           </shadow>
         </value>
         <next>
@@ -359,7 +359,7 @@
                                 <field name="TEXT"></field>
                               </shadow>
                               <block type="text" id="2/zpBXMK9%3EU%zRS;De">
-                                <field name="TEXT">Dollar 1 hit its target 🎉 Congratulations</field>
+                                <field name="TEXT">Dollar One hit its target 🎉 Congratulations</field>
                               </block>
                             </value>
                             <next>

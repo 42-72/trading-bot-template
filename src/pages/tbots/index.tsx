@@ -13,7 +13,6 @@ const Tbots = () => {
                 {BOT_LIBRARY.map(bot => (
                     <div className='tbots__card' key={bot.id}>
                         <div className='tbots__card__header'>
-                            <span className='tbots__card__number'>{bot.number}</span>
                             <h3 className='tbots__card__name'>{bot.name}</h3>
                         </div>
 

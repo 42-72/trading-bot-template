@@ -14,7 +14,7 @@ export const BOT_LIBRARY: TBotLibraryEntry[] = [
     {
         id: 'alpha-v1',
         number: 1,
-        name: 'Dollar 1',
+        name: 'Dollar One',
         description:
             'Martingale progression: stake increases after each loss and resets on a win. Stops at the target profit set in the blocks.',
         file: alphaV1Xml,

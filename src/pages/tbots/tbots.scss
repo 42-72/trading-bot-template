@@ -24,23 +24,11 @@
             gap: 1rem;
         }
 
-        &__number {
-            display: inline-flex;
-            flex-shrink: 0;
-            align-items: center;
-            justify-content: center;
-            width: 2.8rem;
-            height: 2.8rem;
-            border-radius: 50%;
-            background: var(--brand-primary);
-            color: var(--text-colored-background);
-            font-weight: 700;
-        }
-
         &__name {
             margin: 0;
-            color: var(--text-prominent);
+            color: #7dd3fc;
             font-size: 1.8rem;
+            font-weight: 700;
         }
 
         &__description {
