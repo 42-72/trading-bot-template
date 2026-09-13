@@ -203,6 +203,13 @@
         bottom: 0;
         left: 0;
         right: 0;
+        /* Not `height`: this section is sized by its content
+           (.controls__buttons + this border-top), and on iOS the
+           safe-area-inset-bottom padding below adds to that. A fixed
+           height here could clip either. min-height just guarantees it
+           never renders shorter than what other layout (e.g. the
+           TradingView iframe's reserved padding-bottom) assumes it is. */
+        min-height: var(--run-panel-height, 6.2rem);
         padding-bottom: env(safe-area-inset-bottom, 0);
         width: 100%;
         background-color: var(--general-main-1);
@@ -224,7 +231,10 @@
 
     &__buttons {
         padding: 0.8rem 2.4rem;
-        height: 6rem;
+        /* .controls__section's border-top (2px = 0.2rem) is the rest of
+           --run-panel-height; derived from the same var so this can't
+           drift out of sync with it. */
+        height: calc(var(--run-panel-height, 6.2rem) - 0.2rem);
         display: flex;
         width: inherit;
 
@@ -236,7 +246,7 @@
         /* Fix for iOS devices to ensure buttons are properly sized */
         @supports (-webkit-touch-callout: none) {
             height: auto;
-            min-height: 6rem;
+            min-height: calc(var(--run-panel-height, 6.2rem) - 0.2rem);
         }
     }
 

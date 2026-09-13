@@ -2,6 +2,17 @@
     position: relative;
     width: 100%;
     height: 100%;
+    /* Explicit, not assumed: verified no project rule sets content-box here,
+       but this shouldn't depend on load order against a vendor reset either -
+       without this, padding-bottom below would add to the 100% height
+       instead of carving space out of it. */
+    box-sizing: border-box;
+    /* Reserves space for the run panel bar (.controls__section, which
+       overlays the bottom of this tab in an absolutely-positioned bar) so
+       the chart's own bottom toolbar isn't hidden behind it. Scoped to this
+       component only - other tab panels already avoid the run panel via
+       Deriv's own tab layout; see tradingview.scss. */
+    padding-bottom: var(--run-panel-height, 6.2rem);
 
     &__frame {
         display: block;

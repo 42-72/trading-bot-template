@@ -5,6 +5,16 @@
        than repeating the header height as a second magic number. */
     --header-height: 5.6rem;
 
+    /* Measured height of .controls__section (the mobile run panel bar): a
+       6rem button row (.controls__buttons) plus its parent's 2px border-top.
+       .controls__section itself has no explicit height - it's sized by its
+       content - so this is a measurement pinned to a variable, not a value
+       .controls__section is forced into; see run-panel.scss for how it
+       consumes this without being clipped. Anything that needs to reserve
+       space for the run panel (e.g. the TradingView iframe wrapper) reads
+       this instead of repeating the 62px magic number. */
+    --run-panel-height: 6.2rem;
+
     /* Sized to the SMALL viewport (svh - guaranteed-smallest, unlike dvh which
        measured 26.5px too large on the affected device) so the document is
        never taller than what's actually visible - it can't scroll, so nothing
