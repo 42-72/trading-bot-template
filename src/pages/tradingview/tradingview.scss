@@ -1,24 +1,43 @@
 @use 'components/shared/styles/mixins' as *;
 
-// Positioned to line up with the Tabs content area exactly the way
-// .bot-builder does (see main.scss) - same top/inset offsets, same
-// pre-existing --tab-content-height var. Hidden with display:none rather
-// than unmounted, so the iframe (and its chart state) is preserved.
+// Rendered as a direct sibling of <Main />/<BotBuilder /> under
+// .bot-dashboard (see app-content.jsx), the same place .bot-builder lives -
+// NOT nested inside .main/.main__container. That matters here: .main has
+// its own vh-based height/padding that (measured on production at
+// 1440x820) leaves .main__container's own bottom edge short of
+// .bot-dashboard's real bottom, so anchoring against .main__container
+// would never reach it. Anchoring directly against .bot-dashboard
+// (position: relative, already correctly sized off 100svh) instead lets
+// bottom: 0 reach its true edge with no viewport unit of our own.
+//
+// Desktop offsets (top/inset-inline-*) are 1.6rem larger than the
+// equivalent .bot-builder values because .bot-builder still sits inside
+// .main, which adds its own 1.6rem padding on every side; being a level
+// higher, this panel has to add that back itself to land on the same
+// pixels (top 6.6rem + .main's 1.6rem padding-top = 8.2rem, etc). Hidden
+// with display:none rather than unmounted, so the iframe (and its chart
+// state) is preserved.
 .tradingview-panel {
     display: none;
     position: absolute;
-    top: 6.6rem;
-    inset-inline-start: 1.6rem;
-    inset-inline-end: 1.6rem;
-    height: var(--tab-content-height);
+    top: 8.2rem;
+    bottom: 0;
+    inset-inline-start: 3.2rem;
+    inset-inline-end: 3.2rem;
     background: var(--general-main-1);
 
     &--active {
         display: block;
     }
 
+    // .main has no padding at these widths (main.scss), so unlike the
+    // desktop rule above, no compensation is needed here - these values
+    // are unchanged from when this panel was nested inside .main__container,
+    // and must stay that way: the 375x812 result is already verified and
+    // must not move.
     @include mobile-or-tablet-screen {
         top: 5.6rem;
+        bottom: auto;
         inset-inline-start: 0;
         inset-inline-end: 0;
         height: var(--tab-content-height-mobile);

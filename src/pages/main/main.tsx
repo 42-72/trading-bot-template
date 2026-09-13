@@ -48,7 +48,6 @@ import DTraderRedirect from '../dtrader-redirect';
 import Dashboard from '../dashboard';
 import RunStrategy from '../dashboard/run-strategy';
 import Tbots from '../tbots';
-import TradingViewPanel from '../tradingview';
 import './main.scss';
 
 const ChartWrapper = lazy(() => import('../chart/chart-wrapper'));
@@ -502,7 +501,6 @@ const AppWrapper = observer(() => {
                                 <ComingSoon tab_name='Copy Trading' />
                             </div>
                         </Tabs>
-                        <TradingViewPanel />
                         {!isDesktop && right_tab_shadow && <span className='tabs-shadow tabs-shadow--right' />}{' '}
                     </div>
                 </div>

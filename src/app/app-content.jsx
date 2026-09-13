@@ -20,6 +20,7 @@ import BlocklyLoading from '../components/blockly-loading';
 import BotStopped from '../components/bot-stopped';
 import BotBuilder from '../pages/bot-builder';
 import Main from '../pages/main';
+import TradingViewPanel from '../pages/tradingview';
 import './app.scss';
 import 'react-toastify/dist/ReactToastify.css';
 import '../components/bot-notification/bot-notification.scss';
@@ -172,6 +173,7 @@ const AppContent = observer(() => {
                     <Audio />
                     <Main />
                     <BotBuilder />
+                    <TradingViewPanel />
                     <BotStopped />
                     <TransactionDetailsModal />
                     <ToastContainer limit={3} draggable={false} />

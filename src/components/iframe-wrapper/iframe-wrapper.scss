@@ -1,3 +1,5 @@
+@use 'components/shared/styles/mixins' as *;
+
 .iframe-wrapper {
     position: relative;
     width: 100%;
@@ -7,12 +9,15 @@
        without this, padding-bottom below would add to the 100% height
        instead of carving space out of it. */
     box-sizing: border-box;
-    /* Reserves space for the run panel bar (.controls__section, which
-       overlays the bottom of this tab in an absolutely-positioned bar) so
-       the chart's own bottom toolbar isn't hidden behind it. Scoped to this
-       component only - other tab panels already avoid the run panel via
-       Deriv's own tab layout; see tradingview.scss. */
-    padding-bottom: calc(var(--run-panel-height, 6.2rem) + env(safe-area-inset-bottom, 0px));
+
+    /* .controls__section (the run panel bar) only exists in the DOM below
+       MobileWrapper's breakpoint (isMobile(): window.innerWidth <= 600 -
+       see src/components/shared/utils/screen/responsive.ts's
+       MAX_MOBILE_WIDTH, which is what the mobile-screen mixin's 600px
+       matches). Above that width there is nothing to reserve space for. */
+    @include mobile-screen {
+        padding-bottom: calc(var(--run-panel-height, 6.2rem) + env(safe-area-inset-bottom, 0px));
+    }
 
     &__frame {
         display: block;
