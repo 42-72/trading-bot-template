@@ -1,7 +1,6 @@
 import { lazy, Suspense } from 'react';
 import React from 'react';
 import { createBrowserRouter, createRoutesFromElements, Route, RouterProvider } from 'react-router-dom';
-import DebugLayoutOverlay from '@/components/debug-layout-overlay';
 import ChunkLoader from '@/components/loader/chunk-loader';
 import LocalStorageSyncWrapper from '@/components/localStorage-sync-wrapper';
 import RoutePromptDialog from '@/components/route-prompt-dialog';
@@ -101,12 +100,7 @@ function App() {
         }
     }, [isProcessing, isValid, params.code, error, cleanupURL]);
 
-    return (
-        <>
-            <RouterProvider router={router} />
-            <DebugLayoutOverlay />
-        </>
-    );
+    return <RouterProvider router={router} />;
 }
 
 export default App;
