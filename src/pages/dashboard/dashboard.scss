@@ -6,7 +6,8 @@
     --translate-panel-reset: 0px;
 
     position: relative;
-    height: calc(100vh - var(--header-height, 5.6rem));
+    height: calc(100vh - var(--header-height, 5.6rem)); /* fallback for engines without svh */
+    height: calc(100svh - var(--header-height, 5.6rem));
     overflow: hidden;
 
     .toolbar__section {

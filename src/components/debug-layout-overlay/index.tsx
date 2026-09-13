@@ -42,6 +42,9 @@ const buildReport = (): string => {
     } else {
         lines.push('visualViewport: unsupported');
     }
+    // Equal => the page cannot scroll, so nothing can re-anchor mid-scroll.
+    lines.push(`scrollingElement.scrollHeight=${document.scrollingElement?.scrollHeight ?? 'MISSING'}`);
+    lines.push(`scrollingElement.clientHeight=${document.scrollingElement?.clientHeight ?? 'MISSING'}`);
 
     lines.push('--- rects ---');
     lines.push(rectLine('.deriv-header', document.querySelector('.deriv-header')));

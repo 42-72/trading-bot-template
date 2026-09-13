@@ -196,24 +196,28 @@
         @include flex-center(space-between);
 
         flex-direction: column;
-        position: fixed;
-        bottom: 0; /* fallback where env() is unsupported */
-        bottom: env(safe-area-inset-bottom, 0);
+        /* .layout no longer scrolls (100svh), so this can anchor to it instead
+           of the viewport - nearest positioned ancestor is actually
+           .bot-dashboard, not .layout directly; see layout.scss's comment. */
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
         padding-bottom: env(safe-area-inset-bottom, 0);
         width: 100%;
         background-color: var(--general-main-1);
         border-top: solid 2px var(--general-section-1);
         z-index: 20;
 
-        /* Fix for iOS devices to respect safe area */
+        /* Fix for iOS devices to respect safe area - bottom no longer shifts
+           here (that reintroduces the offset the base rule now avoids);
+           only padding-bottom does, matching the base rule above. */
         @supports (-webkit-touch-callout: none) {
-            bottom: env(safe-area-inset-bottom, 0);
             padding-bottom: env(safe-area-inset-bottom, 0);
         }
 
         /* Additional class for iOS detection via JS */
         &.ios-device {
-            bottom: env(safe-area-inset-bottom, 0);
             padding-bottom: env(safe-area-inset-bottom, 0);
         }
     }
