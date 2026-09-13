@@ -12,7 +12,7 @@
        the chart's own bottom toolbar isn't hidden behind it. Scoped to this
        component only - other tab panels already avoid the run panel via
        Deriv's own tab layout; see tradingview.scss. */
-    padding-bottom: var(--run-panel-height, 6.2rem);
+    padding-bottom: calc(var(--run-panel-height, 6.2rem) + env(safe-area-inset-bottom, 0px));
 
     &__frame {
         display: block;
