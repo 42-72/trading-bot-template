@@ -39,11 +39,26 @@
         padding: 0;
     }
 
+    // Bare wrapper div around the tab shadows + <Tabs> (main.tsx) - carries
+    // no other styling, but sits between .main__container and .dc-tabs in
+    // the height chain and previously had no height rule at all, breaking
+    // the chain here regardless of what .main__container resolved to.
+    &__tabs-wrapper {
+        height: 100%;
+    }
+
     &__container {
         position: relative;
         border: none;
         max-width: 100%;
         width: 100%;
+        // .main has a definite height (the calc() above); without these two,
+        // that height dead-ends here - a flex item's default min-height:auto
+        // lets it grow past 100% to fit its content instead of bounding it,
+        // which is exactly what let .market-tool/.tbots grow unbounded and
+        // get clipped by .main's overflow:hidden instead of scrolling.
+        height: 100%;
+        min-height: 0;
 
         &.no-scroll {
             overflow: hidden;

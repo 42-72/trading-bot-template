@@ -374,7 +374,7 @@ const AppWrapper = observer(() => {
                         'main__container--active': active_tour && active_tab === DASHBOARD && !isDesktop,
                     })}
                 >
-                    <div>
+                    <div className='main__tabs-wrapper'>
                         {!isDesktop && left_tab_shadow && <span className='tabs-shadow tabs-shadow--left' />}{' '}
                         <Tabs active_index={active_tab} className='main__tabs' onTabItemClick={handleTabChange} top>
                             <div

@@ -3,9 +3,31 @@
 .dc-tabs {
     position: relative;
     display: grid;
+    // Percentage height against an indefinite ancestor just resolves to
+    // auto (no-op), so this is safe everywhere .dc-tabs is used - it only
+    // starts doing anything where an ancestor genuinely has a definite
+    // height, which is exactly where grid-template-rows: auto 1fr below
+    // needs it: without a definite height on the grid container itself,
+    // "1fr" has no space to distribute and the content row just sizes to
+    // its content instead of being bounded.
+    height: 100%;
+    min-height: 0;
 
     &--top {
         grid-template-rows: auto 1fr;
+    }
+
+    &__content {
+        // Grid items default to min-height: auto, which (like flex items)
+        // lets them grow past their 1fr track to fit content instead of
+        // being bounded by it - the second half of why nothing here used
+        // to scroll. overflow: hidden means this box itself never becomes
+        // the thing pushing a clipped ancestor; the designated scrollable
+        // child (e.g. .market-tool, .tbots) does the actual scrolling with
+        // its own overflow-y: auto.
+        height: 100%;
+        min-height: 0;
+        overflow: hidden;
     }
 
     &--100vw {
