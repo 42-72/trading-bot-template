@@ -47,6 +47,7 @@ import ComingSoon from '../coming-soon';
 import DTraderRedirect from '../dtrader-redirect';
 import Dashboard from '../dashboard';
 import RunStrategy from '../dashboard/run-strategy';
+import MarketTool from '../market-tool';
 import Tbots from '../tbots';
 import './main.scss';
 
@@ -432,7 +433,7 @@ const AppWrapper = observer(() => {
                                 }
                                 id='id-market-tool'
                             >
-                                <ComingSoon tab_name='Market Tool' />
+                                <MarketTool />
                             </div>
                             <div
                                 label={
