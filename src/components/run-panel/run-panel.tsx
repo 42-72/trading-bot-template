@@ -11,7 +11,7 @@ import Text from '@/components/shared_ui/text';
 import Summary from '@/components/summary';
 import TradeAnimation from '@/components/trade-animation';
 import Transactions from '@/components/transactions';
-import { DBOT_TABS } from '@/constants/bot-contents';
+import { DBOT_TABS, RUN_BAR_HIDDEN_TABS } from '@/constants/bot-contents';
 import { popover_zindex } from '@/constants/z-indexes';
 import { useStore } from '@/hooks/useStore';
 import { Localize, localize } from '@deriv-com/translations';
@@ -332,7 +332,11 @@ const RunPanel = observer(() => {
                 >
                     {content}
                 </Drawer>
-                {!isDesktop && <MobileDrawerFooter />}
+                {/* Prefer not rendering at all over hiding with CSS, so a hidden
+                    button can never be clicked - same rule as the desktop
+                    strip in run-strategy.tsx, applied here to .controls__section.
+                    Position/styling of .controls__section itself is untouched. */}
+                {!isDesktop && !RUN_BAR_HIDDEN_TABS.includes(active_tab) && <MobileDrawerFooter />}
             </div>
 
             <StatisticsInfoModal
