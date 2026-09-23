@@ -17,10 +17,14 @@
 // pixels (top 6.6rem + .main's 1.6rem padding-top = 8.2rem, etc). Hidden
 // with display:none rather than unmounted, so the iframe (and its chart
 // state) is preserved.
+//
+// top is a further +6.4rem on top of that (14.6rem) to clear the desktop
+// run-strategy-bar (main.scss), which this tab shows - same reasoning and
+// same +6.4rem as .bot-builder's equivalent change.
 .tradingview-panel {
     display: none;
     position: absolute;
-    top: 8.2rem;
+    top: 14.6rem;
     bottom: 0;
     inset-inline-start: 3.2rem;
     inset-inline-end: 3.2rem;

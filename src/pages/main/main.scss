@@ -402,9 +402,75 @@
     }
 }
 
-.bot-builder {
+// Reserves space for the desktop run-strategy-bar below, in the "normal"
+// grid-based tab content (Dashboard, Tbots, Market Tool, Charts, Copy
+// Trading - everything that renders through .dc-tabs__content rather than
+// as its own always-mounted sibling like .bot-builder/.tradingview-panel,
+// which get the equivalent +6.4rem added straight to their own top
+// instead). Gated on .main__container--run-bar (main.tsx) so Tbots/DTrader
+// - which don't show the run bar - don't get an unused gap at the top.
+// Explicitly wrapped in desktop-screen (min-width: 1280px) - the strip
+// itself (run-strategy.tsx) now only renders at that same breakpoint
+// (useDevice().isDesktop, matching .controls__section's own gate in
+// run-panel.tsx), so below it this padding would reserve space for a strip
+// that isn't mounted. The comment here previously claimed this rule was
+// already desktop-only; it wasn't - it had no media query at all.
+@include desktop-screen {
+    .main__container.main__container--run-bar .dc-tabs__content {
+        padding-top: 6.4rem;
+        box-sizing: border-box;
+    }
+}
+
+// Desktop run-button strip. Previously this rendered via .toolbar__section
+// (run-strategy.tsx) with no positioning of its own, so it fell inside the
+// tabs header row and overlapped the last tab (measured live: both at
+// y=72). Positioned the same way as .bot-builder/.tradingview-panel -
+// siblings of .main under .bot-dashboard (app-content.jsx/DesktopWrapper).
+// top: 6.6rem is .bot-builder's own (pre-existing, unchanged-here) value -
+// confirmed against this task's own measurement: .dc-tabs__list bottom
+// (y=72+h=50=122px live) minus --header-height (5.6rem=56px) is exactly
+// 66px=6.6rem, so this lands flush on the tab list's bottom edge with zero
+// gap, and the 1.2rem padding-top below adds the required ~12px on top of
+// that. (.tradingview-panel's own top carries an extra, pre-existing
+// +1.6rem beyond this that isn't explained by DOM nesting - both panels
+// are equally .bot-dashboard-level siblings - so it's left alone rather
+// than "corrected" here; it still gets the same +6.4rem shift as
+// everything else to clear this strip.)
+.run-strategy-bar {
     position: absolute;
     top: 6.6rem;
+    inset-inline-start: 0;
+    inset-inline-end: 0;
+    height: 6.4rem; // 12px gap + 40px button (kept at its existing size) + 12px below
+    z-index: 100; // matches popover_zindex.TOOLBAR (z-indexes.ts) - this is the toolbar
+    background: var(--general-section-1); // one step darker than the page behind it
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    padding-top: 1.2rem; // 12px gap above the button
+    padding-inline-end: 2.4rem; // 24px inset from the right edge
+    box-sizing: border-box;
+    // The left side is deliberately empty ("stays free for whatever that
+    // tab puts there") - pointer-events: none here (re-enabled on the
+    // actual content) so that empty area can't block clicks on anything a
+    // future tab renders underneath it.
+    pointer-events: none;
+
+    > * {
+        pointer-events: auto;
+    }
+}
+
+.bot-builder {
+    position: absolute;
+    // +6.4rem on the original 6.6rem to clear the desktop run-strategy-bar
+    // below, which this tab shows. mobile-or-tablet-screen's 5.6rem further
+    // down is intentionally NOT shifted - that range (600-1279px) is where
+    // DesktopWrapper's isDesktop() still renders the run bar too, but this
+    // fix is scoped to the measured/verified desktop width (>1279px); a
+    // residual overlap there is a known, disclosed gap, not a silent one.
+    top: 13rem;
     inset-inline-start: 1.6rem;
     z-index: -1;
     background: var(--general-main-1);

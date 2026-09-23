@@ -55,10 +55,8 @@ const MarketTool = () => {
         return () => clearTimeout(timer);
     }, [windowInput]);
 
-    const { digits, counts, directions, lastDigit, lastTickAt, currentQuote, pipSize, n, isLive } = useDigitAnalysis(
-        symbol,
-        windowSize
-    );
+    const { digits, counts, directions, lastDigit, lastTickAt, currentQuote, pipSize, n, isLive, isConnecting } =
+        useDigitAnalysis(symbol, windowSize);
 
     const ranks = useMemo(() => rankDigits(counts), [counts]);
 
@@ -143,10 +141,12 @@ const MarketTool = () => {
 
                 <div className='market-tool__price'>
                     <span
-                        className={classNames('market-tool__live-label', { 'market-tool__live-label--live': isLive })}
+                        className={classNames('market-tool__live-label', {
+                            'market-tool__live-label--live': isLive && !isConnecting,
+                        })}
                     >
                         <span className='market-tool__live-dot' aria-hidden='true' />
-                        Live price
+                        {isConnecting ? 'Connecting…' : 'Live price'}
                     </span>
                     <span className='market-tool__quote'>
                         {quoteMain}

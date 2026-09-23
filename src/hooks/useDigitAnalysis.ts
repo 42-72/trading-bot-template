@@ -1,8 +1,14 @@
-import { useEffect, useReducer, useRef } from 'react';
+import { useEffect, useReducer, useRef, useState } from 'react';
 import { api_base } from '@/external/bot-skeleton/services/api/api-base';
 import { CONNECTION_STATUS } from '@/external/bot-skeleton/services/api/observables/connection-status-stream';
 import { useApiBase } from '@/hooks/useApiBase';
 import { countDigits, createEmptyCounts, getLastDigit } from '@/utils/digit-stats';
+
+// No tick for this long after a subscription is considered live means the
+// stream is dead (server-side drop, a stale subscription surviving a socket
+// swap, etc.) even though nothing told us so - re-subscribing is cheaper
+// and safer than waiting indefinitely for a tick that will never come.
+const WATCHDOG_TIMEOUT_MS = 10000;
 
 export type TDirection = 'R' | 'F';
 
@@ -89,22 +95,39 @@ type TTicksHistoryResponse = {
     subscription?: { id?: string };
 };
 
+/** Pulls .code/.message out of whatever shape the API/transport handed back, instead of logging an opaque "Object". */
+const describeError = (error: unknown): { code?: string; message?: string } => {
+    if (error && typeof error === 'object') {
+        const err = error as { code?: unknown; message?: unknown; error?: { code?: unknown; message?: unknown } };
+        return {
+            code: (err.code ?? err.error?.code) as string | undefined,
+            message: (err.message ?? err.error?.message) as string | undefined,
+        };
+    }
+    return { message: String(error) };
+};
+
 /**
  * Streams the last `windowSize` digits (and price directions) for `symbol`
  * over the app's existing, shared Deriv WebSocket (api_base.api -
  * see api-base.ts) - this hook never opens a socket of its own.
  *
  * Re-subscribes whenever `symbol` or `windowSize` changes (clearing the
- * buffer first, so digits from two symbols/windows are never mixed) and
- * whenever the connection transitions back to OPENED after having dropped (a
- * dead subscription from before the drop is never silently reused). Always
- * unsubscribes both the local message listener and the server-side
- * subscription (via `forget`) on cleanup - a leaked tick stream per
- * symbol/window switch is exactly the bug this guards against.
+ * buffer first, so digits from two symbols/windows are never mixed),
+ * whenever the connection transitions back to OPENED after having dropped,
+ * and whenever `isAuthorized` flips (login completing, or an account
+ * switch) - a subscribe sent while the socket is mid-authorize can be
+ * silently dropped, and a dead subscription from before either transition
+ * is never silently reused. A 10s no-tick watchdog re-subscribes even when
+ * neither signal fires (e.g. a subscription that "succeeded" but was
+ * already stale server-side). Always unsubscribes both the local message
+ * listener and the server-side subscription (via `forget`) on cleanup - a
+ * leaked tick stream per symbol/window switch is exactly the bug this
+ * guards against.
  */
 export const useDigitAnalysis = (symbol: string, windowSize: number) => {
     const [state, dispatch] = useReducer(reducer, initialState);
-    const { connectionStatus } = useApiBase();
+    const { connectionStatus, isAuthorized } = useApiBase();
     // pip_size is cached ONLY from the ticks_history response, never from a
     // streamed `tick` (documented optional/not guaranteed there).
     const pipSizeRef = useRef<number | null>(null);
@@ -114,13 +137,26 @@ export const useDigitAnalysis = (symbol: string, windowSize: number) => {
     // from the last historical price so the first live tick's direction is
     // still relative to something real, not treated as a fresh start.
     const previousQuoteRef = useRef<number | null>(null);
+    const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // True from the moment a (re)subscribe attempt starts until either the
+    // seed data or an error comes back - lets the UI show "Connecting..."
+    // instead of leaving a dead stream indistinguishable from a quiet one.
+    const [isConnecting, setIsConnecting] = useState(true);
 
     useEffect(() => {
         if (connectionStatus !== CONNECTION_STATUS.OPENED) return undefined;
 
         let cancelled = false;
 
+        const clearWatchdog = () => {
+            if (watchdogRef.current) {
+                clearTimeout(watchdogRef.current);
+                watchdogRef.current = null;
+            }
+        };
+
         const cleanupSubscription = () => {
+            clearWatchdog();
             messageSubscriptionRef.current?.unsubscribe();
             messageSubscriptionRef.current = null;
             if (subscriptionIdRef.current) {
@@ -129,11 +165,23 @@ export const useDigitAnalysis = (symbol: string, windowSize: number) => {
             }
         };
 
+        // Re-armed on every tick and right after a successful (re)subscribe -
+        // whichever fires last is always the most recent sign of life.
+        const armWatchdog = () => {
+            clearWatchdog();
+            watchdogRef.current = setTimeout(() => {
+                if (cancelled) return;
+                console.warn(`[DigitAnalysis] No tick for ${WATCHDOG_TIMEOUT_MS / 1000}s on ${symbol} - re-subscribing`);
+                start();
+            }, WATCHDOG_TIMEOUT_MS);
+        };
+
         const start = async () => {
             cleanupSubscription();
             dispatch({ type: 'RESET' });
             pipSizeRef.current = null;
             previousQuoteRef.current = null;
+            setIsConnecting(true);
 
             if (!api_base.api) return;
 
@@ -154,6 +202,7 @@ export const useDigitAnalysis = (symbol: string, windowSize: number) => {
                     previousQuoteRef.current === null || quote >= previousQuoteRef.current ? 'R' : 'F';
                 previousQuoteRef.current = quote;
                 dispatch({ type: 'PUSH', digit, direction, quote, windowSize });
+                armWatchdog();
             });
 
             try {
@@ -166,7 +215,9 @@ export const useDigitAnalysis = (symbol: string, windowSize: number) => {
                 })) as unknown as TTicksHistoryResponse;
 
                 if (response?.error) {
-                    console.error('[DigitAnalysis] ticks_history error:', response.error);
+                    const { code, message } = describeError(response.error);
+                    console.error('[DigitAnalysis] ticks_history error:', { code, message, raw: response.error });
+                    if (!cancelled) setIsConnecting(false);
                     return;
                 }
 
@@ -204,8 +255,12 @@ export const useDigitAnalysis = (symbol: string, windowSize: number) => {
                     currentQuote: previousQuoteRef.current,
                     windowSize,
                 });
+                setIsConnecting(false);
+                armWatchdog();
             } catch (error) {
-                console.error('[DigitAnalysis] Failed to subscribe to ticks_history:', error);
+                const { code, message } = describeError(error);
+                console.error('[DigitAnalysis] Failed to subscribe to ticks_history:', { code, message, raw: error });
+                if (!cancelled) setIsConnecting(false);
             }
         };
 
@@ -215,7 +270,7 @@ export const useDigitAnalysis = (symbol: string, windowSize: number) => {
             cancelled = true;
             cleanupSubscription();
         };
-    }, [symbol, windowSize, connectionStatus]);
+    }, [symbol, windowSize, connectionStatus, isAuthorized]);
 
     return {
         digits: state.digits,
@@ -228,5 +283,6 @@ export const useDigitAnalysis = (symbol: string, windowSize: number) => {
         n: state.digits.length,
         pipSize: pipSizeRef.current,
         isLive: connectionStatus === CONNECTION_STATUS.OPENED,
+        isConnecting,
     };
 };
