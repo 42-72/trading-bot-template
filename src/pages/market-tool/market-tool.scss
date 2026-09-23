@@ -45,21 +45,9 @@
     }
 }
 
-// Centred column with gutters on desktop - previously .market-tool ran
-// edge-to-edge (~97% of the window at 1920px). min(88%, 1680px) gives a
-// consistent gutter at every desktop width (1920 -> 1680px content, 120px
-// each side; 1600 -> 1408px, 96px each side; 1440 -> 1267px, 86px each
-// side) without a fixed breakpoint ladder. The ribbon, circles, and stat
-// panels are all descendants of .market-tool, so they inherit this column
-// and stay aligned with each other and with the controls row above them.
-// Phone (<=760px) is untouched - this query starts one pixel above where
-// that one ends, and the phone layout stays full-width.
-@media (min-width: 761px) {
-    .market-tool {
-        width: min(88%, 1680px);
-        margin-inline: auto;
-    }
-}
+// This tool's desktop layout (>=761px) lives at the end of this file, in
+// one consolidated @media (min-width: 761px) block - see the bottom of
+// this file for why and what's in it.
 
 // ---- Tone system: one place per colour family, consumed by circles, bars,
 // chips and the streak badge. --tone-rank/--tone-grad-* are the exact hexes
@@ -690,5 +678,65 @@
     .digit-circle--bounce,
     .market-tool__live-label--live .market-tool__live-dot {
         animation: none;
+    }
+}
+
+// ---- Desktop layout (>=761px) ----------------------------------------
+//
+// .market-tool was shrink-wrapping to its content instead of filling the
+// viewport - measured 943px wide at a 1920px window, sitting flush left
+// with ~950px of empty space to its right. width alone on .market-tool
+// wasn't enough: .market-tool__panels is CSS grid with its own
+// grid-template-columns, which doesn't grow to fill a wider parent on its
+// own - it was staying at its old fixed ~911px regardless of the
+// container. This block gives .market-tool a real width, tells its direct
+// children to actually fill it (width: 100%, since flex/grid children
+// don't automatically stretch to 100% of a constrained-width block
+// parent the way they do to a stretch-aligned flex parent), and widens
+// the panels grid's own columns so it has somewhere to put that space.
+// Desktop-only versions of the symbol/ticks/price rules are included too
+// (this branch didn't have them at all before - they were only ever added
+// on the separate, unmerged fix/desktop-controls-balance branch).
+@media (min-width: 761px) {
+    .market-tool {
+        width: min(88%, 1680px);
+        margin-inline: auto;
+    }
+
+    .market-tool__controls,
+    .tick-ribbon,
+    .market-tool__circles,
+    .market-tool__panels {
+        width: 100%;
+    }
+
+    // The key rule: without this, the grid keeps its old fixed column
+    // width and .market-tool growing wider has nothing to hand that
+    // space to.
+    .market-tool__panels {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .market-tool__control--symbol {
+        flex: 1 1 auto;
+        min-width: 0;
+        max-width: 520px;
+    }
+
+    .market-tool__control--ticks {
+        flex: 0 0 140px;
+        position: relative;
+    }
+
+    .market-tool__control--ticks .market-tool__control-hint {
+        position: absolute;
+        bottom: -18px;
+        left: 0;
+        white-space: nowrap;
+    }
+
+    .market-tool__price {
+        margin-left: auto;
+        flex: 0 0 auto;
     }
 }
