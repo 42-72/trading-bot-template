@@ -111,7 +111,7 @@ const MarketTool = () => {
     return (
         <div className='market-tool'>
             <div className='market-tool__controls'>
-                <div className='market-tool__control'>
+                <div className='market-tool__control market-tool__control--symbol'>
                     <label htmlFor='market-tool-symbol'>Volatility index</label>
                     <select
                         id='market-tool-symbol'
@@ -128,7 +128,7 @@ const MarketTool = () => {
                     </select>
                 </div>
 
-                <div className='market-tool__control'>
+                <div className='market-tool__control market-tool__control--ticks'>
                     <label htmlFor='market-tool-ticks'>Ticks</label>
                     <input
                         id='market-tool-ticks'

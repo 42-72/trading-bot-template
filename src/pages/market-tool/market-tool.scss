@@ -22,6 +22,23 @@
     @include mobile-screen {
         padding-bottom: calc(var(--run-panel-height, 6.2rem) + env(safe-area-inset-bottom, 0px));
     }
+
+    // No rule anywhere sets a height on .tick-ribbon - what was actually
+    // collapsing it to 2px (its own top+bottom border, with the 32px cells
+    // clipped to nothing by its overflow:hidden) is this flex column itself:
+    // every direct child is a default flex item (flex-shrink:1,
+    // min-height:auto), so once total content exceeds this container's
+    // bounded height, the browser SHRINKS items to fit instead of letting
+    // overflow-y:auto do its job - and .tick-ribbon, whose only height floor
+    // is its children's own height (not a hard min-content constraint the
+    // way the panels' fixed-size buttons or the circles' aspect-ratio boxes
+    // are), absorbed nearly all of that shrink. flex-shrink: 0 on every
+    // direct child makes all of them keep their natural size and pushes the
+    // actual overflow handling back onto this container's scroll, which is
+    // what it's for.
+    > * {
+        flex-shrink: 0;
+    }
 }
 
 // ---- Tone system: one place per colour family, consumed by circles, bars,
@@ -77,13 +94,13 @@
 .market-tool__controls {
     display: flex;
     flex-wrap: wrap;
-    align-items: flex-end;
+    // flex-end bottom-aligned these columns, so the taller one (Ticks: label
+    // + input + hint line) pushed the shorter one (Volatility index: label +
+    // select) down to match bottoms, misaligning the labels/inputs at the
+    // top - that was the notch of white. flex-start aligns tops instead, so
+    // both labels sit on the same line regardless of what's below them.
+    align-items: flex-start;
     gap: 1.6rem;
-
-    @include mobile-screen {
-        flex-direction: column;
-        align-items: stretch;
-    }
 }
 
 .market-tool__control {
@@ -131,11 +148,6 @@
     align-items: flex-end;
     gap: 0.4rem;
     margin-inline-start: auto;
-
-    @include mobile-screen {
-        align-items: flex-start;
-        margin-inline-start: 0;
-    }
 }
 
 .market-tool__live-label {
@@ -245,11 +257,8 @@
     align-items: center;
     width: 7rem;
 
-    @include mobile-screen {
-        // Exactly 5 per row, 2 rows, regardless of natural sizing.
-        flex: 0 0 20%;
-        width: auto;
-    }
+    // 5-per-row layout moved to the 760px breakpoint below, alongside the
+    // rest of this tool's own mobile restructure.
 }
 
 .digit-circle {
@@ -327,9 +336,9 @@
     grid-template-columns: 1fr 1fr;
     gap: 1.6rem;
 
-    @include mobile-screen {
-        grid-template-columns: 1fr;
-    }
+    // Single-column layout moved to the 760px breakpoint below, so it
+    // switches at the same point the controls/circles do rather than at
+    // the narrower 600px used elsewhere for the run-panel reservation.
 }
 
 .stat-panel {
@@ -479,8 +488,14 @@
     border-radius: 6px;
     font-size: 1.1rem;
     font-weight: 800;
-    background: var(--tone-tint);
-    color: var(--tone-text);
+    // Solid flat fill + white bold letters, per the agreed spec - not the
+    // pale-tint/dark-text pattern used for circles and the streak badge.
+    // Flagging again, as before: white-on-solid fails 4.5:1 for three of
+    // the four tones at this size (green ~2.75:1, red ~3.88:1, blue
+    // ~3.97:1, yellow ~1.47:1) - implemented as specified regardless,
+    // since the spec restates this explicitly as agreed.
+    background: var(--tone-rank);
+    color: #fff;
 }
 
 .stat-panel__more {
@@ -510,6 +525,97 @@
     color: #64748b;
     font-size: 1.3rem;
     line-height: 1.5;
+}
+
+// ---- This tool's own mobile layout (<=760px) -----------------------------
+//
+// Deliberately a different breakpoint from the 600px mobile-screen mixin
+// used above for the run-panel reservation: that one is tied to
+// MobileWrapper's actual isMobile() cutoff (where .controls__section
+// really does or doesn't exist in the DOM) and must not move. This one is
+// purely a visual choice about when this tool's own content should
+// compact for a phone/small-tablet screen, chosen wider (760px) so
+// everything below restructures together instead of splitting across two
+// thresholds.
+@media (max-width: 760px) {
+    .market-tool {
+        gap: 1rem;
+        padding: 1.2rem;
+    }
+
+    .market-tool__controls {
+        gap: 0.8rem 1rem;
+    }
+
+    // Volatility index + Ticks side by side on one row; Live price forced
+    // onto its own row below via flex-basis: 100% (nothing else fits
+    // beside a 100%-wide item in a wrapping flex row).
+    .market-tool__control--symbol {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .market-tool__control--symbol select {
+        width: 100%;
+        min-width: 0;
+    }
+
+    // The label takes its own full-width line (flex-basis: 100%); the
+    // input and the "Full"/"342 of 1000" hint then share the next line
+    // together instead of the hint sitting on a third line of its own.
+    .market-tool__control--ticks {
+        flex: 0 0 auto;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        column-gap: 0.6rem;
+    }
+
+    .market-tool__control--ticks label {
+        flex: 1 1 100%;
+    }
+
+    .market-tool__control--ticks input {
+        width: 11rem;
+    }
+
+    .market-tool__price {
+        flex: 1 1 100%;
+        align-items: flex-end;
+    }
+
+    // A quote like 216537.14 at the old fixed 2.8rem was dominating the
+    // screen; vw (viewport WIDTH) is fine here - it's viewport HEIGHT units
+    // (vh/dvh/svh) that caused the mobile run-panel bug, not width ones.
+    .market-tool__quote {
+        font-size: clamp(24px, 7vw, 34px);
+    }
+
+    // Exactly 5 per row, 2 rows - no third row. Dropping the per-circle
+    // max-width (set unconditionally above) lets each circle fill its 20%
+    // track instead of capping out short of it and leaving dead space.
+    .digit-circle-wrap {
+        flex: 0 0 20%;
+        width: auto;
+    }
+
+    .digit-circle {
+        max-width: none;
+    }
+
+    .market-tool__circles {
+        gap: 0.8rem 0.4rem;
+    }
+
+    .market-tool__panels {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    .stat-panel {
+        padding: 1.2rem;
+        gap: 0.8rem;
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
