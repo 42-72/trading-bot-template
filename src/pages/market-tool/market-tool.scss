@@ -97,14 +97,19 @@
 
 .market-tool__controls {
     display: flex;
-    flex-wrap: wrap;
     // flex-end bottom-aligned these columns, so the taller one (Ticks: label
     // + input + hint line) pushed the shorter one (Volatility index: label +
     // select) down to match bottoms, misaligning the labels/inputs at the
     // top - that was the notch of white. flex-start aligns tops instead, so
     // both labels sit on the same line regardless of what's below them.
     align-items: flex-start;
-    gap: 1.6rem;
+    // Without an explicit width this row only spanned its own content
+    // (measured 911px inside a 1408px container at 1440x900) - explicit
+    // 100% plus the symbol control's flex-grow below is what actually
+    // spans the container, rather than relying on stretch alignment from
+    // the parent column to do it implicitly.
+    width: 100%;
+    gap: 16px;
 }
 
 .market-tool__control {
@@ -146,12 +151,49 @@
     color: #94a3b8;
 }
 
+// Desktop sizing for the two controls - measured live at 1440x900: with no
+// rule outside the 760px media query, both fell back to plain
+// .market-tool__control sizing (select's own min-width, input's own fixed
+// width), so they huddled at their natural content width in the left
+// quarter of the row instead of the symbol select taking the free space.
+.market-tool__control--symbol {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 520px;
+}
+
+.market-tool__control--ticks {
+    flex: 0 0 140px;
+    position: relative;
+}
+
+// Load-bearing, not decorative: without this the "Full"/"342 of 1000" hint
+// sits in flow under the ticks input, making that control 73px tall
+// against the symbol control's 55px - since flex row items with
+// align-items: flex-start don't equalize height, the taller one visually
+// sets the row's height on its own. Taking the hint out of flow (matches
+// the same technique already used inside the 760px block) levels the row
+// at ~55px both.
+.market-tool__control--ticks .market-tool__control-hint {
+    position: absolute;
+    bottom: -18px;
+    left: 0;
+    white-space: nowrap;
+}
+
 .market-tool__price {
     display: flex;
     flex-direction: column;
     align-items: flex-end;
     gap: 0.4rem;
+    // margin-inline-start (not margin-left): this codebase uses logical
+    // properties elsewhere (e.g. run-panel.scss, header.scss) for RTL
+    // safety, and this already-present declaration does the same job as
+    // margin-left: auto would in LTR. flex: 0 0 auto is the actual
+    // addition - keeps price at its natural content width so it doesn't
+    // grow/shrink now that its row is width: 100%.
     margin-inline-start: auto;
+    flex: 0 0 auto;
 }
 
 .market-tool__live-label {
