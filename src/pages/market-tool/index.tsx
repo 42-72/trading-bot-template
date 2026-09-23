@@ -106,8 +106,7 @@ const MarketTool = () => {
     const quoteMain = quoteText ? quoteText.slice(0, -1) : '—';
     const quoteLastDigit = quoteText ? quoteText.slice(-1) : '';
 
-    const tickCountLabel =
-        n >= windowSize ? `${windowSize} ticks` : n > 0 ? `${n} of ${windowSize} ticks` : 'Waiting for ticks…';
+    const tickCountLabel = n >= windowSize ? 'Full' : n > 0 ? `${n} of ${windowSize}` : 'Waiting…';
 
     return (
         <div className='market-tool'>
@@ -130,7 +129,7 @@ const MarketTool = () => {
                 </div>
 
                 <div className='market-tool__control'>
-                    <label htmlFor='market-tool-ticks'>Ticks ({tickCountLabel})</label>
+                    <label htmlFor='market-tool-ticks'>Ticks</label>
                     <input
                         id='market-tool-ticks'
                         type='number'
@@ -139,6 +138,7 @@ const MarketTool = () => {
                         value={windowInput}
                         onChange={e => setWindowInput(e.target.value)}
                     />
+                    <span className='market-tool__control-hint'>{tickCountLabel}</span>
                 </div>
 
                 <div className='market-tool__price'>
@@ -172,22 +172,6 @@ const MarketTool = () => {
             </div>
 
             <div className='market-tool__panels'>
-                <StatPanel
-                    title='Even / Odd'
-                    rows={[
-                        { label: 'Even', pct: even.pHat * 100, hasData: n > 0, tone: 'tone-green' },
-                        { label: 'Odd', pct: odd.pHat * 100, hasData: n > 0, tone: 'tone-red' },
-                    ]}
-                    streak={
-                        evenOddStreak && {
-                            label: evenOddStreak.label,
-                            count: evenOddStreak.count,
-                            tone: EVEN_ODD_TONE[evenOddStreak.label],
-                        }
-                    }
-                    chips={evenOddOutcomes.map(o => ({ text: o === 'Even' ? 'E' : 'O', tone: EVEN_ODD_TONE[o] }))}
-                />
-
                 <StatPanel
                     title='Over / Under'
                     picker={{ value: barrier, onChange: setBarrier, ariaLabel: 'Barrier digit' }}
@@ -225,6 +209,22 @@ const MarketTool = () => {
                         text: o === 'Match' ? 'M' : 'D',
                         tone: MATCH_DIFFER_TONE[o],
                     }))}
+                />
+
+                <StatPanel
+                    title='Even / Odd'
+                    rows={[
+                        { label: 'Even', pct: even.pHat * 100, hasData: n > 0, tone: 'tone-green' },
+                        { label: 'Odd', pct: odd.pHat * 100, hasData: n > 0, tone: 'tone-red' },
+                    ]}
+                    streak={
+                        evenOddStreak && {
+                            label: evenOddStreak.label,
+                            count: evenOddStreak.count,
+                            tone: EVEN_ODD_TONE[evenOddStreak.label],
+                        }
+                    }
+                    chips={evenOddOutcomes.map(o => ({ text: o === 'Even' ? 'E' : 'O', tone: EVEN_ODD_TONE[o] }))}
                 />
 
                 <StatPanel
