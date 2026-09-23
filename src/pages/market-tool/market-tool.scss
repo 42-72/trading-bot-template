@@ -545,12 +545,6 @@
     .market-tool {
         gap: 1rem;
         padding: 1.2rem;
-        // The mobile run bar (.controls__section) is absolutely positioned
-        // over the bottom of the page - without this, the Rise/Fall panel's
-        // chips scroll in underneath it and are never reachable. 96px
-        // measured in practice as enough; the old var(--run-panel-height)-
-        // based ~62px wasn't.
-        padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
     }
 
     .market-tool__controls {
@@ -559,15 +553,10 @@
 
     // Volatility index + Ticks side by side on one row; Live price forced
     // onto its own row below via flex-basis: 100% (nothing else fits
-    // beside a 100%-wide item in a wrapping flex row).
-    .market-tool__control--symbol {
-        // flex-basis 0 (not auto) so the symbol control takes the larger
-        // share of the row's free space, with ticks pinned to a fixed
-        // width instead of both splitting ~167/170px roughly evenly.
-        flex: 1 1 0;
-        min-width: 0;
-    }
-
+    // beside a 100%-wide item in a wrapping flex row). The outer flex-basis
+    // for both (symbol's larger share, ticks' fixed width) is set again,
+    // with !important, in the override block at the end of this media
+    // query - kept here are only the properties that block doesn't touch.
     .market-tool__control--symbol select {
         width: 100%;
         min-width: 0;
@@ -577,7 +566,6 @@
     // input and the "Full"/"342 of 1000" hint then share the next line
     // together instead of the hint sitting on a third line of its own.
     .market-tool__control--ticks {
-        flex: 0 0 120px;
         flex-direction: row;
         flex-wrap: wrap;
         align-items: center;
@@ -592,19 +580,9 @@
         width: 11rem;
     }
 
-    // Tightened from ~45px to ~30px tall: smaller gap between the two
-    // lines, and both lines' line-height pulled in tighter than their
-    // (unset/1) defaults, which were adding several px of font-metric
-    // "leading" on top of the nominal font-size. Still full width, still
-    // two lines - not removed, not merged into one row.
     .market-tool__price {
         flex: 1 1 100%;
         align-items: flex-end;
-        gap: 0.2rem;
-    }
-
-    .market-tool__live-label {
-        line-height: 1.1;
     }
 
     // A quote like 216537.14 at the old fixed 2.8rem was dominating the
@@ -612,7 +590,6 @@
     // (vh/dvh/svh) that caused the mobile run-panel bug, not width ones.
     .market-tool__quote {
         font-size: clamp(24px, 7vw, 34px);
-        line-height: 0.9;
     }
 
     // Exactly 5 per row, 2 rows - no third row. flex: 0 0 20% doesn't
@@ -646,6 +623,31 @@
     .stat-panel {
         padding: 1.2rem;
         gap: 0.8rem;
+    }
+
+    // Explicit override block, deliberately last in this media query so it
+    // wins on source order (the !important flags on the two flex-basis
+    // declarations make that unconditional regardless of order or
+    // specificity, matching what was asked for exactly).
+    .market-tool__control--symbol {
+        flex: 1 1 0 !important;
+        min-width: 0;
+    }
+
+    .market-tool__control--ticks {
+        flex: 0 0 120px !important;
+    }
+
+    .market-tool__price {
+        padding-block: 2px;
+        line-height: 1.15;
+    }
+
+    // The mobile run bar (.controls__section) is absolutely positioned
+    // over the bottom of the page - without this, the Rise/Fall panel's
+    // chips scroll in underneath it and are never reachable.
+    .market-tool {
+        padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
     }
 }
 
