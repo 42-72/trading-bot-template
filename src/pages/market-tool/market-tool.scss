@@ -591,20 +591,27 @@
         font-size: clamp(24px, 7vw, 34px);
     }
 
-    // Exactly 5 per row, 2 rows - no third row. Dropping the per-circle
-    // max-width (set unconditionally above) lets each circle fill its 20%
-    // track instead of capping out short of it and leaving dead space.
+    // Exactly 5 per row, 2 rows - no third row. flex: 0 0 20% doesn't
+    // account for the column gaps, so 5 x 20% + 4 gaps overflows the
+    // container's actual width and the 5th wraps (4-4-2 instead of 5-5) -
+    // measured 347px container, 4px gap: 5 x 20% = 346.65px + 16px of gap
+    // = 362.65px, past 347px. Grid divides the space that's actually left
+    // after gaps, so five always fit.
+    .market-tool__circles {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 8px 4px;
+        justify-items: center;
+    }
+
     .digit-circle-wrap {
-        flex: 0 0 20%;
-        width: auto;
+        flex: none;
+        width: 100%;
+        max-width: none;
     }
 
     .digit-circle {
         max-width: none;
-    }
-
-    .market-tool__circles {
-        gap: 0.8rem 0.4rem;
     }
 
     .market-tool__panels {
