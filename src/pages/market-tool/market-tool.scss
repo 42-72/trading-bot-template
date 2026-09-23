@@ -1,13 +1,20 @@
 @use 'components/shared/styles/mixins' as *;
 
+// WHITE ONLY, deliberately: this tool does not follow the app's dark/light
+// toggle, so every colour below is a literal hex, not a theme token. If the
+// surrounding app chrome is in dark mode, this panel will look like a stark
+// white rectangle against it - that's expected, not a bug to silently fix
+// here.
 .market-tool {
     height: 100%;
     overflow-y: auto;
-    padding: 1.6rem;
     box-sizing: border-box;
+    padding: 1.6rem;
     display: flex;
     flex-direction: column;
-    gap: 2rem;
+    gap: 1.6rem;
+    background: #fff;
+    color: #0f1b2a;
 
     // .controls__section (the run panel bar) only exists in the DOM below
     // MobileWrapper's breakpoint - see iframe-wrapper.scss for the full
@@ -15,304 +22,494 @@
     @include mobile-screen {
         padding-bottom: calc(var(--run-panel-height, 6.2rem) + env(safe-area-inset-bottom, 0px));
     }
+}
 
-    &__header {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: flex-end;
-        gap: 1.6rem;
-    }
+// ---- Tone system: one place per colour family, consumed by circles, bars,
+// chips and the streak badge. --tone-rank/--tone-grad-* are the exact hexes
+// given; --tone-text is a darker, readable variant (yellow's is the explicit
+// override - small text on #ffd000 must not be yellow); --tone-tint/
+// --tone-border-soft are pale derivatives (mine, not separately specified)
+// used as fills so text drawn in --tone-text stays readable (a solid
+// saturated fill with white text fails 4.5:1 for all four hues at this
+// size - checked).
+.tone-green {
+    --tone-rank: #00b365;
+    --tone-text: #046b45;
+    --tone-grad-dark: #046b45;
+    --tone-grad-mid: #00c972;
+    --tone-grad-light: #12f08c;
+    --tone-tint: rgb(0 179 101 / 14%);
+    --tone-border-soft: rgb(0 179 101 / 45%);
+}
 
-    &__control {
-        display: flex;
+.tone-red {
+    --tone-rank: #ff0f45;
+    --tone-text: #a3001f;
+    --tone-grad-dark: #a3001f;
+    --tone-grad-mid: #ff0f45;
+    --tone-grad-light: #ff5c7d;
+    --tone-tint: rgb(255 15 69 / 12%);
+    --tone-border-soft: rgb(255 15 69 / 45%);
+}
+
+.tone-blue {
+    --tone-rank: #0f7bff;
+    --tone-text: #0033b8;
+    --tone-grad-dark: #0033b8;
+    --tone-grad-mid: #0f7bff;
+    --tone-grad-light: #5cb0ff;
+    --tone-tint: rgb(15 123 255 / 14%);
+    --tone-border-soft: rgb(15 123 255 / 45%);
+}
+
+.tone-yellow {
+    --tone-rank: #ffd000;
+    --tone-text: #8a6a00; // explicit per spec - not the gradient's dark stop (#b58f00)
+    --tone-grad-dark: #b58f00;
+    --tone-grad-mid: #ffd000;
+    --tone-grad-light: #ffee7a;
+    --tone-tint: rgb(255 208 0 / 20%);
+    --tone-border-soft: rgb(255 208 0 / 50%);
+}
+
+// ---- Controls -------------------------------------------------------------
+
+.market-tool__controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 1.6rem;
+
+    @include mobile-screen {
         flex-direction: column;
-        gap: 0.4rem;
-
-        label {
-            font-size: 1.2rem;
-            color: var(--text-less-prominent);
-        }
-
-        select {
-            min-width: 16rem;
-            height: 3.6rem;
-            padding: 0 1rem;
-            border-radius: 4px;
-            border: 1px solid var(--border-normal);
-            background: var(--general-main-1);
-            color: var(--text-general);
-            font-size: 1.4rem;
-        }
-    }
-
-    &__tick-count {
-        font-size: 1.3rem;
-        color: var(--text-less-prominent);
-        padding-bottom: 0.8rem;
-    }
-
-    &__connection {
-        display: flex;
-        align-items: center;
-        gap: 0.6rem;
-        font-size: 1.3rem;
-        color: var(--text-less-prominent);
-        padding-bottom: 0.8rem;
-        margin-inline-start: auto;
-
-        &__dot {
-            width: 0.8rem;
-            height: 0.8rem;
-            border-radius: 50%;
-            background: var(--text-less-prominent);
-        }
-
-        &--live {
-            color: var(--text-profit-success);
-
-            .market-tool__connection__dot {
-                background: var(--text-profit-success);
-                animation: market-tool-live-dot 2s ease-in-out infinite;
-            }
-        }
-    }
-
-    &__rings {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 1.6rem 1.2rem;
-    }
-
-    &__strength {
-        display: flex;
-        flex-direction: column;
-        gap: 1.6rem;
-        max-width: 64rem;
-        width: 100%;
-        margin: 0 auto;
-    }
-
-    &__footnote {
-        max-width: 64rem;
-        width: 100%;
-        margin: 0 auto;
-        padding: 1.2rem 1.6rem;
-        border-radius: 8px;
-        background: var(--general-section-1);
-        color: var(--text-less-prominent);
-        font-size: 1.3rem;
-        line-height: 1.5;
+        align-items: stretch;
     }
 }
 
-@keyframes market-tool-live-dot {
+.market-tool__control {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+
+    label {
+        font-size: 1.1rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #64748b;
+    }
+
+    select,
+    input {
+        height: 3.6rem;
+        padding: 0 1rem;
+        border-radius: 6px;
+        border: 1px solid #e2e8f0;
+        background: #fff;
+        color: #0f1b2a;
+        font-size: 1.4rem;
+        box-sizing: border-box;
+    }
+
+    select {
+        min-width: 16rem;
+    }
+
+    input {
+        width: 10rem;
+    }
+}
+
+.market-tool__price {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.4rem;
+    margin-inline-start: auto;
+
+    @include mobile-screen {
+        align-items: flex-start;
+        margin-inline-start: 0;
+    }
+}
+
+.market-tool__live-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1.1rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #94a3b8;
+}
+
+.market-tool__live-dot {
+    width: 0.7rem;
+    height: 0.7rem;
+    border-radius: 50%;
+    background: #cbd5e1;
+}
+
+.market-tool__live-label--live {
+    color: #0033b8;
+
+    .market-tool__live-dot {
+        background: #0f7bff;
+        animation: market-tool-live-pulse 1.6s ease-in-out infinite;
+    }
+}
+
+.market-tool__quote {
+    font-family: 'IBM Plex Sans', 'SFMono-Regular', Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 2.8rem;
+    font-weight: 700;
+    line-height: 1;
+    color: #0f1b2a;
+}
+
+.market-tool__quote-digit {
+    color: #0f7bff;
+}
+
+@keyframes market-tool-live-pulse {
     0%,
     100% {
         opacity: 1;
     }
 
     50% {
-        opacity: 0.35;
+        opacity: 0.3;
     }
 }
 
-.digit-ring {
-    position: relative;
+// ---- Tick ribbon ------------------------------------------------------------
+
+.tick-ribbon {
     display: flex;
-    flex-direction: column;
-    align-items: center;
-    width: 7.2rem;
-
-    &__svg {
-        width: 6.4rem;
-        height: 6.4rem;
-    }
-
-    &__track {
-        fill: none;
-        stroke: var(--border-normal);
-        stroke-width: 4;
-    }
-
-    &__fill {
-        fill: none;
-        stroke: var(--text-info-blue);
-        stroke-width: 4;
-        stroke-linecap: round;
-        transform: rotate(-90deg);
-        transform-origin: 32px 32px;
-        transition: stroke-dashoffset 0.3s ease;
-    }
-
-    &__label {
-        position: absolute;
-        top: 1.6rem;
-        left: 0;
-        right: 0;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        pointer-events: none;
-    }
-
-    &__digit {
-        font-size: 1.8rem;
-        font-weight: 700;
-        color: var(--text-general);
-        line-height: 1.2;
-    }
-
-    &__pct {
-        font-size: 1.1rem;
-        color: var(--text-less-prominent);
-    }
-
-    &__pulse {
-        position: absolute;
-        top: 0;
-        left: 0.4rem;
-        width: 6.4rem;
-        height: 6.4rem;
-        border-radius: 50%;
-        border: 2px solid var(--text-info-blue);
-        animation: digit-ring-pulse 0.7s ease-out;
-        pointer-events: none;
-    }
-
-    &--highest .digit-ring__track {
-        stroke: var(--text-profit-success);
-        opacity: 0.5;
-    }
-
-    &--lowest .digit-ring__track {
-        stroke-dasharray: 3 3;
-    }
-
-    &__badge {
-        margin-top: 0.4rem;
-        font-size: 1rem;
-        color: var(--text-less-prominent);
-        white-space: nowrap;
-    }
-}
-
-@keyframes digit-ring-pulse {
-    0% {
-        transform: scale(0.85);
-        opacity: 0.9;
-    }
-
-    100% {
-        transform: scale(1.35);
-        opacity: 0;
-    }
-}
-
-.strength-row {
-    padding: 1.6rem;
+    width: 100%;
     border-radius: 8px;
-    background: var(--general-section-1);
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+}
+
+.tick-ribbon__cell {
+    flex: 1 1 0;
     display: flex;
-    flex-direction: column;
-    gap: 1.2rem;
+    align-items: center;
+    justify-content: center;
+    height: 3.2rem;
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: #64748b;
+    background: #f8fafc;
+    border-inline-start: 1px solid #e2e8f0;
 
-    &__header {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.8rem;
+    &:first-child {
+        border-inline-start: none;
     }
 
-    &__title {
-        font-size: 1.4rem;
+    &--newest {
+        background: #0f7bff;
+        color: #fff;
         font-weight: 700;
-        color: var(--text-general);
     }
 
-    &__selector {
-        display: flex;
-        align-items: center;
-        gap: 0.6rem;
-        font-size: 1.2rem;
-        color: var(--text-less-prominent);
-
-        select {
-            height: 2.8rem;
-            padding: 0 0.8rem;
-            border-radius: 4px;
-            border: 1px solid var(--border-normal);
-            background: var(--general-main-1);
-            color: var(--text-general);
+    // 40 cells render always; hide all but the last 18 at mobile widths
+    // rather than re-slicing the array per breakpoint.
+    @include mobile-screen {
+        &:nth-child(-n + 22) {
+            display: none;
         }
     }
 }
 
-.stat-bar {
+// ---- Digit circles ----------------------------------------------------------
+
+.market-tool__circles {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 1.2rem 0.8rem;
+}
+
+.digit-circle-wrap {
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
+    align-items: center;
+    width: 7rem;
 
-    &__meta {
-        display: flex;
-        justify-content: space-between;
-        font-size: 1.3rem;
-    }
-
-    &__label {
-        color: var(--text-general);
-    }
-
-    &__value {
-        color: var(--text-general);
-        font-weight: 700;
-    }
-
-    &__track {
-        position: relative;
-        height: 1.2rem;
-        border-radius: 999px;
-        background: var(--general-main-1);
-        overflow: hidden;
-    }
-
-    &__band {
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        background: var(--stat-band-fill);
-    }
-
-    &__marker {
-        position: absolute;
-        top: -0.2rem;
-        bottom: -0.2rem;
-        width: 3px;
-        margin-inline-start: -1.5px;
-        border-radius: 2px;
-        background: var(--text-info-blue);
-        transition:
-            left 0.3s ease,
-            background-color 0.3s ease;
-    }
-
-    &--outside &__marker {
-        background: var(--stat-outside-ink);
-        width: 4px;
-        margin-inline-start: -2px;
-    }
-
-    &__flag {
-        font-size: 1.2rem;
-        font-weight: 700;
-        color: var(--stat-outside-ink);
+    @include mobile-screen {
+        // Exactly 5 per row, 2 rows, regardless of natural sizing.
+        flex: 0 0 20%;
+        width: auto;
     }
 }
 
+.digit-circle {
+    width: 100%;
+    aspect-ratio: 1;
+    max-width: 7rem;
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.2rem;
+    background: #dce5f0;
+    border: 2px solid #c3d0e0;
+    transition:
+        transform 0.15s ease,
+        box-shadow 0.15s ease;
+
+    &--ranked {
+        background: var(--tone-tint);
+        border-color: var(--tone-rank);
+        box-shadow: 0 0 0 4px var(--tone-tint);
+    }
+
+    &--ranked &__digit,
+    &--ranked &__pct {
+        color: var(--tone-text);
+    }
+
+    &--bounce {
+        animation: digit-circle-bounce 0.35s ease-out;
+    }
+}
+
+.digit-circle__digit {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #334155;
+    line-height: 1;
+}
+
+.digit-circle__pct {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #334155;
+}
+
+.digit-circle__caret {
+    width: 0;
+    height: 0;
+    margin-top: 0.4rem;
+    border-left: 0.6rem solid transparent;
+    border-right: 0.6rem solid transparent;
+    border-bottom: 0.7rem solid #0f1b2a;
+}
+
+@keyframes digit-circle-bounce {
+    0% {
+        transform: scale(1);
+    }
+
+    40% {
+        transform: scale(1.16);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+// ---- Panels -------------------------------------------------------------
+
+.market-tool__panels {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.6rem;
+
+    @include mobile-screen {
+        grid-template-columns: 1fr;
+    }
+}
+
+.stat-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1.2rem;
+    padding: 1.6rem;
+    border-radius: 10px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 2px 8px rgb(15 27 42 / 6%);
+}
+
+.stat-panel__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8rem;
+}
+
+.stat-panel__title {
+    font-size: 1.3rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #0f1b2a;
+}
+
+.stat-panel__streak {
+    padding: 0.3rem 0.9rem;
+    border-radius: 999px;
+    font-size: 1.2rem;
+    font-weight: 700;
+    white-space: nowrap;
+    background: var(--tone-tint);
+    color: var(--tone-text);
+    border: 1px solid var(--tone-border-soft);
+}
+
+// ---- Digit picker ---------------------------------------------------------
+
+.digit-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+}
+
+.digit-picker__btn {
+    width: 3.6rem;
+    height: 3.6rem;
+    border-radius: 8px;
+    border: 2px solid #e2e8f0;
+    background: #fff;
+    color: #0f1b2a;
+    font-size: 1.4rem;
+    font-weight: 700;
+    cursor: pointer;
+
+    &--selected {
+        border-color: #0f7bff;
+        color: #0033b8;
+        background: rgb(15 123 255 / 10%);
+    }
+
+    @include mobile-screen {
+        width: 3.8rem;
+        height: 3.8rem;
+    }
+}
+
+// ---- Stat rows (bars) -------------------------------------------------------
+
+.stat-panel__rows {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
+
+.stat-row {
+    display: grid;
+    grid-template-columns: 9rem 1fr 6rem;
+    align-items: center;
+    gap: 0.8rem;
+
+    @include mobile-screen {
+        grid-template-columns: 7.5rem 1fr 5.5rem;
+    }
+}
+
+.stat-row__label {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: #334155;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.stat-row__track {
+    height: 1rem;
+    border-radius: 999px;
+    background: #eef2f6;
+    overflow: hidden;
+}
+
+.stat-row__fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--tone-grad-dark), var(--tone-grad-mid), var(--tone-grad-light));
+    transition: width 0.3s ease;
+}
+
+.stat-row__pct {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: #0f1b2a;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+// ---- History chips ----------------------------------------------------------
+
+.stat-panel__history {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
+
+.stat-panel__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.stat-panel__chips-empty {
+    font-size: 1.2rem;
+    color: #94a3b8;
+}
+
+.stat-panel__chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.2rem;
+    height: 2.2rem;
+    padding: 0 0.4rem;
+    border-radius: 6px;
+    font-size: 1.1rem;
+    font-weight: 800;
+    background: var(--tone-tint);
+    color: var(--tone-text);
+}
+
+.stat-panel__more {
+    align-self: flex-start;
+    padding: 0.4rem 1rem;
+    border-radius: 999px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    color: #334155;
+    font-size: 1.2rem;
+    font-weight: 700;
+    cursor: pointer;
+
+    &:hover {
+        background: #eef2f6;
+    }
+}
+
+// ---- Footnote -----------------------------------------------------------
+
+.market-tool__footnote {
+    margin: 0;
+    padding: 1rem 1.4rem;
+    border-radius: 8px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    color: #64748b;
+    font-size: 1.3rem;
+    line-height: 1.5;
+}
+
 @media (prefers-reduced-motion: reduce) {
-    .digit-ring__pulse,
-    .market-tool__connection__dot {
+    .digit-circle--bounce,
+    .market-tool__live-label--live .market-tool__live-dot {
         animation: none;
     }
 }

@@ -8,7 +8,9 @@
  */
 
 export const DIGITS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
-export const MAX_BUFFER = 500;
+export const MIN_WINDOW_SIZE = 50;
+export const MAX_WINDOW_SIZE = 5000;
+export const DEFAULT_WINDOW_SIZE = 1000;
 
 /**
  * Extracts the last digit of a quote, respecting the symbol's pip size.
@@ -115,4 +117,54 @@ export const computeMatchesDiffersStats = (counts: number[], n: number, digit: n
         matches: computeStat(matchCount, n, 0.1, `Matches ${digit}`),
         differs: computeStat(differCount, n, 0.9, `Differs ${digit}`),
     };
+};
+
+/** "R" if a tick's quote >= the previous quote, else "F" - see useDigitAnalysis. */
+export const computeRiseFallStats = (directions: ('R' | 'F')[]) => {
+    const n = directions.length;
+    const riseCount = directions.filter(d => d === 'R').length;
+    return {
+        rise: computeStat(riseCount, n, 0.5, 'Rise'),
+        fall: computeStat(n - riseCount, n, 0.5, 'Fall'),
+    };
+};
+
+export type TDigitRank = 1 | 2 | 3 | 4;
+
+/**
+ * Ranks only the two most- and two least-frequent digits in the window (1 =
+ * most frequent, 2 = 2nd most, 3 = 2nd least, 4 = least); the other six are
+ * unranked. Ties are broken by digit value ascending, so ranking is stable
+ * and reproducible rather than jumping around for cosmetic reasons.
+ */
+export const rankDigits = (counts: number[]): Map<number, TDigitRank> => {
+    const ranks = new Map<number, TDigitRank>();
+    const total = counts.reduce((sum, c) => sum + c, 0);
+    if (total === 0) return ranks;
+    const sorted = DIGITS.slice().sort((a, b) => counts[b] - counts[a] || a - b);
+    ranks.set(sorted[0], 1);
+    ranks.set(sorted[1], 2);
+    ranks.set(sorted[8], 3);
+    ranks.set(sorted[9], 4);
+    return ranks;
+};
+
+/**
+ * Length of the run of the most recent shared outcome at the end of a
+ * history (e.g. "3x Under"). `null` entries (an outcome that belongs to
+ * neither label, such as the barrier digit itself for Over/Under) are
+ * skipped rather than breaking the streak, so a barrier hit doesn't reset an
+ * otherwise-unbroken run. Purely descriptive of what already happened - not
+ * a prediction of what comes next.
+ */
+export const computeStreak = <T extends string>(outcomes: (T | null)[]): { label: T; count: number } | null => {
+    const labeled = outcomes.filter((o): o is T => o !== null);
+    if (labeled.length === 0) return null;
+    const last = labeled[labeled.length - 1];
+    let count = 0;
+    for (let i = labeled.length - 1; i >= 0; i--) {
+        if (labeled[i] !== last) break;
+        count++;
+    }
+    return { label: last, count };
 };
