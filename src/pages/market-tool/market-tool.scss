@@ -18,10 +18,14 @@
 
     // .controls__section (the run panel bar) only exists in the DOM below
     // MobileWrapper's breakpoint - see iframe-wrapper.scss for the full
-    // reasoning. Same pattern, same var, applied here for the same reason.
-    @include mobile-screen {
-        padding-bottom: calc(var(--run-panel-height, 6.2rem) + env(safe-area-inset-bottom, 0px));
-    }
+    // reasoning. The actual clearance value now lives in the 760px block
+    // below (96px, not --run-panel-height's ~62px) - measured in practice
+    // that 62px wasn't enough and the Rise/Fall chips were still scrolling
+    // in under the absolutely-positioned run bar. Since that 760px rule is
+    // declared later in this file and 600px is a subset of <=760px, it
+    // already wins the cascade at every width this rule could apply to -
+    // leaving both would mean this one never actually takes effect, so it's
+    // removed here rather than kept as dead weight.
 
     // No rule anywhere sets a height on .tick-ribbon - what was actually
     // collapsing it to 2px (its own top+bottom border, with the 32px cells
@@ -530,17 +534,23 @@
 // ---- This tool's own mobile layout (<=760px) -----------------------------
 //
 // Deliberately a different breakpoint from the 600px mobile-screen mixin
-// used above for the run-panel reservation: that one is tied to
-// MobileWrapper's actual isMobile() cutoff (where .controls__section
-// really does or doesn't exist in the DOM) and must not move. This one is
-// purely a visual choice about when this tool's own content should
-// compact for a phone/small-tablet screen, chosen wider (760px) so
-// everything below restructures together instead of splitting across two
-// thresholds.
+// used elsewhere (e.g. iframe-wrapper.scss) for run-panel reservations
+// tied to MobileWrapper's actual isMobile() cutoff. This one is purely a
+// visual choice about when this tool's own content should compact for a
+// phone/small-tablet screen, chosen wider (760px) so everything below
+// restructures together instead of splitting across two thresholds. It
+// still fully covers the <=600px range .controls__section actually exists
+// in, which is what the run-bar clearance right below depends on.
 @media (max-width: 760px) {
     .market-tool {
         gap: 1rem;
         padding: 1.2rem;
+        // The mobile run bar (.controls__section) is absolutely positioned
+        // over the bottom of the page - without this, the Rise/Fall panel's
+        // chips scroll in underneath it and are never reachable. 96px
+        // measured in practice as enough; the old var(--run-panel-height)-
+        // based ~62px wasn't.
+        padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
     }
 
     .market-tool__controls {
@@ -551,7 +561,10 @@
     // onto its own row below via flex-basis: 100% (nothing else fits
     // beside a 100%-wide item in a wrapping flex row).
     .market-tool__control--symbol {
-        flex: 1 1 auto;
+        // flex-basis 0 (not auto) so the symbol control takes the larger
+        // share of the row's free space, with ticks pinned to a fixed
+        // width instead of both splitting ~167/170px roughly evenly.
+        flex: 1 1 0;
         min-width: 0;
     }
 
@@ -564,7 +577,7 @@
     // input and the "Full"/"342 of 1000" hint then share the next line
     // together instead of the hint sitting on a third line of its own.
     .market-tool__control--ticks {
-        flex: 0 0 auto;
+        flex: 0 0 120px;
         flex-direction: row;
         flex-wrap: wrap;
         align-items: center;
@@ -579,9 +592,19 @@
         width: 11rem;
     }
 
+    // Tightened from ~45px to ~30px tall: smaller gap between the two
+    // lines, and both lines' line-height pulled in tighter than their
+    // (unset/1) defaults, which were adding several px of font-metric
+    // "leading" on top of the nominal font-size. Still full width, still
+    // two lines - not removed, not merged into one row.
     .market-tool__price {
         flex: 1 1 100%;
         align-items: flex-end;
+        gap: 0.2rem;
+    }
+
+    .market-tool__live-label {
+        line-height: 1.1;
     }
 
     // A quote like 216537.14 at the old fixed 2.8rem was dominating the
@@ -589,6 +612,7 @@
     // (vh/dvh/svh) that caused the mobile run-panel bug, not width ones.
     .market-tool__quote {
         font-size: clamp(24px, 7vw, 34px);
+        line-height: 0.9;
     }
 
     // Exactly 5 per row, 2 rows - no third row. flex: 0 0 20% doesn't

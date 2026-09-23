@@ -26,7 +26,7 @@ const OVER_UNDER_ROW_TONE: Record<'Over' | 'Under', TTone> = { Over: 'tone-green
 // Chip colours for Over/Under deliberately differ from the row colours
 // (O green, U red - not U yellow). Matches the spec exactly.
 const OVER_UNDER_CHIP_TONE: Record<'Over' | 'Under', TTone> = { Over: 'tone-green', Under: 'tone-red' };
-const MATCH_DIFFER_TONE: Record<'Match' | 'Differ', TTone> = { Match: 'tone-red', Differ: 'tone-blue' };
+const MATCH_DIFFER_TONE: Record<'Match' | 'Differ', TTone> = { Match: 'tone-green', Differ: 'tone-red' };
 const RISE_FALL_TONE: Record<'Rise' | 'Fall', TTone> = { Rise: 'tone-green', Fall: 'tone-red' };
 
 const MarketTool = () => {
@@ -195,8 +195,8 @@ const MarketTool = () => {
                     title='Match / Differ'
                     picker={{ value: matchDigit, onChange: setMatchDigit, ariaLabel: 'Match digit' }}
                     rows={[
-                        { label: `Matches ${matchDigit}`, pct: matches.pHat * 100, hasData: n > 0, tone: 'tone-red' },
-                        { label: `Differs ${matchDigit}`, pct: differs.pHat * 100, hasData: n > 0, tone: 'tone-blue' },
+                        { label: `Matches ${matchDigit}`, pct: matches.pHat * 100, hasData: n > 0, tone: 'tone-green' },
+                        { label: `Differs ${matchDigit}`, pct: differs.pHat * 100, hasData: n > 0, tone: 'tone-red' },
                     ]}
                     streak={
                         matchDifferStreak && {
