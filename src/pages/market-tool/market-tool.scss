@@ -45,6 +45,22 @@
     }
 }
 
+// Centred column with gutters on desktop - previously .market-tool ran
+// edge-to-edge (~97% of the window at 1920px). min(88%, 1680px) gives a
+// consistent gutter at every desktop width (1920 -> 1680px content, 120px
+// each side; 1600 -> 1408px, 96px each side; 1440 -> 1267px, 86px each
+// side) without a fixed breakpoint ladder. The ribbon, circles, and stat
+// panels are all descendants of .market-tool, so they inherit this column
+// and stay aligned with each other and with the controls row above them.
+// Phone (<=760px) is untouched - this query starts one pixel above where
+// that one ends, and the phone layout stays full-width.
+@media (min-width: 761px) {
+    .market-tool {
+        width: min(88%, 1680px);
+        margin-inline: auto;
+    }
+}
+
 // ---- Tone system: one place per colour family, consumed by circles, bars,
 // chips and the streak badge. --tone-rank/--tone-grad-* are the exact hexes
 // given; --tone-text is a darker, readable variant (yellow's is the explicit
