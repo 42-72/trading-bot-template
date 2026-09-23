@@ -10,7 +10,7 @@ import MobileWrapper from '@/components/shared_ui/mobile-wrapper';
 import Tabs from '@/components/shared_ui/tabs/tabs';
 import TradeTypeConfirmationModal from '@/components/trade-type-confirmation-modal';
 import TradingViewModal from '@/components/trading-view-chart/trading-view-modal';
-import { DBOT_TABS, RUN_BAR_HIDDEN_TABS, TAB_IDS } from '@/constants/bot-contents';
+import { DBOT_TABS, TAB_IDS } from '@/constants/bot-contents';
 import { api_base, updateWorkspaceName } from '@/external/bot-skeleton';
 import { CONNECTION_STATUS } from '@/external/bot-skeleton/services/api/observables/connection-status-stream';
 import { isDbotRTL } from '@/external/bot-skeleton/utils/workspace';
@@ -381,10 +381,6 @@ const AppWrapper = observer(() => {
                 <div
                     className={classNames('main__container', {
                         'main__container--active': active_tour && active_tab === DASHBOARD && !isDesktop,
-                        // Reserves space in the tab content for the desktop run
-                        // bar (main.scss) only on the tabs that actually show
-                        // it - Tbots/DTrader don't get an unused gap at the top.
-                        'main__container--run-bar': !RUN_BAR_HIDDEN_TABS.includes(active_tab),
                     })}
                 >
                     <div className='main__tabs-wrapper'>
@@ -520,10 +516,14 @@ const AppWrapper = observer(() => {
                 </div>
             </div>
             <DesktopWrapper>
+                {/* pointer-events: none on this wrapper (main.scss) so the empty
+                    area around the floating Run button never blocks clicks on
+                    the content underneath - kept separate from RunPanel, whose
+                    own drawer toggle must stay clickable regardless. */}
                 <div className='main__run-strategy-wrapper'>
                     <RunStrategy />
-                    <RunPanel />
                 </div>
+                <RunPanel />
                 <ChartModal />
                 <TradingViewModal />
             </DesktopWrapper>

@@ -18,13 +18,13 @@
 // with display:none rather than unmounted, so the iframe (and its chart
 // state) is preserved.
 //
-// top is a further +6.4rem on top of that (14.6rem) to clear the desktop
-// run-strategy-bar (main.scss), which this tab shows - same reasoning and
-// same +6.4rem as .bot-builder's equivalent change.
+// The desktop run strip (main.scss) now floats over this panel rather than
+// reserving space above it, so top stays at its original 8.2rem - no
+// further offset needed.
 .tradingview-panel {
     display: none;
     position: absolute;
-    top: 14.6rem;
+    top: 8.2rem;
     bottom: 0;
     inset-inline-start: 3.2rem;
     inset-inline-end: 3.2rem;
