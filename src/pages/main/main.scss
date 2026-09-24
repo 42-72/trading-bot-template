@@ -797,3 +797,40 @@
     align-items: center;
     justify-content: center;
 }
+
+// Pins the MAIN tab strip to the dark treatment in both themes - measured
+// per-theme values were #151717/#fff/#333 bg-swapping with #c2c2c2/#333333
+// text; this makes it look identical regardless of the theme class on
+// <body>. Scoped with the --main__tabs modifier Tabs (main.tsx,
+// className='main__tabs') applies only to THIS strip's own .dc-tabs__list/
+// .dc-tabs__item, so the run-panel's separate Summary/Transactions/Journal
+// <Tabs> (no className, so no --main__tabs modifier) and any other
+// .dc-tabs usage keep following the theme untouched.
+.dc-tabs__list--main__tabs {
+    background: #151717 !important;
+}
+
+.dc-tabs__item--main__tabs {
+    // --text-general drives this label's own text colour (tabs.scss:
+    // .dc-tabs__item { color: var(--text-general) }) AND every tab icon's
+    // fill (main.tsx passes fill='var(--text-general)' on each one, not a
+    // hardcoded colour) - redefining it here on the <li> itself overrides
+    // whatever the current theme sets on <body>, recolouring the label and
+    // its icon together in one step rather than needing to target the icon
+    // separately.
+    --text-general: #e8e8e8;
+    color: #e8e8e8 !important;
+    font-weight: 600;
+
+    &.dc-tabs__active {
+        // The active tab's icon still only ever reads --text-general (its
+        // fill prop is static JSX, not conditioned on active state), so it
+        // needs its own redefinition here - scoped to just the active <li>
+        // - to stay in step with its own (brighter) label colour instead of
+        // being left behind at the inactive #e8e8e8.
+        --text-general: #ffffff;
+        background: #0e0e0e !important;
+        color: #ffffff !important;
+        font-weight: 700;
+    }
+}
