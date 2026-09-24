@@ -150,12 +150,19 @@
     color: #94a3b8;
 }
 
+// Its own full-width row between the controls and the ribbon (not inside
+// .market-tool__controls any more - it used to be the last child there
+// with margin-left: auto, which pinned it to the same top-right corner the
+// floating desktop Run bar occupies, so the two overlapped). Left-aligned
+// by default: .market-tool is a flex column with the default stretch
+// cross-axis, so this box is already full width, and with no
+// justify-content set here its children (label, quote) simply sit
+// together at its left edge - the same left edge .tick-ribbon has, since
+// both are plain siblings under the same padding.
 .market-tool__price {
     display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 0.4rem;
-    margin-inline-start: auto;
+    align-items: baseline;
+    gap: 1.2rem;
 }
 
 .market-tool__live-label {
@@ -596,11 +603,6 @@
         white-space: nowrap;
     }
 
-    .market-tool__price {
-        flex: 1 1 100%;
-        align-items: flex-end;
-    }
-
     // A quote like 216537.14 at the old fixed 2.8rem was dominating the
     // screen; vw (viewport WIDTH) is fine here - it's viewport HEIGHT units
     // (vh/dvh/svh) that caused the mobile run-panel bug, not width ones.
@@ -654,16 +656,12 @@
         flex: 0 0 120px !important;
     }
 
-    // Was a vertical stack ("LIVE PRICE" above the number), so padding
-    // changes couldn't shrink it - its height was set by the two stacked
-    // line-boxes regardless of padding. Horizontal instead: label and
-    // number share one line, baseline-aligned, number right-aligned.
+    // Base layout is already horizontal/baseline-aligned; at this width the
+    // number is pushed to the far right (space-between) instead of sitting
+    // right next to the label, and the gap tightens to match.
     .market-tool__price {
-        flex-direction: row;
-        align-items: baseline;
         justify-content: space-between;
         gap: 8px;
-        padding-block: 0;
     }
 
     // The mobile run bar (.controls__section) is absolutely positioned
@@ -733,10 +731,5 @@
         bottom: -18px;
         left: 0;
         white-space: nowrap;
-    }
-
-    .market-tool__price {
-        margin-left: auto;
-        flex: 0 0 auto;
     }
 }

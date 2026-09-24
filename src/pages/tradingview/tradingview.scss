@@ -10,24 +10,30 @@
 // (position: relative, already correctly sized off 100svh) instead lets
 // bottom: 0 reach its true edge with no viewport unit of our own.
 //
-// Desktop offsets (top/inset-inline-*) are 1.6rem larger than the
-// equivalent .bot-builder values because .bot-builder still sits inside
-// .main, which adds its own 1.6rem padding on every side; being a level
-// higher, this panel has to add that back itself to land on the same
-// pixels (top 6.6rem + .main's 1.6rem padding-top = 8.2rem, etc). Hidden
-// with display:none rather than unmounted, so the iframe (and its chart
-// state) is preserved.
+// top is 1.6rem larger than the equivalent .bot-builder value because
+// .bot-builder still sits inside .main, which adds its own 1.6rem
+// padding-top; being a level higher, this panel has to add that back
+// itself to land on the same pixel (top 6.6rem + .main's 1.6rem
+// padding-top = 8.2rem). Hidden with display:none rather than unmounted,
+// so the iframe (and its chart state) is preserved.
 //
 // The desktop run strip (main.scss) now floats over this panel rather than
 // reserving space above it, so top stays at its original 8.2rem - no
 // further offset needed.
+//
+// inset-inline-start/end are 0, not the +1.6rem-over-.bot-builder pattern
+// top follows - the chart should be edge to edge (measured: it was inset
+// 32px each side while .dc-tabs__content itself was only inset 16px, so
+// this panel was narrower than the tab row above it for no reason). Market
+// Tool's own centred column and the Charts tab (a different component,
+// SmartCharts, not this iframe) are untouched by this.
 .tradingview-panel {
     display: none;
     position: absolute;
     top: 8.2rem;
     bottom: 0;
-    inset-inline-start: 3.2rem;
-    inset-inline-end: 3.2rem;
+    inset-inline-start: 0;
+    inset-inline-end: 0;
     background: var(--general-main-1);
 
     &--active {

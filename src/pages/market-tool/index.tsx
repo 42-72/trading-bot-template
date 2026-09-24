@@ -138,21 +138,21 @@ const MarketTool = () => {
                     />
                     <span className='market-tool__control-hint'>{tickCountLabel}</span>
                 </div>
+            </div>
 
-                <div className='market-tool__price'>
-                    <span
-                        className={classNames('market-tool__live-label', {
-                            'market-tool__live-label--live': isLive && !isConnecting,
-                        })}
-                    >
-                        <span className='market-tool__live-dot' aria-hidden='true' />
-                        {isConnecting ? 'Connecting…' : 'Live price'}
-                    </span>
-                    <span className='market-tool__quote'>
-                        {quoteMain}
-                        <span className='market-tool__quote-digit'>{quoteLastDigit}</span>
-                    </span>
-                </div>
+            <div className='market-tool__price'>
+                <span
+                    className={classNames('market-tool__live-label', {
+                        'market-tool__live-label--live': isLive && !isConnecting,
+                    })}
+                >
+                    <span className='market-tool__live-dot' aria-hidden='true' />
+                    {isConnecting ? 'Connecting…' : 'Live price'}
+                </span>
+                <span className='market-tool__quote'>
+                    {quoteMain}
+                    <span className='market-tool__quote-digit'>{quoteLastDigit}</span>
+                </span>
             </div>
 
             <TickRibbon digits={ribbonDigits} />
