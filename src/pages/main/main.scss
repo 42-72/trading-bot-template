@@ -627,7 +627,8 @@
     left: 0;
     bottom: 0;
     width: 100%;
-    height: 100vh;
+    height: 100vh; /* fallback for engines without svh */
+    height: 100svh;
     padding: 1.6rem;
     border-top: solid 1px var(--border-normal);
     z-index: 1000;
@@ -777,6 +778,34 @@
                 }
             }
         }
+    }
+}
+
+// Same class of bug as the mobile Run button fixed earlier: on a real phone
+// the visible viewport is shorter than the nominal one by whatever the
+// browser's own address-bar chrome takes up, so a card sized/positioned
+// against the full (large) viewport can end up with its bottom edge - and
+// the Skip/Start buttons that live near it - off the actually-visible
+// screen. 100svh (small viewport - guaranteed-smallest; same unit .layout/
+// .bot-dashboard already size themselves with, above) keeps max-height
+// from ever exceeding what's actually visible; overflow-y: auto is the
+// fallback for the rare case this card's own content (the Welcome image/
+// text) is still taller than that even so - it scrolls to reach the
+// buttons rather than making them unreachable outright.
+//
+// Scoped to these two modifiers specifically (both only ever added by the
+// onboarding tour, onboarding-tour-mobile.tsx) rather than the bare
+// .dbot-slider, so the separate Bot Builder tour card
+// (.dbot-slider__bot-builder-tour, bot-builder-tour-mobile.tsx - no
+// --active/--tour-position modifier, already height: auto and much
+// shorter than a full viewport) doesn't pick up an extra bottom padding it
+// never needed.
+.dbot-slider--active,
+.dbot-slider--tour-position {
+    @media (max-width: 760px) {
+        max-height: 100svh;
+        padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+        overflow-y: auto;
     }
 }
 
