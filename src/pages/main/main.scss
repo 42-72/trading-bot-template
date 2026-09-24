@@ -8,6 +8,19 @@
     }
 }
 
+// Only ever rendered by the main tab strip (main.tsx) - not used by any
+// other component - so hiding it here doesn't need any extra scoping to
+// stay clear of other .dc-tabs usages (run-panel's Summary/Transactions/
+// Journal tabs never render these spans at all).
+//
+// These faded to var(--general-section-1) - fine while the strip itself
+// followed the theme, but now that .dc-tabs__list is pinned to #151717 in
+// both themes (main.scss, further down), the light-theme fade
+// (--general-section-1 still resolves light there) painted a light smear
+// over the pinned dark strip's now-always-dark labels. Each one also just
+// covered 64px of tab labels outright. Hidden rather than recoloured -
+// there's no reason to keep an edge fade at all once it can't match the
+// (no longer theme-following) strip behind it.
 .tabs-shadow {
     position: absolute;
     top: 8px;
@@ -15,6 +28,11 @@
     width: 64px;
     z-index: 1;
     pointer-events: none;
+
+    &--left,
+    &--right {
+        display: none;
+    }
 
     &--left {
         left: 0;
