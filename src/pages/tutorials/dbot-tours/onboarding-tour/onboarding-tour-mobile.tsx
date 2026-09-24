@@ -31,7 +31,13 @@ type TTourData = TMobileTourConfig & {
 const isTourDebugEnabled = () => {
     if (typeof window === 'undefined') return false;
     try {
-        return new URLSearchParams(window.location.search).get('tourdebug') === '1';
+        // localStorage is the persisted copy main.tsx writes on app load - the
+        // OAuth redirect strips ?tourdebug=1 from the URL, so the URL check
+        // alone misses the flag on the post-login return.
+        return (
+            new URLSearchParams(window.location.search).get('tourdebug') === '1' ||
+            localStorage.getItem('tourdebug') === '1'
+        );
     } catch {
         return false;
     }
