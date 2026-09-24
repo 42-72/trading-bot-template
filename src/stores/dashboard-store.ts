@@ -34,10 +34,8 @@ export interface IDashboardStore {
     faq_search_value: string | null;
     has_mobile_preview_loaded: boolean;
     is_web_socket_intialised: boolean;
-    initInfoPanel: () => void;
     is_dialog_open: boolean;
     is_file_supported: boolean;
-    is_info_panel_visible: boolean;
     is_preview_on_popup: boolean;
     onCloseDialog: () => void;
     onCloseTour: (param: Partial<string>) => void;
@@ -45,7 +43,6 @@ export interface IDashboardStore {
     setActiveTab: (active_tab: number) => void;
     setActiveTabTutorial: (active_tab_tutorials: number) => void;
     setFAQSearchValue: (faq_search_value: string) => void;
-    setInfoPanelVisibility: (visibility: boolean) => void;
     setIsFileSupported: (is_file_supported: boolean) => void;
     setWebSocketState: (is_web_socket_intialised: boolean) => void;
     setOpenSettings: (toast_message: NOTIFICATION_TYPE) => void;
@@ -79,11 +76,9 @@ export default class DashboardStore implements IDashboardStore {
             getFileArray: observable,
             has_file_loaded: observable,
             has_mobile_preview_loaded: observable,
-            initInfoPanel: action.bound,
             active_tour: observable,
             is_dialog_open: observable,
             is_file_supported: observable,
-            is_info_panel_visible: observable,
             is_preview_on_popup: observable,
             is_tour_dialog_visible: observable,
             is_web_socket_intialised: observable,
@@ -98,7 +93,6 @@ export default class DashboardStore implements IDashboardStore {
             faq_title: observable,
             setFaqTitle: action.bound,
             setFileLoaded: action.bound,
-            setInfoPanelVisibility: action.bound,
             setIsFileSupported: action.bound,
             setPreviewOnDialog: action.bound,
             setPreviewOnPopup: action.bound,
@@ -175,7 +169,6 @@ export default class DashboardStore implements IDashboardStore {
                 }
             }
         );
-        this.initInfoPanel();
     }
 
     active_tab = 0;
@@ -189,7 +182,6 @@ export default class DashboardStore implements IDashboardStore {
     active_tour = '';
     is_dialog_open = false;
     is_file_supported = false;
-    is_info_panel_visible = false;
     is_preview_on_popup = false;
     is_tour_dialog_visible = false;
     show_toast = false;
@@ -300,10 +292,6 @@ export default class DashboardStore implements IDashboardStore {
         this.is_file_supported = is_file_supported;
     };
 
-    initInfoPanel() {
-        if (!localStorage.getItem('dbot_should_show_info')) this.is_info_panel_visible = true;
-    }
-
     setTourActiveStep = (active_tour_step_number: number) => {
         this.active_tour_step_number = active_tour_step_number;
     };
@@ -374,10 +362,6 @@ export default class DashboardStore implements IDashboardStore {
         } else {
             this.is_dialog_open = false;
         }
-    };
-
-    setInfoPanelVisibility = (is_info_panel_visible: boolean): void => {
-        this.is_info_panel_visible = is_info_panel_visible;
     };
 
     onZoomInOutClick = (is_zoom_in: boolean): void => {

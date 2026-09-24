@@ -781,31 +781,26 @@
     }
 }
 
-// Same class of bug as the mobile Run button fixed earlier: on a real phone
-// the visible viewport is shorter than the nominal one by whatever the
-// browser's own address-bar chrome takes up, so a card sized/positioned
-// against the full (large) viewport can end up with its bottom edge - and
-// the Skip/Start buttons that live near it - off the actually-visible
-// screen. 100svh (small viewport - guaranteed-smallest; same unit .layout/
-// .bot-dashboard already size themselves with, above) keeps max-height
-// from ever exceeding what's actually visible; overflow-y: auto is the
-// fallback for the rare case this card's own content (the Welcome image/
-// text) is still taller than that even so - it scrolls to reach the
-// buttons rather than making them unreachable outright.
+// The real blocker turned out to be a second overlay (the "Welcome to Deriv
+// Bot!" info panel modal, removed entirely - see info-panel.tsx's deletion)
+// rendering on top of this card, not the card's own sizing: it's already
+// position: fixed and pinned to the bottom (above), so with that modal
+// gone it never needs to scroll to reach Skip/Start. The previous
+// max-height: 100svh / overflow-y: auto here was treating the symptom;
+// removed. Kept: a small safe-area bottom clearance, same as the rest of
+// this file's pattern for fixed bottom bars (.controls__section, run-panel.
+// scss) - just enough that the buttons never sit flush against a device's
+// home-indicator/gesture-bar area.
 //
 // Scoped to these two modifiers specifically (both only ever added by the
 // onboarding tour, onboarding-tour-mobile.tsx) rather than the bare
 // .dbot-slider, so the separate Bot Builder tour card
 // (.dbot-slider__bot-builder-tour, bot-builder-tour-mobile.tsx - no
-// --active/--tour-position modifier, already height: auto and much
-// shorter than a full viewport) doesn't pick up an extra bottom padding it
-// never needed.
+// --active/--tour-position modifier) doesn't pick up padding it never had.
 .dbot-slider--active,
 .dbot-slider--tour-position {
     @media (max-width: 760px) {
-        max-height: 100svh;
-        padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-        overflow-y: auto;
+        padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
     }
 }
 
