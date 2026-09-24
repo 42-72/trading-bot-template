@@ -106,6 +106,28 @@ const MarketTool = () => {
 
     const tickCountLabel = n >= windowSize ? 'Full' : n > 0 ? `${n} of ${windowSize}` : 'Waiting…';
 
+    // Rendered twice (see market-tool.scss) rather than moved with CSS
+    // alone: desktop needs it as its own row, clear of the floating Run bar
+    // above the ribbon; mobile (<=760px, no floating bar - Run lives in the
+    // bottom .controls__section there) needs it back as an actual flex-wrap
+    // child of .market-tool__controls so flex: 1 1 100% can push it onto
+    // its own wrapped row under the symbol/ticks pair, the pre-runfloat
+    // arrangement. A CSS position alone can't relocate it between two
+    // different parent containers, only which of these two copies is
+    // display: none at a given width.
+    const price_label = (
+        <span className={classNames('market-tool__live-label', { 'market-tool__live-label--live': isLive && !isConnecting })}>
+            <span className='market-tool__live-dot' aria-hidden='true' />
+            {isConnecting ? 'Connecting…' : 'Live price'}
+        </span>
+    );
+    const price_quote = (
+        <span className='market-tool__quote'>
+            {quoteMain}
+            <span className='market-tool__quote-digit'>{quoteLastDigit}</span>
+        </span>
+    );
+
     return (
         <div className='market-tool'>
             <div className='market-tool__controls'>
@@ -138,21 +160,16 @@ const MarketTool = () => {
                     />
                     <span className='market-tool__control-hint'>{tickCountLabel}</span>
                 </div>
+
+                <div className='market-tool__price market-tool__price--in-controls'>
+                    {price_label}
+                    {price_quote}
+                </div>
             </div>
 
-            <div className='market-tool__price'>
-                <span
-                    className={classNames('market-tool__live-label', {
-                        'market-tool__live-label--live': isLive && !isConnecting,
-                    })}
-                >
-                    <span className='market-tool__live-dot' aria-hidden='true' />
-                    {isConnecting ? 'Connecting…' : 'Live price'}
-                </span>
-                <span className='market-tool__quote'>
-                    {quoteMain}
-                    <span className='market-tool__quote-digit'>{quoteLastDigit}</span>
-                </span>
+            <div className='market-tool__price market-tool__price--standalone'>
+                {price_label}
+                {price_quote}
             </div>
 
             <TickRibbon digits={ribbonDigits} />

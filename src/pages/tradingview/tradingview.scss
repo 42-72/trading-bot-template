@@ -85,3 +85,19 @@
         }
     }
 }
+
+// Explicit, defensive undo below desktop-screen's 1280px, alongside
+// .tradingview-panel's own mobile-or-tablet-screen block above: there is no
+// floating Run bar at these widths (Run lives in the bottom
+// .controls__section instead), so there is nothing for the crop to tuck
+// the banner behind - it would just remove the banner for no reason.
+@include mobile-or-tablet-screen {
+    .iframe-wrapper.tradingview-container {
+        overflow: visible;
+
+        iframe {
+            margin-top: 0;
+            height: 100%;
+        }
+    }
+}

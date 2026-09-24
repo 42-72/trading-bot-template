@@ -150,19 +150,30 @@
     color: #94a3b8;
 }
 
-// Its own full-width row between the controls and the ribbon (not inside
-// .market-tool__controls any more - it used to be the last child there
-// with margin-left: auto, which pinned it to the same top-right corner the
-// floating desktop Run bar occupies, so the two overlapped). Left-aligned
-// by default: .market-tool is a flex column with the default stretch
-// cross-axis, so this box is already full width, and with no
-// justify-content set here its children (label, quote) simply sit
-// together at its left edge - the same left edge .tick-ribbon has, since
-// both are plain siblings under the same padding.
+// Rendered twice (index.tsx) - --standalone as its own full-width row
+// between the controls and the ribbon, --in-controls as an actual child of
+// .market-tool__controls - only one is display: none at a given width (set
+// below/in the 760px block), matching whichever one this width's Run bar
+// arrangement needs clear of. Base styling here (shared by both) is the
+// desktop-appropriate one: .market-tool is a flex column with the default
+// stretch cross-axis, so a full-width box's children (label, quote) simply
+// sit together at its left edge with no justify-content needed - the same
+// left edge .tick-ribbon has, since both are plain siblings under the same
+// padding. --in-controls overrides what it needs to inside the 760px block.
 .market-tool__price {
     display: flex;
     align-items: baseline;
     gap: 1.2rem;
+}
+
+// Desktop (>=761px, no override below): --standalone is the one that's
+// meant to be visible - it used to be the last child of
+// .market-tool__controls with margin-left: auto, which pinned it to the
+// same top-right corner the floating Run bar occupies, so the two
+// overlapped; moving it out to its own row (main.scss's floating strip
+// work) fixed that, but only applies at the width that strip exists at.
+.market-tool__price--in-controls {
+    display: none;
 }
 
 .market-tool__live-label {
@@ -656,10 +667,24 @@
         flex: 0 0 120px !important;
     }
 
-    // Base layout is already horizontal/baseline-aligned; at this width the
-    // number is pushed to the far right (space-between) instead of sitting
-    // right next to the label, and the gap tightens to match.
-    .market-tool__price {
+    // No floating Run bar at this width - Run lives in the bottom
+    // .controls__section instead - so the pre-runfloat arrangement is
+    // restored: --in-controls becomes visible again as an actual flex-wrap
+    // child of .market-tool__controls (flex: 1 1 100% pushes it onto its
+    // own wrapped row below the symbol/ticks pair, matching the measured
+    // pre-runfloat ~27px-tall third child), and --standalone (the row
+    // between controls and the ribbon, needed only to clear the desktop
+    // strip) is hidden instead. Base layout is already horizontal/
+    // baseline-aligned; here the number is pushed to the far right
+    // (space-between) instead of sitting right next to the label, and the
+    // gap tightens to match.
+    .market-tool__price--standalone {
+        display: none;
+    }
+
+    .market-tool__price--in-controls {
+        display: flex;
+        flex: 1 1 100%;
         justify-content: space-between;
         gap: 8px;
     }
