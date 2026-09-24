@@ -10,27 +10,30 @@
 // (position: relative, already correctly sized off 100svh) instead lets
 // bottom: 0 reach its true edge with no viewport unit of our own.
 //
-// top is 1.6rem larger than the equivalent .bot-builder value because
-// .bot-builder still sits inside .main, which adds its own 1.6rem
-// padding-top; being a level higher, this panel has to add that back
-// itself to land on the same pixel (top 6.6rem + .main's 1.6rem
-// padding-top = 8.2rem). Hidden with display:none rather than unmounted,
-// so the iframe (and its chart state) is preserved.
+// top used to carry an extra +1.6rem beyond .bot-builder's own 6.6rem, on
+// the theory that .bot-builder sits a level deeper inside .main (which
+// would add its own 1.6rem padding-top back). app-content.jsx shows that
+// theory was wrong: <Main/>, <BotBuilder/> and <TradingViewPanel/> are all
+// direct siblings under .bot-dashboard - .bot-builder is not nested inside
+// .main either, so there was never a padding level to compensate for. That
+// stray 1.6rem (16px) was a real, measured gap between this panel and
+// .dc-tabs__list's bottom edge; top now matches .bot-builder's value
+// exactly. Hidden with display:none rather than unmounted, so the iframe
+// (and its chart state) is preserved.
 //
-// The desktop run strip (main.scss) now floats over this panel rather than
-// reserving space above it, so top stays at its original 8.2rem - no
-// further offset needed.
+// The desktop run strip (main.scss) floats over this panel rather than
+// reserving space above it, so no further offset is needed here for that.
 //
-// inset-inline-start/end are 0, not the +1.6rem-over-.bot-builder pattern
-// top follows - the chart should be edge to edge (measured: it was inset
-// 32px each side while .dc-tabs__content itself was only inset 16px, so
-// this panel was narrower than the tab row above it for no reason). Market
+// inset-inline-start/end are 0 (not the same +1.6rem pattern top used to
+// follow) - the chart should be edge to edge (measured: it was inset 32px
+// each side while .dc-tabs__content itself was only inset 16px, so this
+// panel was narrower than the tab row above it for no reason). Market
 // Tool's own centred column and the Charts tab (a different component,
 // SmartCharts, not this iframe) are untouched by this.
 .tradingview-panel {
     display: none;
     position: absolute;
-    top: 8.2rem;
+    top: 6.6rem;
     bottom: 0;
     inset-inline-start: 0;
     inset-inline-end: 0;
@@ -57,4 +60,28 @@
 .tradingview-tab-panel {
     width: 100%;
     height: 100%;
+}
+
+// Deriv's hosted TradingView instance (TRADINGVIEW_SRC, index.tsx) always
+// renders its own banner/logo strip at the top of the page it serves - we
+// don't control that page's markup, so it can't be removed, only clipped.
+// overflow: hidden on the wrapper + a negative margin-top on the iframe
+// slides the whole document up inside it, cropping the banner behind the
+// floating Run bar; the matching height increase keeps the iframe's own
+// bottom edge flush with the wrapper's (otherwise the negative margin would
+// leave an equal-sized empty gap at the bottom). No z-index here - the
+// iframe must stay under .main__run-strategy-wrapper's z-index: 30, not be
+// raised to compete with it. Desktop-only (min-width: 1280px, matching
+// where that floating strip actually exists - useDevice().isDesktop in
+// run-strategy.tsx) - there's nothing to hide the banner behind below that
+// width, where Run instead lives in the mobile .controls__section bar.
+@include desktop-screen {
+    .iframe-wrapper.tradingview-container {
+        overflow: hidden;
+
+        iframe {
+            margin-top: -64px;
+            height: calc(100% + 64px);
+        }
+    }
 }
