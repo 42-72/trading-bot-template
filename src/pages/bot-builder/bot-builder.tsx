@@ -5,11 +5,9 @@ import { botNotification } from '@/components/bot-notification/bot-notification'
 import { notification_message } from '@/components/bot-notification/bot-notification-utils';
 import { useStore } from '@/hooks/useStore';
 import { localize } from '@deriv-com/translations';
-import { useDevice } from '@deriv-com/ui';
 import { TBlocklyEvents } from 'Types';
 import LoadModal from '../../components/load-modal';
 import SaveModal from '../dashboard/bot-list/save-modal';
-import BotBuilderTourHandler from '../tutorials/dbot-tours/bot-builder-tour';
 import QuickStrategy1 from './quick-strategy';
 import WorkspaceWrapper from './workspace-wrapper';
 
@@ -21,7 +19,6 @@ const BotBuilder = observer(() => {
     const { is_loading } = blockly_store;
     const is_blockly_listener_registered = React.useRef(false);
     const is_blockly_delete_listener_registered = React.useRef(false);
-    const { isDesktop } = useDevice();
     const { onMount, onUnmount } = app;
     const el_ref = React.useRef<HTMLInputElement | null>(null);
 
@@ -122,7 +119,6 @@ const BotBuilder = observer(() => {
                     <WorkspaceWrapper />
                 </div>
             </div>
-            {active_tab === 1 && <BotBuilderTourHandler is_mobile={!isDesktop} />}
             {/* removed this outside from toolbar becuase it needs to loaded seperately without dependency */}
             <LoadModal />
             <SaveModal />

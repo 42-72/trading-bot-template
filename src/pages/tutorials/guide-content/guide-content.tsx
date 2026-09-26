@@ -2,7 +2,6 @@ import React from 'react';
 import classNames from 'classnames';
 import Dialog from '@/components/shared_ui/dialog';
 import Text from '@/components/shared_ui/text';
-import { DBOT_TABS } from '@/constants/bot-contents';
 import { useStore } from '@/hooks/useStore';
 import { LegacyPlay1pxIcon } from '@deriv/quill-icons/Legacy';
 import { Localize, localize } from '@deriv-com/translations';
@@ -26,33 +25,16 @@ type TGuideContent = {
     is_dialog_open: boolean;
 };
 
+// The "Step-by-step guides" section used to live here, driven by
+// guide_tab_content (user_guide_content() in tutorials/constants.ts) -
+// every entry in it launched one of the two tours, both now removed, so
+// that data source is permanently empty and the section is gone with it.
+// guide_tab_content stays as a prop (tutorials.tsx still passes it) so
+// that file doesn't need touching, but it's otherwise unused here now.
 const GuideContent = ({ guide_tab_content, video_tab_content, is_dialog_open }: TGuideContent) => {
     const { isDesktop } = useDevice();
     const { dashboard } = useStore();
-    const {
-        dialog_options,
-        onCloseDialog: onOkButtonClick,
-        setActiveTab,
-        setTourDialogVisibility,
-        showVideoDialog,
-        setActiveTour,
-        setShowMobileTourDialog,
-    } = dashboard;
-
-    // Only the Bot Builder tour's own "Guide" card calls this now - the
-    // onboarding tour's card, and this function's other branch, are gone.
-    const triggerTour = () => {
-        setActiveTab(DBOT_TABS.BOT_BUILDER);
-        if (!isDesktop) setActiveTour('bot_builder');
-        setTourDialogVisibility(true);
-        if (!isDesktop) setShowMobileTourDialog(true);
-        setTimeout(() => {
-            const botBuilderSection = document.getElementById('id-bot-builder');
-            if (botBuilderSection) {
-                botBuilderSection.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-            }
-        }, 100);
-    };
+    const { dialog_options, onCloseDialog: onOkButtonClick, showVideoDialog } = dashboard;
 
     const has_guide_content = guide_tab_content.length > 0 || video_tab_content.length > 0;
 
@@ -60,60 +42,6 @@ const GuideContent = ({ guide_tab_content, video_tab_content, is_dialog_open }: 
         () =>
             has_guide_content && (
                 <div className='tutorials-wrap'>
-                    {guide_tab_content && guide_tab_content.length > 0 && (
-                        <div className='tutorials-wrap__group'>
-                            <div className='tutorials-wrap__group__title'>
-                                <Text
-                                    align='left'
-                                    weight='bold'
-                                    color='prominent'
-                                    lineHeight='s'
-                                    size={isDesktop ? 's' : 'xs'}
-                                >
-                                    <Localize i18n_default_text='Step-by-step guides' />
-                                </Text>
-                            </div>
-                            <div className='tutorials-wrap__group__guides'>
-                                {guide_tab_content?.map(({ id, content, src, subtype }) => {
-                                    return (
-                                        <div className='tutorials-wrap__group__cards' key={id}>
-                                            <div
-                                                className='tutorials-wrap--tour'
-                                                onClick={() => {
-                                                    if (subtype) {
-                                                        triggerTour();
-                                                        /* [AI] - Analytics event tracking removed - see migrate-docs/MONITORING_PACKAGES.md for re-implementation guide */
-                                                        /* [/AI] */
-                                                    }
-                                                }}
-                                                onKeyDown={e => {
-                                                    if (e.key === 'Enter') triggerTour();
-                                                }}
-                                            >
-                                                <div
-                                                    className={classNames('tutorials-wrap__placeholder__tours', {
-                                                        'tutorials-wrap__placeholder--disabled': !src,
-                                                    })}
-                                                    style={{
-                                                        backgroundImage: `url(${src})`,
-                                                    }}
-                                                />
-                                            </div>
-                                            <Text
-                                                align='center'
-                                                color='prominent'
-                                                lineHeight='s'
-                                                size={isDesktop ? 's' : 'xs'}
-                                            >
-                                                {content}
-                                            </Text>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    )}
-
                     {video_tab_content && video_tab_content.length > 0 && (
                         <div className='tutorials-wrap__group'>
                             <div className='tutorials-wrap__group__title'>

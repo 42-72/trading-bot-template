@@ -13,7 +13,6 @@ import {
     user_guide_content,
     VIDEOS,
 } from '../pages/tutorials/constants';
-import { setTourSettings, tour_type, TTourType } from '../pages/tutorials/dbot-tours/utils';
 import {
     TFaqContent,
     TGuideContent,
@@ -38,8 +37,6 @@ export interface IDashboardStore {
     is_file_supported: boolean;
     is_preview_on_popup: boolean;
     onCloseDialog: () => void;
-    onCloseTour: (param: Partial<string>) => void;
-    onTourEnd: (step: number, is_tour_active: boolean) => void;
     setActiveTab: (active_tab: number) => void;
     setActiveTabTutorial: (active_tab_tutorials: number) => void;
     setFAQSearchValue: (faq_search_value: string) => void;
@@ -51,7 +48,6 @@ export interface IDashboardStore {
     setFaqTitle: (param: string) => void;
     faq_title: string;
     show_toast: boolean;
-    show_mobile_tour_dialog: boolean;
     showVideoDialog: (param: { [key: string]: string }) => void;
     strategy_save_type: string;
     toast_message: string;
@@ -84,8 +80,6 @@ export default class DashboardStore implements IDashboardStore {
             is_web_socket_intialised: observable,
             tutorials_combined_content: observable,
             onCloseDialog: action.bound,
-            onCloseTour: action.bound,
-            onTourEnd: action.bound,
             setActiveTab: action.bound,
             setActiveTabTutorial: action.bound,
             setWebSocketState: action.bound,
@@ -102,7 +96,6 @@ export default class DashboardStore implements IDashboardStore {
             resetTutorialTabContent: action.bound,
             filterTuotrialTab: action.bound,
             show_toast: observable,
-            show_mobile_tour_dialog: observable,
             showVideoDialog: action.bound,
             strategy_save_type: observable,
             toast_message: observable,
@@ -111,7 +104,6 @@ export default class DashboardStore implements IDashboardStore {
             quick_strategy_tab_content: observable,
             video_tab_content: observable,
             setStrategySaveType: action.bound,
-            setShowMobileTourDialog: action.bound,
             is_chart_modal_visible: observable,
             is_trading_view_modal_visible: observable,
             bot_builder_symbol: observable,
@@ -173,7 +165,6 @@ export default class DashboardStore implements IDashboardStore {
 
     active_tab = 0;
     active_tab_tutorials = 0;
-    active_tour_step_number = 0;
     dialog_options: TDialogOptions = {};
     faq_search_value = '';
     getFileArray = [];
@@ -185,7 +176,6 @@ export default class DashboardStore implements IDashboardStore {
     is_preview_on_popup = false;
     is_tour_dialog_visible = false;
     show_toast = false;
-    show_mobile_tour_dialog = false;
     strategy_save_type = 'unsaved';
     toast_message = '';
     is_web_socket_intialised = true;
@@ -267,10 +257,6 @@ export default class DashboardStore implements IDashboardStore {
         }
     };
 
-    setShowMobileTourDialog = (show_mobile_tour_dialog: boolean) => {
-        this.show_mobile_tour_dialog = show_mobile_tour_dialog;
-    };
-
     setWebSocketState = (is_web_socket_intialised: boolean) => {
         this.is_web_socket_intialised = is_web_socket_intialised;
     };
@@ -290,10 +276,6 @@ export default class DashboardStore implements IDashboardStore {
 
     setIsFileSupported = (is_file_supported: boolean) => {
         this.is_file_supported = is_file_supported;
-    };
-
-    setTourActiveStep = (active_tour_step_number: number) => {
-        this.active_tour_step_number = active_tour_step_number;
     };
 
     setPreviewOnDialog = (has_mobile_preview_loaded: boolean) => {
@@ -372,24 +354,4 @@ export default class DashboardStore implements IDashboardStore {
         workspace.zoom(metrics.viewWidth / 2, metrics.viewHeight / 2, addition);
     };
 
-    onCloseTour = (): void => {
-        setTourSettings(new Date().getTime(), `${tour_type.key}_token`);
-        this.setActiveTour('');
-    };
-    setTourEnd = (param: TTourType): void => {
-        const { key } = param;
-        if (this.core.ui.is_mobile) this.setTourDialogVisibility(true);
-        setTourSettings(new Date().getTime(), `${key}_token`);
-    };
-
-    // step === 8 (the onboarding tour's own final step) used to be handled
-    // here too; that tour is gone, and the Bot Builder tour's own step
-    // counter never reaches 8, so only its own step === 3 completion stays.
-    onTourEnd = (step: number, is_tour_active: boolean): void => {
-        if (!is_tour_active && step === 3) {
-            this.onCloseTour();
-            this.setTourEnd(tour_type);
-            this.setActiveTour('');
-        }
-    };
 }

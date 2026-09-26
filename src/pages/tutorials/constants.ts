@@ -7,16 +7,12 @@ export const USER_GUIDE = 'user guide';
 export const VIDEOS = 'videos on deriv bot';
 export const QUICK_STRATEGY_GUIDES = 'quick strategy guides';
 
-export const user_guide_content = (): TUserGuideContent[] => [
-    {
-        id: 1,
-        type: 'Tour',
-        subtype: 'BotBuilder',
-        content: localize('Let’s build a bot!'),
-        src: getImageLocation('bot-builder-tour.png'),
-        search_id: `${USER_GUIDE}-0`,
-    },
-];
+// Both entries this used to hold launched one of the two guided tours
+// (Get started on Deriv Bot / Let's build a bot!), and both tours are
+// gone - kept as an empty, still-typed array rather than removed entirely,
+// since dashboard-store.ts's search index and guide-content.tsx's prop
+// still expect a TUserGuideContent[] to iterate over.
+export const user_guide_content = (): TUserGuideContent[] => [];
 
 export const guide_content = (): TGuideContent[] => [
     {
