@@ -134,6 +134,29 @@
         flex-direction: column;
         overflow: hidden !important;
 
+        // This is .run-panel__content, which Drawer (drawer.tsx) renders
+        // alongside its own .dc-drawer__content on the same element - the
+        // overflow: hidden !important above beats that base component's
+        // own overflow: auto regardless of width. Logged out there's
+        // nothing to overflow, but logged in, transaction rows plus the
+        // stats block (Total stake/payout, No. of runs, Contracts lost/
+        // won, Total profit-loss) make the content taller than the drawer,
+        // and with overflow hidden the stats were simply unreachable - no
+        // way to scroll to them. Overridden here (same selector, same
+        // !important, later in source, so it wins) rather than in
+        // drawer.scss, which is the generic, reusable base every <Drawer>
+        // in the app uses - this fix is specific to the run panel's own
+        // stats content, not a drawer-wide change.
+        @media (max-width: 760px) {
+            overflow-y: auto !important;
+            -webkit-overflow-scrolling: touch;
+            // 62px matches .controls__section's own measured height (the
+            // mobile Run bar, position: absolute at the bottom) so the
+            // last stats row can scroll clear of it instead of ending up
+            // underneath it.
+            padding-bottom: calc(62px + env(safe-area-inset-bottom, 0px));
+        }
+
         .dc-tabs {
             &__item {
                 overflow: hidden;

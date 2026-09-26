@@ -8,6 +8,23 @@ body {
     background: var(--general-main-1);
 }
 
+// Root-only, mobile-only: the page itself was scrolling horizontally on
+// phones (html/body both overflow-x: visible, the CSS default - confirmed
+// components/shared/styles/_reset.scss's own html/body rules are never
+// actually loaded anywhere in this app, so that file wasn't the source and
+// isn't the fix; this file is the real, always-loaded global stylesheet).
+// Scoped to max-width: 760px and to these two root elements specifically -
+// the main tab strip and the Blockly workspace both rely on their OWN
+// inner horizontal scroll/pan, and clamping overflow-x anywhere inside
+// them would break that; this only stops the OUTER page/viewport from
+// ever scrolling sideways.
+@media (max-width: 760px) {
+    html,
+    body {
+        overflow-x: hidden;
+    }
+}
+
 .icon-general-fill-path {
     path {
         fill: var(--text-general);
