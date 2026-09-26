@@ -4,7 +4,6 @@ import Dialog from '@/components/shared_ui/dialog';
 import Text from '@/components/shared_ui/text';
 import { DBOT_TABS } from '@/constants/bot-contents';
 import { useStore } from '@/hooks/useStore';
-import { removeKeyValue } from '@/utils/settings';
 import { LegacyPlay1pxIcon } from '@deriv/quill-icons/Legacy';
 import { Localize, localize } from '@deriv-com/translations';
 import { useDevice } from '@deriv-com/ui';
@@ -40,30 +39,19 @@ const GuideContent = ({ guide_tab_content, video_tab_content, is_dialog_open }: 
         setShowMobileTourDialog,
     } = dashboard;
 
-    const triggerTour = (type: string) => {
-        if (type === 'OnBoard') {
-            removeKeyValue('onboard_tour_token');
-            setActiveTab(DBOT_TABS.DASHBOARD);
-            if (!isDesktop) setActiveTour('onboarding');
-            setTourDialogVisibility(true);
-            setTimeout(() => {
-                const dbotDashboardSection = document.getElementById('id-dbot-dashboard');
-                if (dbotDashboardSection) {
-                    dbotDashboardSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                }
-            }, 100);
-        } else {
-            setActiveTab(DBOT_TABS.BOT_BUILDER);
-            if (!isDesktop) setActiveTour('bot_builder');
-            setTourDialogVisibility(true);
-            if (!isDesktop) setShowMobileTourDialog(true);
-            setTimeout(() => {
-                const botBuilderSection = document.getElementById('id-bot-builder');
-                if (botBuilderSection) {
-                    botBuilderSection.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-                }
-            }, 100);
-        }
+    // Only the Bot Builder tour's own "Guide" card calls this now - the
+    // onboarding tour's card, and this function's other branch, are gone.
+    const triggerTour = () => {
+        setActiveTab(DBOT_TABS.BOT_BUILDER);
+        if (!isDesktop) setActiveTour('bot_builder');
+        setTourDialogVisibility(true);
+        if (!isDesktop) setShowMobileTourDialog(true);
+        setTimeout(() => {
+            const botBuilderSection = document.getElementById('id-bot-builder');
+            if (botBuilderSection) {
+                botBuilderSection.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+            }
+        }, 100);
     };
 
     const has_guide_content = guide_tab_content.length > 0 || video_tab_content.length > 0;
@@ -93,13 +81,13 @@ const GuideContent = ({ guide_tab_content, video_tab_content, is_dialog_open }: 
                                                 className='tutorials-wrap--tour'
                                                 onClick={() => {
                                                     if (subtype) {
-                                                        triggerTour(subtype);
+                                                        triggerTour();
                                                         /* [AI] - Analytics event tracking removed - see migrate-docs/MONITORING_PACKAGES.md for re-implementation guide */
                                                         /* [/AI] */
                                                     }
                                                 }}
                                                 onKeyDown={e => {
-                                                    if (e.key === 'Enter') triggerTour('OnBoard');
+                                                    if (e.key === 'Enter') triggerTour();
                                                 }}
                                             >
                                                 <div

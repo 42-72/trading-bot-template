@@ -11,18 +11,10 @@ export const user_guide_content = (): TUserGuideContent[] => [
     {
         id: 1,
         type: 'Tour',
-        subtype: 'OnBoard',
-        content: localize('Get started on Deriv Bot'),
-        src: getImageLocation('dbot-onboard-tour.png'),
-        search_id: `${USER_GUIDE}-0`,
-    },
-    {
-        id: 2,
-        type: 'Tour',
         subtype: 'BotBuilder',
         content: localize('Let’s build a bot!'),
         src: getImageLocation('bot-builder-tour.png'),
-        search_id: `${USER_GUIDE}-1`,
+        search_id: `${USER_GUIDE}-0`,
     },
 ];
 

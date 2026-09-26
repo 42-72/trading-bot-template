@@ -382,12 +382,10 @@ export default class DashboardStore implements IDashboardStore {
         setTourSettings(new Date().getTime(), `${key}_token`);
     };
 
+    // step === 8 (the onboarding tour's own final step) used to be handled
+    // here too; that tour is gone, and the Bot Builder tour's own step
+    // counter never reaches 8, so only its own step === 3 completion stays.
     onTourEnd = (step: number, is_tour_active: boolean): void => {
-        if (step === 8) {
-            this.onCloseTour();
-            this.setTourEnd(tour_type);
-            this.setActiveTour('');
-        }
         if (!is_tour_active && step === 3) {
             this.onCloseTour();
             this.setTourEnd(tour_type);

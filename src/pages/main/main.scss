@@ -488,76 +488,10 @@
     }
 }
 
-#react-joyride-step-6 {
-    .onboard__label {
-        margin-bottom: 1.6rem;
-    }
-}
-
 #react-joyride-step-4 {
     .__floater__arrow {
         span {
             inset-inline-end: 0;
-        }
-    }
-}
-
-.onboard {
-    &__header {
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 2.4rem;
-        margin-top: -2rem;
-
-        &--close {
-            cursor: pointer;
-        }
-    }
-
-    &__steps {
-        @media (height <= 730px) {
-            max-height: 40vh;
-            overflow-y: auto;
-        }
-    }
-
-    &__label {
-        text-align: left;
-        margin-bottom: 2.4rem;
-    }
-
-    &__container {
-        width: 100%;
-        height: 100%;
-        display: flex;
-        justify-content: center;
-        margin-bottom: 2.4rem;
-
-        img {
-            width: 97%;
-        }
-
-        .initial-loader {
-            width: 33rem;
-            height: 18rem;
-        }
-    }
-
-    &__content {
-        text-align: left;
-
-        @include rtl {
-            text-align: right;
-        }
-
-        p {
-            font-size: 1.4rem;
-        }
-
-        &__block {
-            &:first-child {
-                margin-bottom: 2.4rem;
-            }
         }
     }
 }
@@ -634,31 +568,6 @@
     z-index: 1000;
     background-color: var(--general-main-1);
 
-    &--tour-position {
-        top: 0;
-
-        .progress-bar-circle:first-child {
-            display: none;
-        }
-    }
-
-    &--active {
-        height: auto;
-        min-height: 18rem;
-    }
-
-    &__navbar {
-        display: flex;
-        justify-content: space-between;
-        padding: 0 1.6rem;
-        width: 100%;
-        margin-bottom: 1.8rem;
-    }
-
-    &__title {
-        margin-bottom: 0.8rem;
-    }
-
     &__label {
         margin-bottom: 0.8rem;
     }
@@ -674,24 +583,6 @@
         &:last-child {
             margin-bottom: 3rem;
         }
-    }
-
-    &__image,
-    &__media {
-        background: var(--general-section-1);
-        text-align: center;
-        width: 100%;
-        height: 55%;
-        margin-bottom: auto;
-    }
-
-    img {
-        height: 100%;
-    }
-
-    video {
-        height: 100%;
-        width: 65%;
     }
 
     &__progress-bar {
@@ -778,29 +669,6 @@
                 }
             }
         }
-    }
-}
-
-// The real blocker turned out to be a second overlay (the "Welcome to Deriv
-// Bot!" info panel modal, removed entirely - see info-panel.tsx's deletion)
-// rendering on top of this card, not the card's own sizing: it's already
-// position: fixed and pinned to the bottom (above), so with that modal
-// gone it never needs to scroll to reach Skip/Start. The previous
-// max-height: 100svh / overflow-y: auto here was treating the symptom;
-// removed. Kept: a small safe-area bottom clearance, same as the rest of
-// this file's pattern for fixed bottom bars (.controls__section, run-panel.
-// scss) - just enough that the buttons never sit flush against a device's
-// home-indicator/gesture-bar area.
-//
-// Scoped to these two modifiers specifically (both only ever added by the
-// onboarding tour, onboarding-tour-mobile.tsx) rather than the bare
-// .dbot-slider, so the separate Bot Builder tour card
-// (.dbot-slider__bot-builder-tour, bot-builder-tour-mobile.tsx - no
-// --active/--tour-position modifier) doesn't pick up padding it never had.
-.dbot-slider--active,
-.dbot-slider--tour-position {
-    @media (max-width: 760px) {
-        padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
     }
 }
 

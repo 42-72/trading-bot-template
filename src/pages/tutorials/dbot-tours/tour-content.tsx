@@ -1,10 +1,7 @@
-import { getImageLocation } from '../../../public-path';
 import React from 'react';
-import Text from '@/components/shared_ui/text';
 import { isDbotRTL } from '@/external/bot-skeleton/utils/workspace';
 import { LabelPairedCircleCheckMdFillIcon } from '@deriv/quill-icons/LabelPaired';
 import { Localize, localize } from '@deriv-com/translations';
-import TourSteps from './common/tour-steps';
 
 type TJoyrideConfig = Record<
     'showProgress' | 'spotlightClicks' | 'disableBeacon' | 'disableOverlay' | 'disableCloseOnEsc',
@@ -20,141 +17,6 @@ const joyride_props: TJoyrideConfig = {
     disableOverlay: true,
     disableCloseOnEsc: true,
 };
-
-export const DBOT_ONBOARDING = [
-    {
-        target: '#id-bot-builder',
-        content: (
-            <TourSteps
-                label={<Localize i18n_default_text='Build from scratch' />}
-                content={[
-                    <>
-                        <Localize i18n_default_text='Create your bot using our drag-and-drop blocks or click Quick Strategy to choose from the ready-to-use bot templates.' />
-                    </>,
-                    <>
-                        <Localize i18n_default_text='We also provide a guide on the Tutorial tab to show you how you can build and execute a simple strategy.' />
-                    </>,
-                ]}
-                media={'/assets/videos/dbot-onboarding-tour-step-1.mp4'}
-                step_index={1}
-            />
-        ),
-        ...joyride_props,
-        disableOverlay: false,
-    },
-    {
-        target: '#id-charts',
-        content: (
-            <TourSteps
-                label={<Localize i18n_default_text='Monitor the market' />}
-                content={[
-                    <Localize
-                        key='view the market'
-                        i18n_default_text='View the market price of your favourite assets.'
-                    />,
-                ]}
-                media={'/assets/videos/dbot-onboarding-tour-step-2.mp4'}
-                step_index={2}
-            />
-        ),
-        ...joyride_props,
-        disableOverlay: false,
-    },
-    {
-        target: '#id-tutorials',
-        content: (
-            <TourSteps
-                label={<Localize i18n_default_text='Learn more with our tutorials' />}
-                content={[
-                    <Localize
-                        key='explore tutorials'
-                        i18n_default_text='Explore the video guides and FAQs to build your bot in the tutorials tab.'
-                    />,
-                ]}
-                media={'/assets/videos/dbot-onboarding-tour-step-3.mp4'}
-                step_index={3}
-            />
-        ),
-        ...joyride_props,
-        disableOverlay: false,
-    },
-    {
-        target: '#tab__dashboard__table__tiles',
-        content: (
-            <TourSteps
-                label={<Localize i18n_default_text='Use these shortcuts' />}
-                content={[
-                    <Localize
-                        key='use shortcuts'
-                        i18n_default_text='You can also import or build your bot using any of these shortcuts.'
-                    />,
-                ]}
-                step_index={4}
-            />
-        ),
-        placement: isDbotRTL() ? 'right' : 'left',
-        ...joyride_props,
-        disableOverlay: false,
-    },
-    {
-        target: '.dc-drawer__container',
-        content: (
-            <TourSteps
-                label={<Localize i18n_default_text="Check your bot's performance" />}
-                content={[
-                    <Localize
-                        key='check bot performance'
-                        i18n_default_text='See how your bot is doing in real-time.'
-                    />,
-                ]}
-                media={'/assets/videos/dbot-onboarding-tour-step-5.mp4'}
-                step_index={5}
-            />
-        ),
-        placement: isDbotRTL() ? 'left' : 'right',
-        ...joyride_props,
-        disableOverlay: false,
-    },
-    {
-        target: '.animation__wrapper',
-        content: (
-            <TourSteps
-                label={<Localize i18n_default_text='Run your bot' />}
-                content={[
-                    <Localize
-                        key='run your bot'
-                        i18n_default_text='Click <0>Run</0> when you want to start trading, and click <0>Stop</0> when you want to stop.'
-                        components={[<strong key={0} />]}
-                    />,
-                ]}
-                media={'/assets/videos/dbot-onboarding-tour-step-6.mp4'}
-                step_index={6}
-            />
-        ),
-        ...joyride_props,
-        disableOverlay: false,
-    },
-    {
-        target: '#id-tutorials',
-        content: (
-            <TourSteps
-                label={<Localize i18n_default_text='Want to retake the tour?' />}
-                content={[
-                    <Text key={`${0}-id-tutorials`} as='p'>
-                        <Localize i18n_default_text='Head to the Tutorials tab to do so.' />
-                    </Text>,
-                ]}
-                step_index={7}
-                show_actions={false}
-                has_localize_component
-            />
-        ),
-        locale: { last: localize('Got it, thanks!') },
-        ...joyride_props,
-        hideBackButton: true,
-        disableOverlay: false,
-    },
-];
 
 const Step1 = ({ show_label = false }) => (
     <div className='joyride-content'>
@@ -476,111 +338,6 @@ export const BOT_BUILDER_MOBILE: TMobileTourConfig[] = [
     },
 ];
 
-export const DBOT_ONBOARDING_MOBILE: TMobileTourConfig[] = [
-    {
-        header: <Localize i18n_default_text='Welcome to Deriv Bot' />,
-        content: [
-            <span key='get-started-on-deriv-bot-wrapper'>
-                <Localize
-                    key='get-started-on-deriv-bot'
-                    i18n_default_text='Let’s take a quick tour to discover how Deriv Bot works. Press <0>Start</0> to begin.'
-                    components={[<strong key={0} />]}
-                />
-            </span>,
-        ],
-        tour_step_key: 1,
-    },
-    {
-        header: <Localize i18n_default_text='Import or choose your bot' />,
-        content: [
-            <span key='import-or-choose-your-bot-wrapper'>
-                <Localize
-                    key='import-or-choose-your-bot'
-                    i18n_default_text='Import your bot or tap Quick Strategies to choose from the ready-to-use bot templates.'
-                />
-            </span>,
-        ],
-        media: '/assets/videos/dbot-mobile-onboarding-step-1.mp4',
-        tour_step_key: 2,
-    },
-    {
-        header: <Localize i18n_default_text='Monitor the market' />,
-        content: [
-            <span key='monitor-the-market-wrapper'>
-                <Localize
-                    key='monitor-the-market'
-                    i18n_default_text='View the market price of your favourite assets.'
-                />
-            </span>,
-        ],
-        media: '/assets/videos/dbot-mobile-onboarding-step-2.mp4',
-        tour_step_key: 3,
-    },
-    {
-        header: <Localize i18n_default_text='Learn more with our tutorials' />,
-        content: [
-            <span key='learn-more-with-our-tutorials-wrapper'>
-                <Localize
-                    key='learn-more-with-our-tutorials'
-                    i18n_default_text='Explore the video guides and FAQs to build your bot in the tutorials tab.'
-                />
-            </span>,
-        ],
-        media: '/assets/videos/dbot-mobile-onboarding-step-3.mp4',
-        tour_step_key: 4,
-    },
-    {
-        header: <Localize i18n_default_text='Use these shortcuts' />,
-        img: getImageLocation('dbot-mobile-onboarding-step-4.png'),
-        content: [
-            <span key='use-these-shortcuts-wrapper'>
-                <Localize
-                    key='use-these-shortcuts'
-                    i18n_default_text='You can also import or build your bot using any of these shortcuts.'
-                />
-            </span>,
-        ],
-        tour_step_key: 5,
-    },
-    {
-        header: <Localize i18n_default_text='Check your bot’s performance' />,
-        media: '/assets/videos/dbot-mobile-onboarding-step-5.mp4',
-        content: [
-            <span key='check-your-bots-performance-wrapper'>
-                <Localize
-                    key='check-your-bots-performance'
-                    i18n_default_text='See how your bot is doing in real-time.'
-                />
-            </span>,
-        ],
-        tour_step_key: 6,
-    },
-    {
-        header: <Localize i18n_default_text='Run your bot' />,
-        media: '/assets/videos/dbot-mobile-onboarding-step-6.mp4',
-        content: [
-            <span key='run-your-bot-wrapper'>
-                <Localize
-                    key='run-your-bot'
-                    i18n_default_text='Click <0>Run</0> when you want to start trading, and click <0>Stop</0> when you want to stop.'
-                    components={[<strong key={0} />]}
-                />
-            </span>,
-        ],
-        tour_step_key: 7,
-    },
-    {
-        header: <Localize i18n_default_text='Want to retake the tour?' />,
-        img: getImageLocation('dbot-mobile-onboarding-step-7.png'),
-        content: [
-            <span key='want-to-retake-the-tour-wrapper'>
-                <Localize key='want-to-retake-the-tour' i18n_default_text='Head to the Tutorials tab to do so.' />
-            </span>,
-        ],
-        tour_step_key: 8,
-    },
-];
-
 export const getTourDialogInfo = (is_mobile: boolean) => {
     return is_mobile ? (
         <Localize
@@ -603,10 +360,6 @@ export const getTourDialogAction = (is_mobile: boolean) => {
     }
     return '';
 };
-
-export const onboarding_tour_header = (
-    <Localize key='onboarding-tour-header' i18n_default_text='Welcome to Deriv Bot' />
-);
 
 export const getBotBuilderTourHeader = (is_mobile: boolean) => {
     if (is_mobile) {
