@@ -22,7 +22,10 @@ export type TAction = {
 export type TNotificationStyle = {
     type: TypeOptions;
     position: ToastPosition;
-    autoClose: number;
+    // false is react-toastify's own way to say "never auto-dismiss" -
+    // needed for the session-expired notification, which must stay up
+    // until the user acts rather than vanish like a normal toast.
+    autoClose: number | false;
     hideProgressBar: boolean;
     closeOnClick: boolean;
     pauseOnHover: boolean;

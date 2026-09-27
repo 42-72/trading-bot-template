@@ -199,6 +199,11 @@ export class OAuthTokenExchangeService {
                 // Store as JSON string
                 sessionStorage.setItem('auth_info', JSON.stringify(authInfo));
 
+                // TEMPORARY - sessionfix STEP 0 diagnostic, remove before commit.
+                // Never logs token values, only which keys the response populated.
+                // eslint-disable-next-line no-console
+                console.log('[sessionfix STEP 0] auth_info keys:', Object.keys(authInfo));
+
                 // Immediately fetch accounts and initialize WebSocket after token exchange
                 try {
                     const { DerivWSAccountsService } = await import('./derivws-accounts.service');

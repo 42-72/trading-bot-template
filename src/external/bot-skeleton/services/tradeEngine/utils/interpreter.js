@@ -238,9 +238,24 @@ const Interpreter = () => {
                 if ($scope.stopped) {
                     return;
                 }
-                // DBot handles 'InvalidToken' internally
+
+                // DBot handles 'InvalidToken' internally - run-panel-store's
+                // handleInvalidToken (registered on 'client.invalid_token')
+                // stops the bot via the same path the Stop button uses,
+                // which itself sets $scope.stopped and would eventually
+                // settle this promise that way. reject(e) here settles it
+                // explicitly and immediately rather than depending on that
+                // indirectly, and also routes through dbot.js's own
+                // run(code).catch(...) (globalObserver.emit('Error', ...) +
+                // this.stopBot()) as a second, already-idempotent
+                // (api_base.is_stopping-guarded) path to the same stop -
+                // belt and suspenders against a fix to one of the two ever
+                // regressing on its own. resolve() would be wrong here: the
+                // run did not complete, it was aborted by an external auth
+                // failure.
                 if (e.code === 'InvalidToken') {
                     globalObserver.emit('client.invalid_token');
+                    reject(e);
                     return;
                 }
                 if (shouldStopOnError(bot, e?.code)) {

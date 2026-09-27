@@ -98,6 +98,12 @@ declare module '*.xml' {
 declare global {
     interface Window {
         __webpack_public_path__: string;
+        // TEMPORARY - sessionfix STEP 3 dev-only test triggers, remove once
+        // the fix has been verified live. Never defined on the canonical
+        // production domain, and require the `debugauth` opt-in everywhere
+        // else (both are gated on isDebugAuthAllowed() at the call site).
+        __debugInjectInvalidToken?: () => void;
+        __debugInjectAuthError?: () => Promise<void>;
         Analytics: unknown;
         DD_RUM: object | undefined;
         GrowthbookFeatures: { [key: string]: boolean };
