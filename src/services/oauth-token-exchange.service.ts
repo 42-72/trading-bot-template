@@ -199,10 +199,10 @@ export class OAuthTokenExchangeService {
                 // Store as JSON string
                 sessionStorage.setItem('auth_info', JSON.stringify(authInfo));
 
-                // TEMPORARY - sessionfix STEP 0 diagnostic, remove before commit.
-                // Never logs token values, only which keys the response populated.
-                // eslint-disable-next-line no-console
-                console.log('[sessionfix STEP 0] auth_info keys:', Object.keys(authInfo));
+                // A successful login means the InvalidToken auto-redirect
+                // loop guard (see useInvalidTokenHandler.ts) can fire again
+                // if needed - this session is now genuinely authenticated.
+                sessionStorage.removeItem('invalid_token_redirect_attempted');
 
                 // Immediately fetch accounts and initialize WebSocket after token exchange
                 try {
@@ -327,6 +327,10 @@ export class OAuthTokenExchangeService {
 
                 // Store updated auth info
                 sessionStorage.setItem('auth_info', JSON.stringify(authInfo));
+
+                // See exchangeCodeForToken - a successful token exchange
+                // re-arms the InvalidToken auto-redirect loop guard.
+                sessionStorage.removeItem('invalid_token_redirect_attempted');
             }
 
             return data;
