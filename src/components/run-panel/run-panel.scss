@@ -150,11 +150,14 @@
         @media (max-width: 760px) {
             overflow-y: auto !important;
             -webkit-overflow-scrolling: touch;
-            // 62px matches .controls__section's own measured height (the
-            // mobile Run bar, position: absolute at the bottom) so the
-            // last stats row can scroll clear of it instead of ending up
-            // underneath it.
-            padding-bottom: calc(62px + env(safe-area-inset-bottom, 0px));
+            // 62px (.controls__section's own height) wasn't enough on its
+            // own - measured against dbtraders (same fork, same 76px-tall
+            // run bar) the second stats row's VALUES (Contracts lost/won,
+            // Total profit-loss - the labels above them were already
+            // visible) were still clipped, one full ~44px row short. 112px
+            // = 62px run bar + ~50px so that last value row clears it,
+            // matching dbtraders' own spacing.
+            padding-bottom: calc(112px + env(safe-area-inset-bottom, 0px));
         }
 
         .dc-tabs {
