@@ -44,32 +44,6 @@ export const isProduction = () => {
 
 export const isLocal = () => /localhost(:\d+)?$/i.test(window.location.hostname);
 
-// sessionfix STEP 3 dev-trigger gate. Deliberately NOT the same as
-// isProduction(): isProduction() treats this project's own pages.dev
-// preview subdomains (e.g. sessionfix.charlestraders-bot.pages.dev) as
-// production so they hit the production WS endpoint - that's required
-// elsewhere and must not change. But it means !isProduction() is useless as
-// a "safe to expose debug triggers" gate on a preview deploy, which is
-// exactly where we need to exercise them. This checks the canonical
-// production domain directly instead, and additionally requires an
-// explicit opt-in (a `debugauth` query param, sticky for the tab via
-// sessionStorage) so the triggers don't exist on every preview by default -
-// only when someone deliberately asks for them.
-const DEBUG_AUTH_SESSION_KEY = 'debugauth_enabled';
-
-export const isDebugAuthAllowed = (): boolean => {
-    if (window.location.hostname === PRODUCTION_DOMAINS.COM) return false;
-
-    try {
-        if (new URLSearchParams(window.location.search).has('debugauth')) {
-            sessionStorage.setItem(DEBUG_AUTH_SESSION_KEY, '1');
-        }
-        return sessionStorage.getItem(DEBUG_AUTH_SESSION_KEY) === '1';
-    } catch {
-        return false;
-    }
-};
-
 const getDefaultServerURL = () => {
     const isProductionEnv = isProduction();
 

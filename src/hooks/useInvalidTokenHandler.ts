@@ -1,69 +1,18 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { observer as globalObserver } from '@/external/bot-skeleton/utils/observer';
 import { ErrorLogger } from '@/utils/error-logger';
-import { localize } from '@deriv-com/translations';
-
-// Loop guard: this hook auto-redirects to OAuth login on InvalidToken. If
-// that event ever fires spuriously (e.g. during the OAuth return itself),
-// an unguarded redirect becomes an infinite loop that makes the site
-// unusable for every user. This sessionStorage key caps it at one
-// auto-redirect per browser session; oauth-token-exchange.service.ts
-// clears it on a successful token exchange, so a genuinely new session
-// gets a fresh attempt.
-const REDIRECT_GUARD_KEY = 'invalid_token_redirect_attempted';
 
 /**
  * Hook to handle invalid token events by clearing auth data and redirecting to OAuth login
  *
- * This hook listens for 'InvalidToken' events (emitted by CoreStoreProvider
- * when a WS message comes back with code: 'AuthorizationRequired',
- * 'DisabledClient' or 'InvalidToken'). When such an event is detected, it
- * clears the invalid authentication data and redirects to OAuth login to
- * prevent infinite reload loops.
+ * This hook listens for 'InvalidToken' events emitted by the API base when
+ * a token is invalid. When such an event is detected, it clears the invalid
+ * authentication data and redirects to OAuth login to prevent infinite reload loops.
  *
- * isRunning gates this: while a strategy is running, this must never fire -
- * that case is owned entirely by run-panel-store's handleInvalidToken
- * (stop the bot, Journal entry, a dismissible "Log in again" notification -
- * no auto-redirect, the bot must never auto-run after login). The caller
- * (CoreStoreProvider) already only emits 'InvalidToken' when nothing is
- * running, but this hook re-checks isRunning itself at fire time (via a
- * ref, so the effect doesn't need isRunning in its own dependency array and
- * doesn't re-subscribe on every render) as a second, independent guard
- * against a future emitter being added elsewhere without the same care.
- *
- * @param isRunning Whether a strategy is currently running.
  * @returns {{ unregisterHandler: () => void }} An object containing a function to unregister the event handler
  */
-export const useInvalidTokenHandler = (isRunning: boolean): { unregisterHandler: () => void } => {
-    const isRunningRef = useRef(isRunning);
-    isRunningRef.current = isRunning;
-
+export const useInvalidTokenHandler = (): { unregisterHandler: () => void } => {
     const handleInvalidToken = async () => {
-        if (isRunningRef.current) return;
-
-        // Already auto-redirected once this session - don't do it again.
-        // Show the same persistent notification instead, so the user
-        // clicks through deliberately rather than being bounced in a loop.
-        if (sessionStorage.getItem(REDIRECT_GUARD_KEY)) {
-            const [{ botNotification }, { generateOAuthURL }] = await Promise.all([
-                import('@/components/bot-notification/bot-notification'),
-                import('@/components/shared'),
-            ]);
-            botNotification(
-                localize('Your session has expired. Please log in again.'),
-                {
-                    label: localize('Log in again'),
-                    onClick: async closeToast => {
-                        closeToast?.();
-                        const oauthUrl = await generateOAuthURL();
-                        if (oauthUrl) window.location.replace(oauthUrl);
-                    },
-                },
-                { autoClose: false }
-            );
-            return;
-        }
-
         try {
             // Clear invalid session data to prevent infinite reload loop
             sessionStorage.removeItem('auth_info');
@@ -80,11 +29,6 @@ export const useInvalidTokenHandler = (isRunning: boolean): { unregisterHandler:
             const oauthUrl = await generateOAuthURL();
 
             if (oauthUrl) {
-                // Set the guard AFTER sessionStorage.clear() above (so it
-                // isn't wiped by it) and right before navigating away, so
-                // it's committed regardless of what happens on the other
-                // side of the OAuth round trip.
-                sessionStorage.setItem(REDIRECT_GUARD_KEY, '1');
                 // Use replace to prevent back button from returning to invalid state
                 window.location.replace(oauthUrl);
             } else {

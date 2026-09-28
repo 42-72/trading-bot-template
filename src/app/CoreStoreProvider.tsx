@@ -5,9 +5,7 @@ import { toMoment } from '@/components/shared';
 import { FORM_ERROR_MESSAGES } from '@/components/shared/constants/form-error-messages';
 import { initFormErrorMessages } from '@/components/shared/utils/validation/declarative-validation-rules';
 import { api_base } from '@/external/bot-skeleton';
-import { observer as globalObserver } from '@/external/bot-skeleton/utils/observer';
 import { useApiBase } from '@/hooks/useApiBase';
-import { useInvalidTokenHandler } from '@/hooks/useInvalidTokenHandler';
 import { useLogout } from '@/hooks/useLogout';
 import { useStore } from '@/hooks/useStore';
 import { TSocketResponseData } from '@/types/api-types';
@@ -32,17 +30,11 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
     const accountInitialization = useRef(false);
     const timeInterval = useRef<NodeJS.Timeout | null>(null);
     const msg_listener = useRef<{ unsubscribe: () => void } | null>(null);
-    const { client, common, run_panel } = useStore() ?? {};
+    const { client, common } = useStore() ?? {};
 
     const { currentLang } = useTranslations();
 
     const handleLogout = useLogout();
-
-    // Only ever redirects to login when nothing is running - see
-    // useInvalidTokenHandler's own doc comment for why. This branch's
-    // is_running check runs on every render; the hook itself re-checks a
-    // ref at fire time as a second, independent guard.
-    useInvalidTokenHandler(run_panel?.is_running ?? false);
 
     const activeAccount = useMemo(
         () => accountList?.find(account => account.loginid === activeLoginid),
@@ -140,20 +132,6 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
                 clearInvalidTokenParams();
                 // Call client store logout directly to avoid double logout
                 await client?.logout();
-                // Emitted unconditionally - useInvalidTokenHandler (mounted
-                // above) is the thing that decides whether to actually
-                // redirect, gated on is_running there. This is a distinct
-                // path from interpreter.js's own 'client.invalid_token'
-                // emit (run-panel-store's handleInvalidToken): that one
-                // fires only from inside a running bot's own error
-                // handler and owns the running case (stop + Journal +
-                // notification, no redirect); this one is a generic
-                // any-message check that also covers AuthorizationRequired/
-                // DisabledClient, and owns the not-running case. logout()
-                // above already cleared all storage either way, so the two
-                // never fight over state - they only differ in whether a
-                // redirect follows.
-                globalObserver.emit('InvalidToken');
             }
 
             if (msg_type === 'balance' && data && !error) {

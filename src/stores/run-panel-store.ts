@@ -858,53 +858,8 @@ export default class RunPanelStore {
         observer.unregisterAll('client.invalid_token');
     };
 
-    // Fires on 'client.invalid_token', which interpreter.js emits from
-    // inside a running bot's own error handler when a trade-engine call
-    // comes back with code: 'InvalidToken' (session/access token expired
-    // mid-run). Previously this just switched the drawer to the Summary
-    // tab - the bot's own run loop was left un-stopped and the user had no
-    // indication anything had gone wrong. If no bot is running when this
-    // fires, there's nothing here to do - CoreStoreProvider's own
-    // InvalidToken handling (client.logout() + the mounted
-    // useInvalidTokenHandler, gated the same way on !is_running) owns that
-    // case instead.
     handleInvalidToken = async () => {
-        if (!this.is_running) return;
-
-        const { journal } = this.root_store;
-        const had_open_contract = this.has_open_contract;
-
-        // Same path the Stop button uses (onStopButtonClick -> stopBot),
-        // so is_running/$scope.stopped end up in the same correct state a
-        // manual stop leaves them in.
-        this.stopBot();
-
-        const message = had_open_contract
-            ? localize(
-                  'Your session has expired, so the bot has been stopped. You had an open contract - please check your Deriv account to confirm its current status.'
-              )
-            : localize('Your session has expired, so the bot has been stopped.');
-
-        journal.onError(message);
-
-        // Persistent (autoClose: false) and dismissible (default
-        // closeButton) - this must stay on screen until the user acts, not
-        // vanish after a few seconds like a normal toast. The redirect only
-        // ever runs from this onClick, i.e. only on a deliberate click -
-        // never automatically, and the strategy itself is never restarted
-        // after login.
-        botNotification(
-            message,
-            {
-                label: localize('Log in again'),
-                onClick: async closeToast => {
-                    closeToast?.();
-                    const oauthUrl = await generateOAuthURL();
-                    if (oauthUrl) window.location.replace(oauthUrl);
-                },
-            },
-            { autoClose: false }
-        );
+        this.setActiveTabIndex(run_panel.SUMMARY);
     };
 
     preloadAudio = () => {
