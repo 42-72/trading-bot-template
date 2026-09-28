@@ -9,6 +9,9 @@ import './styles/index.scss';
 // Configure MobX to handle multiple instances in production builds
 configure({ isolateGlobalState: true });
 
+// eslint-disable-next-line no-console
+console.info(`[Build] ${process.env.BUILD_COMMIT} @ ${process.env.BUILD_TIME}`);
+
 // Perform version check FIRST - before any other operations
 performVersionCheck();
 

@@ -6,6 +6,7 @@
 .vscode/
 dist/
 node_modules/
+public/build-info.json
 packages/**/scripts/CNAME
 .DS_Store
 tsconfig.tsbuildinfo

@@ -4,6 +4,31 @@ import { pluginSass } from '@rsbuild/plugin-sass';
 import { pluginBasicSsl } from '@rsbuild/plugin-basic-ssl';
 
 const path = require('path');
+const fs = require('fs');
+const { execSync } = require('child_process');
+
+// So any device can report which build it's running without opening
+// DevTools: readable at https://<host>/build-info.json. Written into
+// public/ (gitignored, see .gitignore) so rsbuild's existing `output.copy`
+// rule for the whole public/ directory (below) picks it up for free - no
+// separate copy rule needed. Runs on every `dev`/`build` invocation, so it's
+// always current for whatever's actually being served.
+const writeBuildInfo = () => {
+    let commit = 'unknown';
+    try {
+        commit = execSync('git rev-parse HEAD').toString().trim();
+    } catch {
+        // Not a git checkout (e.g. a source archive with no .git) - leave 'unknown'.
+    }
+    const buildInfo = {
+        commit,
+        built_at: new Date().toISOString(),
+    };
+    fs.writeFileSync(path.join(__dirname, 'public', 'build-info.json'), JSON.stringify(buildInfo, null, 2));
+    return buildInfo;
+};
+
+const buildInfo = writeBuildInfo();
 
 export default defineConfig({
     plugins: [
@@ -27,6 +52,8 @@ export default defineConfig({
         define: {
             'process.env': {
                 APP_ENV: JSON.stringify(process.env.APP_ENV),
+                BUILD_COMMIT: JSON.stringify(buildInfo.commit),
+                BUILD_TIME: JSON.stringify(buildInfo.built_at),
                 CLIENT_ID: JSON.stringify(process.env.CLIENT_ID),
                 APP_ID: JSON.stringify(process.env.APP_ID),
                 GD_CLIENT_ID: JSON.stringify(process.env.GD_CLIENT_ID),

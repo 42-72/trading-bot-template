@@ -7,8 +7,19 @@
     height: 0;
 
     &__container {
-        height: var(--bot-content-height) !important;
+        // Was `height: var(--bot-content-height) !important` (calc(100vh -
+        // 140px)) - viewport arithmetic that clips on short/scaled-down
+        // viewports (see .run-panel-tab__content below for the same class
+        // of bug). This element is .dc-drawer underneath (drawer.scss:7,
+        // position: fixed, so top/bottom anchor to the viewport exactly
+        // like 100vh does) - anchoring both edges instead of one edge plus
+        // a computed height is equivalent at every viewport height 140px
+        // was tuned for (104px top clearance + 36px bottom gutter = the
+        // same 140px), but now correct by construction instead of by
+        // arithmetic: the browser computes the height, so it can never go
+        // negative. Desktop only - mobile uses &--mobile below, untouched.
         top: 10.4rem !important;
+        bottom: 3.6rem;
         width: 36.6rem !important;
         right: 0;
 
@@ -179,12 +190,26 @@
 
     &-tab {
         &__content {
-            height: calc(100vh - 42rem);
-            overflow: hidden;
-
-            &--no-stat {
-                height: var(--drawer-content-height-no-stat);
-            }
+            // Was `height: calc(100vh - 42rem)` (420px, given this app's
+            // 62.5% root font-size) - on a laptop with OS display scaling
+            // this goes to zero or negative and the whole tab area
+            // disappears. .run-panel__content (the parent, above) is
+            // already `display: flex; flex-direction: column`, so this
+            // takes whatever space is actually left in it - correct by
+            // construction at any viewport height, no magic number. This
+            // also makes the old &--no-stat modifier (a second, separately
+            // hand-tuned subtraction for when Journal has no stats block
+            // above it) unnecessary: flex reallocates space based on the
+            // stats block's real height automatically, stats present or
+            // not, instead of needing two different guessed constants for
+            // the two cases - so it's removed rather than kept as dead
+            // weight. overflow-y: auto (was overflow: hidden) so this pane
+            // scrolls its own content instead of clipping it, matching
+            // what @media (max-width: 760px) below already does on mobile.
+            // Desktop only - mobile uses &--mobile below, untouched.
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
 
             &--mobile {
                 display: flex;
