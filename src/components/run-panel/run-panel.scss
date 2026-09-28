@@ -7,20 +7,17 @@
     height: 0;
 
     &__container {
-        // Was `height: var(--bot-content-height) !important` (calc(100vh -
-        // 140px)) - viewport arithmetic that clips on short/scaled-down
-        // viewports (see .run-panel-tab__content below for the same class
-        // of bug). This element is .dc-drawer underneath (drawer.scss:7,
-        // position: fixed, so top/bottom anchor to the viewport exactly
-        // like 100vh does) - anchoring both edges instead of one edge plus
-        // a computed height is equivalent at every viewport height 140px
-        // was tuned for (104px top clearance + 36px bottom gutter = the
-        // same 140px), but now correct by construction instead of by
-        // arithmetic: the browser computes the height, so it can never go
-        // negative. Desktop only - mobile uses &--mobile below, untouched.
-        top: 10.4rem !important;
+        // top now lives in dashboard.scss (.bot-dashboard .run-panel__
+        // container), computed from --run-strategy-bar-height so the panel
+        // always starts exactly where the Run/Pause/Stop strip ends - see
+        // that rule's own comment. bottom is unchanged from before: 3.6rem,
+        // paired with that top to compute height by construction rather
+        // than a viewport-arithmetic calc (can never go negative). width
+        // is the same --run-panel-width the strip uses (app.scss), so the
+        // two can't drift out of sync. Desktop only - mobile uses
+        // &--mobile below, untouched.
         bottom: 3.6rem;
-        width: 36.6rem !important;
+        width: var(--run-panel-width) !important;
         right: 0;
 
         &--mobile {

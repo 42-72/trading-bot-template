@@ -516,14 +516,18 @@ const AppWrapper = observer(() => {
                 </div>
             </div>
             <DesktopWrapper>
-                {/* pointer-events: none on this wrapper (main.scss) so the empty
-                    area around the floating Run button never blocks clicks on
-                    the content underneath - kept separate from RunPanel, whose
-                    own drawer toggle must stay clickable regardless. */}
+                {/* Permanent right-hand column: RunStrategy (Run/Pause/Stop)
+                    directly above RunPanel (Summary/Transactions/Journal +
+                    stats), matching upstream's DOM shape. This wrapper is a
+                    plain grouping node - each child positions itself
+                    independently (position: fixed) via the shared
+                    --run-panel-width/--run-strategy-bar-height custom
+                    properties (app.scss), so the two can't drift out of sync
+                    the way two separately-hardcoded numbers did before. */}
                 <div className='main__run-strategy-wrapper'>
                     <RunStrategy />
+                    <RunPanel />
                 </div>
-                <RunPanel />
                 <ChartModal />
                 <TradingViewModal />
             </DesktopWrapper>

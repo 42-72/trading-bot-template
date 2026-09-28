@@ -414,38 +414,31 @@
     }
 }
 
-// Desktop run strip - floats over the tab content instead of reserving
-// space for itself (dollarprinter-style: content is unshifted underneath
-// it). .main__run-strategy-wrapper is a sibling of .main under
-// .bot-dashboard (position: relative - dashboard.scss), same containing
-// block .bot-builder/.tradingview-panel already anchor against; top: 6.6rem
-// is that same pre-existing, measurement-calibrated value (header 5.6rem +
-// 66px = 122px, flush with .dc-tabs__list's bottom edge - both panels are
-// equally .bot-dashboard-level siblings, so this reaches the identical
-// pixel with no viewport unit of its own). .run-strategy-bar's own
-// top: 8px is relative to the wrapper (also position: absolute, so it's
-// the bar's containing block), landing the button at 122 + 8 = 130px -
-// only .run-strategy-bar has pointer-events re-enabled, so the wrapper's
-// otherwise-empty area (it no longer has a background band of its own)
-// can never block clicks on the content now visible underneath it.
-.main__run-strategy-wrapper {
-    position: absolute;
-    top: 6.6rem;
-    inset-inline-end: 0;
-    z-index: 30;
-    pointer-events: none;
-}
-
+// runpanel: permanent desktop right-hand column, replacing the floating
+// strip that was decoupled from the panel (ecb4437). .main__run-strategy-
+// wrapper (main.tsx) is now a plain DOM grouping node with no CSS of its
+// own - RunStrategy and RunPanel each position themselves independently
+// via position: fixed, coordinated through the shared --run-panel-width/
+// --run-strategy-bar-height custom properties (app.scss) instead of two
+// separately-hardcoded numbers that can silently drift apart (which is
+// exactly what broke this before). .run-panel__container's own top
+// (dashboard.scss) is computed from --run-strategy-bar-height, so this
+// strip and the drawer below it can never end up with a gap or an overlap
+// between them. Width matches the reference measurement (1918x958: panel
+// ~600px, ~31% of viewport) via --run-panel-width: clamp(360px, 31%,
+// 620px) - see app.scss for the full reasoning.
 .run-strategy-bar {
-    position: absolute;
-    top: 8px;
-    inset-inline-end: 24px;
+    position: fixed;
+    top: 10.4rem;
+    inset-inline-end: 0;
+    width: var(--run-panel-width);
+    height: var(--run-strategy-bar-height, 6.4rem);
+    box-sizing: border-box;
     display: flex;
     align-items: center;
-    padding: 0;
-    min-height: 0;
-    width: auto;
-    pointer-events: auto;
+    justify-content: flex-end;
+    padding: 1.2rem 2.4rem;
+    z-index: 30;
 }
 
 .bot-builder {

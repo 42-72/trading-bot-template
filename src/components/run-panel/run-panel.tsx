@@ -11,7 +11,7 @@ import Text from '@/components/shared_ui/text';
 import Summary from '@/components/summary';
 import TradeAnimation from '@/components/trade-animation';
 import Transactions from '@/components/transactions';
-import { DBOT_TABS, RUN_BAR_HIDDEN_TABS } from '@/constants/bot-contents';
+import { RUN_BAR_HIDDEN_TABS } from '@/constants/bot-contents';
 import { popover_zindex } from '@/constants/z-indexes';
 import { useStore } from '@/hooks/useStore';
 import { Localize, localize } from '@deriv-com/translations';
@@ -267,7 +267,6 @@ const RunPanel = observer(() => {
     const { statistics } = transactions;
     const { active_tour, active_tab } = dashboard;
     const { total_payout, total_profit, total_stake, won_contracts, lost_contracts, number_of_runs } = statistics;
-    const { BOT_BUILDER, CHART } = DBOT_TABS;
 
     React.useEffect(() => {
         onMount();
@@ -310,8 +309,12 @@ const RunPanel = observer(() => {
         />
     );
 
-    const show_run_panel = [BOT_BUILDER, CHART].includes(active_tab) || active_tour;
-    if ((!show_run_panel && isDesktop) || active_tour === 'bot_builder') return null;
+    // Permanent on every desktop tab now (runpanel) - previously restricted
+    // to Bot Builder/Chart only, matching upstream's own show_run_panel
+    // check, which predates this fork's Tbots/Market Tool/DTrader/
+    // TradingView tabs entirely. active_tour is unrelated to which tab is
+    // active; kept as-is.
+    if (active_tour === 'bot_builder') return null;
 
     return (
         <>
@@ -327,7 +330,20 @@ const RunPanel = observer(() => {
                     footer={isDesktop && footer}
                     is_open={is_drawer_open}
                     toggleDrawer={toggleDrawer}
-                    width={366}
+                    // Drawer computes its own collapse-to-a-sliver transform
+                    // from this number in JS (translateX(width - 16px)), but
+                    // the actual rendered width is now the responsive
+                    // --run-panel-width (app.scss, clamp(360px, 31%, 620px))
+                    // - the two can only match exactly at the viewport width
+                    // where the clamp's 31% resolves to ~600px (close to the
+                    // 1918px reference this was measured against). At other
+                    // widths the collapse will be close but not pixel-exact
+                    // (a few px more or less of sliver than the intended
+                    // 16px). Flagged as a known approximation, not silently
+                    // guessed - a fully robust fix would replace this with a
+                    // CSS-driven transform using var(--run-panel-width)
+                    // directly instead of a JS-computed one.
+                    width={600}
                     zIndex={popover_zindex.RUN_PANEL}
                 >
                     {content}

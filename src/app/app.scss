@@ -1,6 +1,22 @@
 .bot {
     --bot-content-height: calc(100vh - 140px);
     --bot-content-width: calc(100vw - 366px);
+    // Desktop run panel column (runpanel). Shared by the run bar
+    // (.run-strategy-bar, main.scss) and the drawer itself
+    // (.run-panel__container, run-panel.scss/dashboard.scss) so both are
+    // always exactly the same width and never drift apart the way two
+    // separately-hardcoded numbers did before. Measured against the
+    // reference at 1918x958: panel ~600px wide, ~31% of viewport. Scales
+    // with viewport instead of a fixed rem; floored near the old 366px
+    // width so it's never uncomfortably narrow, capped at 620px so it
+    // doesn't balloon on an ultrawide monitor.
+    --run-panel-width: clamp(360px, 31%, 620px);
+    // Run/Pause/Stop strip's own height (12px gap + 40px button + 12px
+    // below - the same total bb78d90 originally derived). .run-panel__
+    // container's top offset (dashboard.scss) is computed from this, so
+    // the drawer always starts exactly where the strip ends - "no gap" by
+    // construction, not by eyeballing two numbers into agreement.
+    --run-strategy-bar-height: 6.4rem;
     --drawer-content-height-mobile: calc(100% - 233px);
     --tab-content-height: calc(100vh - 16.6rem);
     --tab-content-height-mobile: calc(100vh - 12.6rem);

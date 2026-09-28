@@ -5,6 +5,20 @@
     --translate-panel-ltr: 367px;
     --translate-panel-reset: 0px;
 
+    // RunStrategy (run-strategy.tsx) returns null on RUN_BAR_HIDDEN_TABS
+    // (Tbots, DTrader) - #id-tbots/#id-dtrader are those tabs' own content
+    // wrapper divs (main.tsx), only present in the DOM while that tab is
+    // active (Tabs only ever renders the active child - tabs.tsx). Sets
+    // the SAME --run-strategy-bar-height (app.scss) to 0 on exactly those
+    // tabs, so .run-panel__container's existing
+    // calc(10.4rem + var(--run-strategy-bar-height, 6.4rem)) (below)
+    // produces the right answer everywhere through the one variable,
+    // rather than a second constant or a duplicate rule to keep in sync.
+    &:has(#id-tbots),
+    &:has(#id-dtrader) {
+        --run-strategy-bar-height: 0;
+    }
+
     position: relative;
     height: calc(100vh - var(--header-height, 5.6rem)); /* fallback for engines without svh */
     height: calc(100svh - var(--header-height, 5.6rem));
@@ -19,11 +33,23 @@
     }
 
     .run-panel__container {
-        height: var(--tab-content-height) !important;
-        position: sticky;
+        // Was position: sticky with height: var(--tab-content-height) -
+        // sticky only takes effect once its scrolling container actually
+        // scrolls, and .bot-dashboard never does (overflow: hidden above),
+        // so it rendered at its plain normal-flow position regardless of
+        // top/height/bottom - which is what put the tabs at the bottom of
+        // the page instead of below the Run bar. position: fixed (this
+        // element's own natural type - drawer.scss:7) makes top/bottom
+        // (run-panel.scss) fully effective and viewport-relative,
+        // independent of DOM nesting/flow entirely. top is offset by
+        // --run-strategy-bar-height so the panel starts exactly where the
+        // Run/Pause/Stop strip ends - no gap, and no separate hand-tuned
+        // number to keep in sync with it. margin-top removed - it
+        // contradicted that same "no gap" requirement.
+        position: fixed;
+        top: calc(10.4rem + var(--run-strategy-bar-height, 6.4rem));
         transform: translateX(var(--translate-panel-ltr));
         transition: all 0.4s;
-        margin-top: 1rem;
 
         @include is-RTL {
             transform: translateX(var(--translate-panel-rtl));
