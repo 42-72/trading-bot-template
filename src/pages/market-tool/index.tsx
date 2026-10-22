@@ -107,8 +107,9 @@ const MarketTool = () => {
     const tickCountLabel = n >= windowSize ? 'Full' : n > 0 ? `${n} of ${windowSize}` : 'Waiting…';
 
     // Rendered twice (see market-tool.scss) rather than moved with CSS
-    // alone: desktop needs it as its own row, clear of the floating Run bar
-    // above the ribbon; mobile (<=760px, no floating bar - Run lives in the
+    // alone: desktop shows it as its own row above the ribbon (originally
+    // to clear the floating Run bar; that bar is gone - Run is inside the
+    // run panel now - so the separate row is just cosmetic); mobile (<=760px, no floating bar - Run lives in the
     // bottom .controls__section there) needs it back as an actual flex-wrap
     // child of .market-tool__controls so flex: 1 1 100% can push it onto
     // its own wrapped row under the symbol/ticks pair, the pre-runfloat

@@ -66,15 +66,15 @@
 // renders its own banner/logo strip at the top of the page it serves - we
 // don't control that page's markup, so it can't be removed, only clipped.
 // overflow: hidden on the wrapper + a negative margin-top on the iframe
-// slides the whole document up inside it, cropping the banner behind the
-// floating Run bar; the matching height increase keeps the iframe's own
-// bottom edge flush with the wrapper's (otherwise the negative margin would
-// leave an equal-sized empty gap at the bottom). No z-index here - the
-// iframe must stay under .main__run-strategy-wrapper's z-index: 30, not be
-// raised to compete with it. Desktop-only (min-width: 1280px, matching
-// where that floating strip actually exists - useDevice().isDesktop in
-// run-strategy.tsx) - there's nothing to hide the banner behind below that
-// width, where Run instead lives in the mobile .controls__section bar.
+// slides the whole document up inside it, clipping the banner off the top
+// entirely; the matching height increase keeps the iframe's own bottom
+// edge flush with the wrapper's (otherwise the negative margin would leave
+// an equal-sized empty gap at the bottom). The clip is deliberate: the
+// banner is Deriv's branding and this is a white-label site, so hidden is
+// the intended result - not a side effect of anything sitting on top of it
+// (the floating Run bar that used to cover this spot no longer exists).
+// Desktop-only (min-width: 1280px) - see the block below for narrower
+// widths.
 @include desktop-screen {
     .iframe-wrapper.tradingview-container {
         overflow: hidden;
@@ -87,10 +87,10 @@
 }
 
 // Explicit, defensive undo below desktop-screen's 1280px, alongside
-// .tradingview-panel's own mobile-or-tablet-screen block above: there is no
-// floating Run bar at these widths (Run lives in the bottom
-// .controls__section instead), so there is nothing for the crop to tuck
-// the banner behind - it would just remove the banner for no reason.
+// .tradingview-panel's own mobile-or-tablet-screen block above: the crop
+// above is not applied at these widths, so the banner still shows here.
+// Left as-is because the mobile layout is confirmed correct; extending the
+// white-label crop to mobile would be a separate, deliberate change.
 @include mobile-or-tablet-screen {
     .iframe-wrapper.tradingview-container {
         overflow: visible;
