@@ -21,8 +21,9 @@
 // exactly. Hidden with display:none rather than unmounted, so the iframe
 // (and its chart state) is preserved.
 //
-// The desktop run strip (main.scss) floats over this panel rather than
-// reserving space above it, so no further offset is needed here for that.
+// On desktop the Run strip (main.scss) reserves its own band under the nav
+// row, and dashboard.scss moves this panel's top down by that band while the
+// strip renders - so the strip never covers it.
 //
 // inset-inline-start/end are 0 (not the same +1.6rem pattern top used to
 // follow) - the chart should be edge to edge (measured: it was inset 32px

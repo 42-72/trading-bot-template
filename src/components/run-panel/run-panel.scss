@@ -209,8 +209,8 @@
         }
     }
 
-    // Desktop only - run-panel.tsx renders these three wrappers only when
-    // isDesktop. Run bar, tabs and stats stacked in one flex column inside
+    // Desktop only - run-panel.tsx renders these two wrappers only when
+    // isDesktop. Tabs and stats stacked in one flex column inside
     // .run-panel__content, whose height is already definite (drawer
     // container, top + bottom), so the chain down to AutoSizer stays
     // definite: layout -> scroll (flexed) -> .dc-tabs (height: 100%) ->
@@ -220,27 +220,6 @@
         flex-direction: column;
         flex: 1 1 auto;
         min-height: 0;
-    }
-
-    &__controls {
-        flex: 0 0 auto;
-        display: flex;
-        align-items: center;
-        padding: 0.6rem 0.8rem;
-
-        // .animation__wrapper is a flex item here, and flex items default
-        // to flex-grow: 0 - it stayed at its content width (Run button +
-        // status box) instead of filling the row. Grow it, then grow the
-        // status box inside it the same way; the Run button keeps its own
-        // fit-content width (trade-animation.scss).
-        .animation__wrapper {
-            flex: 1 1 auto;
-            min-width: 0;
-        }
-
-        .animation__container {
-            flex: 1 1 auto;
-        }
     }
 
     &__scroll {

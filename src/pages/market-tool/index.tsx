@@ -108,9 +108,10 @@ const MarketTool = () => {
 
     // Rendered twice (see market-tool.scss) rather than moved with CSS
     // alone: desktop shows it as its own row above the ribbon (originally
-    // to clear the floating Run bar; that bar is gone - Run is inside the
-    // run panel now - so the separate row is just cosmetic); mobile (<=760px, no floating bar - Run lives in the
-    // bottom .controls__section there) needs it back as an actual flex-wrap
+    // to clear the floating Run bar; the bar now reserves its own band
+    // above tab content, so the separate row is just cosmetic); mobile
+    // (<=760px, no floating bar - Run lives in the bottom
+    // .controls__section there) needs it back as an actual flex-wrap
     // child of .market-tool__controls so flex: 1 1 100% can push it onto
     // its own wrapped row under the symbol/ticks pair, the pre-runfloat
     // arrangement. A CSS position alone can't relocate it between two

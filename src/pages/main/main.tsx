@@ -45,6 +45,7 @@ import RunPanel from '../../components/run-panel';
 import ChartModal from '../chart/chart-modal';
 import ComingSoon from '../coming-soon';
 import Dashboard from '../dashboard';
+import RunStrategy from '../dashboard/run-strategy';
 import DTraderRedirect from '../dtrader-redirect';
 import MarketTool from '../market-tool';
 import Tbots from '../tbots';
@@ -515,9 +516,14 @@ const AppWrapper = observer(() => {
                 </div>
             </div>
             <DesktopWrapper>
-                {/* Permanent right-hand column. The Run bar renders inside
-                    RunPanel itself (.run-panel__controls) on desktop. */}
+                {/* Desktop right-hand column: RunStrategy (Run/Pause/Stop) is
+                    a full-width band directly under the nav row, and
+                    .bot-dashboard reserves its height for all tab content
+                    whenever it renders (dashboard.scss, :has(.run-strategy-
+                    bar)), so nothing sits underneath it. RunPanel starts
+                    below that band. */}
                 <div className='main__run-strategy-wrapper'>
+                    <RunStrategy />
                     <RunPanel />
                 </div>
                 <ChartModal />

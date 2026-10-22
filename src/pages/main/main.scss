@@ -414,6 +414,45 @@
     }
 }
 
+// Desktop Run/Pause/Stop strip (run-strategy.tsx, recovered from f93193f).
+// A full-width band directly under the nav row - 6.6rem is that row's
+// bottom, .bot-builder's own live-measured value (bb78d90) - so it can
+// RESERVE its height rather than float: .bot-dashboard pushes every tab's
+// content down by exactly this band while it renders (dashboard.scss,
+// :has(.run-strategy-bar)). The previous strip was only as wide as the
+// panel and floated over whatever tab was underneath (Charts, Copy
+// Trading). position: absolute against .bot-dashboard; .main__run-
+// strategy-wrapper around it has no CSS of its own beyond the Run/Stop
+// colours. The Run controls sit right-aligned and exactly as wide as the
+// run panel's content column below them: --run-panel-width less the 16px
+// drawer toggle and an 8px gutter each side. The bar has no inline
+// padding so the 31% inside --run-panel-width resolves against the same
+// width the panel's does (.bot-dashboard's).
+.run-strategy-bar {
+    position: absolute;
+    top: 6.6rem;
+    inset-inline: 0;
+    height: var(--run-strategy-bar-height, 6.4rem);
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 1.2rem 0;
+    z-index: 30;
+
+    // Fill the column instead of keeping content width: flex items default
+    // to flex-grow: 0, which is what left the Run bar at 209px (af50aa4).
+    .animation__wrapper {
+        flex: 0 0 auto;
+        width: calc(var(--run-panel-width) - 3.2rem);
+        margin-inline-end: 0.8rem;
+    }
+
+    .animation__container {
+        flex: 1 1 auto;
+    }
+}
+
 .bot-builder {
     position: absolute;
     top: 6.6rem;

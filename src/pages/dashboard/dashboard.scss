@@ -29,6 +29,32 @@
     // Browsers without overflow: clip keep the hidden above.
     @include desktop-screen {
         overflow: clip;
+
+        // Reserve the Run bar's height above ALL tab content, so nothing can
+        // sit underneath it. Keyed on the bar actually being in the DOM
+        // (run-strategy.tsx returns null on mobile and RUN_BAR_HIDDEN_TABS),
+        // not on a list of tab ids - space is reserved exactly when the bar
+        // renders, and never otherwise.
+        &:has(.run-strategy-bar) {
+            --run-strategy-bar-space: var(--run-strategy-bar-height, 6.4rem);
+            // Same expression as app.scss, less the reserved band, so content
+            // that starts lower by the band still ends where it did before.
+            --tab-content-height: calc(100vh - 16.6rem - var(--run-strategy-bar-space));
+        }
+
+        // Every way tab content is placed, offset by the same space. 6.6rem
+        // is the nav row's bottom (bb78d90), the value these already used.
+        // In-flow tabs (Dashboard, Charts, Copy Trading, Market Tool):
+        .dc-tabs__content--main__tabs {
+            box-sizing: border-box;
+            padding-top: var(--run-strategy-bar-space, 0px);
+        }
+
+        // Absolutely positioned tabs (Bot Builder, TradingView):
+        .bot-builder,
+        .tradingview-panel {
+            top: calc(6.6rem + var(--run-strategy-bar-space, 0px));
+        }
     }
 
     .toolbar__section {
@@ -59,11 +85,10 @@
         // account for the nav tab row, not the header at all. top reuses
         // 6.6rem - not a new number: it's .bot-builder's own value
         // (main.scss), live-measured against this same nav row
-        // (.dc-tabs__list bottom minus --header-height, bb78d90). The Run
-        // bar now lives inside the panel (.run-panel__controls), so there
-        // is no strip above it to offset by any more.
+        // (.dc-tabs__list bottom minus --header-height, bb78d90) - offset by
+        // the reserved Run bar band so the panel starts where the bar ends.
         position: absolute;
-        top: 6.6rem;
+        top: calc(6.6rem + var(--run-strategy-bar-space, 0px));
         // This element also carries .run-panel (run-panel.tsx's outer
         // wrapper class), whose own height: 0 (run-panel.scss) was winning:
         // with top, bottom (run-panel.scss) AND height all specified on an

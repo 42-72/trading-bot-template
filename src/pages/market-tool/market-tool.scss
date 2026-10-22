@@ -170,9 +170,10 @@
 // meant to be visible - it used to be the last child of
 // .market-tool__controls with margin-left: auto, which pinned it to the
 // same top-right corner the old floating Run bar occupied, so it was moved
-// out to its own row. That bar is gone (Run now renders inside the run
-// panel, .run-panel__controls), so this separate row is purely cosmetic
-// now - kept because the layout works, not because anything overlaps it.
+// out to its own row. The Run bar now reserves its own band above all tab
+// content (dashboard.scss) instead of floating, so this separate row is
+// purely cosmetic now - kept because the layout works, not because
+// anything overlaps it.
 .market-tool__price--in-controls {
     display: none;
 }

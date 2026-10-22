@@ -47,7 +47,6 @@ type TDrawerContent = {
     is_drawer_open: boolean;
     active_tour: string;
     setActiveTabIndex: () => void;
-    show_controls: boolean;
 };
 
 type TDrawerFooter = {
@@ -129,14 +128,7 @@ const DrawerHeader = ({ is_clear_stat_disabled, is_mobile, is_drawer_open, onCle
         />
     );
 
-const DrawerContent = ({
-    active_index,
-    is_drawer_open,
-    active_tour,
-    setActiveTabIndex,
-    show_controls,
-    ...props
-}: TDrawerContent) => {
+const DrawerContent = ({ active_index, is_drawer_open, active_tour, setActiveTabIndex, ...props }: TDrawerContent) => {
     const { isDesktop } = useDevice();
     // Use the useBlockScroll hook to prevent body scrolling when drawer is open on mobile
 
@@ -177,16 +169,10 @@ const DrawerContent = ({
         );
     }
 
-    // Desktop: Run bar, scrollable tabs and stats as one flex column, so
-    // the Run bar travels with the panel instead of floating over whatever
-    // tab is underneath it (the Charts / Copy Trading overlap).
+    // Desktop: scrollable tabs and stats as one flex column. The Run bar is
+    // its own band above the panel (run-strategy.tsx), not part of it.
     return (
         <div className='run-panel__layout'>
-            {show_controls && (
-                <div className='run-panel__controls' data-testid='dt_run_strategy'>
-                    <TradeAnimation />
-                </div>
-            )}
             <div className='run-panel__scroll'>{tabs}</div>
             {stats}
         </div>
@@ -323,8 +309,8 @@ const RunPanel = observer(() => {
     // is respected until the next one of those changes resets it to that
     // tab's own default - deliberate, not an oversight, since "hidden by
     // default on every other tab" is the explicit requirement. Does NOT
-    // replace the RUN_BAR_HIDDEN_TABS check on show_controls/
-    // MobileDrawerFooter below (Tbots/DTrader specifically hide the Run
+    // replace the RUN_BAR_HIDDEN_TABS checks (run-strategy.tsx, the desktop
+    // early return below, MobileDrawerFooter) (Tbots/DTrader specifically hide the Run
     // button itself, a separate, narrower concern from this tab's
     // panel-visibility default).
     React.useEffect(() => {
@@ -342,7 +328,6 @@ const RunPanel = observer(() => {
             lost_contracts={lost_contracts}
             number_of_runs={number_of_runs}
             setActiveTabIndex={setActiveTabIndex}
-            show_controls={!RUN_BAR_HIDDEN_TABS.includes(active_tab)}
             toggleStatisticsInfoModal={toggleStatisticsInfoModal}
             total_payout={total_payout}
             total_profit={total_profit}
@@ -363,13 +348,12 @@ const RunPanel = observer(() => {
         />
     );
 
-    // The component itself always mounts on desktop now (across every
-    // tab, not just Bot Builder/Chart the way upstream's own
-    // show_run_panel restricted it) - see the effect above for per-tab
-    // default visibility (collapsed vs shown), which needs the Drawer's
-    // chevron to always be reachable so a hidden tab's panel can still be
-    // opened manually. active_tour is unrelated to which tab is active;
-    // this specific early-return is unchanged from before.
+    // Desktop: mounts on every tab except RUN_BAR_HIDDEN_TABS (Tbots,
+    // DTrader), where neither the Run bar nor the panel is shown. On the
+    // other tabs see the effect above for default visibility (collapsed vs
+    // shown) - the Drawer's chevron stays reachable so a collapsed panel can
+    // still be opened manually.
+    if (isDesktop && RUN_BAR_HIDDEN_TABS.includes(active_tab)) return null;
     if (active_tour === 'bot_builder') return null;
 
     return (
@@ -392,7 +376,7 @@ const RunPanel = observer(() => {
                 </Drawer>
                 {/* Prefer not rendering at all over hiding with CSS, so a hidden
                     button can never be clicked - same rule as the desktop
-                    .run-panel__controls (show_controls), applied here to .controls__section.
+                    strip in run-strategy.tsx, applied here to .controls__section.
                     Position/styling of .controls__section itself is untouched. */}
                 {!isDesktop && !RUN_BAR_HIDDEN_TABS.includes(active_tab) && <MobileDrawerFooter />}
             </div>
