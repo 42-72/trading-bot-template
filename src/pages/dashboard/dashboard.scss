@@ -17,6 +17,20 @@
     height: calc(100svh - var(--header-height, 5.6rem));
     overflow: hidden;
 
+    // Desktop: clip, not hidden. overflow: hidden still makes this a scroll
+    // container that script can scroll - and it was being scrolled. The
+    // closed run panel is translated past the right edge (it overhangs by
+    // its own width), so this box had ~381px of horizontal overflow, and
+    // main.tsx's tab-click scrollIntoView({ inline: 'center' }) scrolled it
+    // (244px on Charts/Copy Trading, the rightmost tabs), dragging the
+    // absolutely positioned panel back on screen and cutting off the nav.
+    // clip paints identically but is not a scroll container at all. Both
+    // axes: a clip axis paired with a hidden one computes back to hidden.
+    // Browsers without overflow: clip keep the hidden above.
+    @include desktop-screen {
+        overflow: clip;
+    }
+
     .toolbar__section {
         justify-content: end;
 
