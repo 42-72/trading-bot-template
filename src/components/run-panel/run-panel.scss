@@ -223,8 +223,21 @@
         flex: 0 0 auto;
         display: flex;
         align-items: center;
-        justify-content: flex-end;
         padding: 0.6rem 0.8rem;
+
+        // .animation__wrapper is a flex item here, and flex items default
+        // to flex-grow: 0 - it stayed at its content width (Run button +
+        // status box) instead of filling the row. Grow it, then grow the
+        // status box inside it the same way; the Run button keeps its own
+        // fit-content width (trade-animation.scss).
+        .animation__wrapper {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+
+        .animation__container {
+            flex: 1 1 auto;
+        }
     }
 
     &__scroll {

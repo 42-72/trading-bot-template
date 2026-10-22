@@ -162,7 +162,11 @@ const Transactions = observer(({ is_drawer_open }: TTransactions) => {
                                 const row = transaction_list?.[index];
                                 switch (row.type) {
                                     case transaction_elements.CONTRACT: {
-                                        return 50;
+                                        // Desktop: .transactions__item-wrapper is 5.2rem + 1px
+                                        // border-top = 53px, and nothing clips it - a 50px slot
+                                        // let every row paint 3px into the next. 56 = 53 + 3px
+                                        // headroom. Mobile keeps upstream's 50, untouched.
+                                        return isDesktop ? 56 : 50;
                                     }
                                     case transaction_elements.DIVIDER: {
                                         return 21;
