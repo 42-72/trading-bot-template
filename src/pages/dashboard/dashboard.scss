@@ -6,17 +6,26 @@
     --translate-panel-reset: 0px;
 
     // RunStrategy (run-strategy.tsx) returns null on RUN_BAR_HIDDEN_TABS
-    // (Tbots, DTrader) - #id-tbots/#id-dtrader are those tabs' own content
-    // wrapper divs (main.tsx), only present in the DOM while that tab is
-    // active (Tabs only ever renders the active child - tabs.tsx). Sets
-    // the SAME --run-strategy-bar-height (app.scss) to 0 on exactly those
-    // tabs, so .run-panel__container's existing
-    // calc(10.4rem + var(--run-strategy-bar-height, 6.4rem)) (below)
-    // produces the right answer everywhere through the one variable,
-    // rather than a second constant or a duplicate rule to keep in sync.
-    &:has(#id-tbots),
-    &:has(#id-dtrader) {
-        --run-strategy-bar-height: 0;
+    // (Tbots, DTrader). #id-tbots/#id-dtrader are NOT the tab panels -
+    // Tabs (tabs.tsx) passes the `id` prop from each child straight to Tab
+    // (tab.tsx:63, `<li id={id} ...>`), i.e. the tab STRIP BUTTON, which is
+    // always in the DOM for every tab regardless of which is active - only
+    // the content area is conditionally rendered, and it renders
+    // `child.props.children`, stripping the id entirely. So `:has(#id-
+    // tbots)` alone matched on every tab, not just Tbots. The active
+    // button additionally gets .dc-tabs__active (tab.tsx:52, unconditional
+    // on `is_active` - not scoped to the className prop Tabs was given in
+    // main.tsx), so pairing the id with that class is true only while that
+    // specific tab is selected. Sets the SAME --run-strategy-bar-height
+    // (app.scss) to 0 on exactly those tabs, so .run-panel__container's
+    // existing calc(6.6rem + var(--run-strategy-bar-height, 6.4rem))
+    // (below) produces the right answer everywhere through the one
+    // variable, rather than a second constant or a duplicate rule to keep
+    // in sync. 0px, not 0 - calc() can't add a bare number to a length;
+    // the whole declaration is invalid and dropped if it's unitless.
+    &:has(#id-tbots.dc-tabs__active),
+    &:has(#id-dtrader.dc-tabs__active) {
+        --run-strategy-bar-height: 0px;
     }
 
     position: relative;
@@ -38,16 +47,35 @@
         // scrolls, and .bot-dashboard never does (overflow: hidden above),
         // so it rendered at its plain normal-flow position regardless of
         // top/height/bottom - which is what put the tabs at the bottom of
-        // the page instead of below the Run bar. position: fixed (this
-        // element's own natural type - drawer.scss:7) makes top/bottom
-        // (run-panel.scss) fully effective and viewport-relative,
-        // independent of DOM nesting/flow entirely. top is offset by
-        // --run-strategy-bar-height so the panel starts exactly where the
-        // Run/Pause/Stop strip ends - no gap, and no separate hand-tuned
-        // number to keep in sync with it. margin-top removed - it
-        // contradicted that same "no gap" requirement.
-        position: fixed;
-        top: calc(10.4rem + var(--run-strategy-bar-height, 6.4rem));
+        // the page instead of below the Run bar. Went to position: fixed
+        // next (viewport-relative) with top: 10.4rem (header + nav row,
+        // upstream's own number for their shorter header) - but that made
+        // .dc-drawer--right's left: calc(100vw - 16px) (drawer.scss) part
+        // of the same over-constrained box run-panel.scss's left: auto now
+        // fixes, and needed a hardcoded top guess for OUR taller
+        // header+nav, which is exactly the mistake this task called out.
+        // position: absolute instead: .bot-dashboard (this selector's own
+        // scope) is position: relative and already sits below the brand
+        // header via normal page flow (Layout renders AppHeader, then
+        // Body/Outlet - layout/index.tsx) - so this only ever needs to
+        // account for the nav tab row, not the header at all. top reuses
+        // 6.6rem - not a new number: it's .bot-builder's own value
+        // (main.scss), live-measured against this same nav row
+        // (.dc-tabs__list bottom minus --header-height, bb78d90) - offset
+        // by --run-strategy-bar-height so the panel still starts exactly
+        // where the Run/Pause/Stop strip ends, no gap.
+        position: absolute;
+        top: calc(6.6rem + var(--run-strategy-bar-height, 6.4rem));
+        // This element also carries .run-panel (run-panel.tsx's outer
+        // wrapper class), whose own height: 0 (run-panel.scss) was winning:
+        // with top, bottom (run-panel.scss) AND height all specified on an
+        // absolutely positioned box, height wins and bottom is dropped -
+        // 0 beat the ~363px top+bottom would have computed. height: auto
+        // here lets top+bottom determine the box instead, scoped to this
+        // desktop container rule only - .run-panel { height: 0 } itself is
+        // untouched, since that's what keeps the drawer taking no space in
+        // normal flow, and other things may depend on it.
+        height: auto;
         transform: translateX(var(--translate-panel-ltr));
         transition: all 0.4s;
 

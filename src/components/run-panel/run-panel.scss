@@ -10,15 +10,41 @@
         // top now lives in dashboard.scss (.bot-dashboard .run-panel__
         // container), computed from --run-strategy-bar-height so the panel
         // always starts exactly where the Run/Pause/Stop strip ends - see
-        // that rule's own comment. bottom is unchanged from before: 3.6rem,
-        // paired with that top to compute height by construction rather
-        // than a viewport-arithmetic calc (can never go negative). width
-        // is the same --run-panel-width the strip uses (app.scss), so the
-        // two can't drift out of sync. Desktop only - mobile uses
+        // that rule's own comment. bottom: 3.6rem is NOT dead space - it is
+        // exactly the desktop .app-footer (footer.scss: position: fixed;
+        // bottom: 0; height: 3.6rem; rendered only when isDesktop -
+        // layout/index.tsx). .bot-dashboard reaches the window bottom, so
+        // bottom: 0 would slide the panel (z-index 6) over the footer's
+        // right end, where its row-reverse layout puts the footer controls.
+        // width is the same --run-panel-width the strip uses (app.scss), so
+        // the two can't drift out of sync. Desktop only - mobile uses
         // &--mobile below, untouched.
         bottom: 3.6rem;
         width: var(--run-panel-width) !important;
         right: 0;
+        // This element is .dc-drawer underneath, whose base .dc-drawer--
+        // right rule (drawer.scss) sets left: calc(100vw - 16px) - with
+        // left, width, AND right all specified at once, the box is over-
+        // constrained, and left wins (right is dropped) per how absolute/
+        // fixed positioning resolves that case - pushing the whole panel
+        // off past the right edge of the viewport instead of where right:
+        // 0 says it should sit. left: auto removes the conflict so right +
+        // width unambiguously determine the box.
+        left: auto;
+
+        // With the stats block now Summary-only (run-panel.tsx), the tabs
+        // take every pixel .run-panel__content has. .run-panel__content is
+        // a flex column, so flex props DO apply to .dc-tabs here (it's the
+        // grid's own children they don't apply to - see transactions.scss).
+        .run-panel__content > .dc-tabs {
+            flex: 1 1 auto;
+            min-height: 0;
+        }
+
+        // Reset never gives up height to the content above it.
+        .dc-drawer__footer {
+            flex-shrink: 0;
+        }
 
         &--mobile {
             position: absolute;

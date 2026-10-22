@@ -7,6 +7,57 @@
 
     flex-direction: column;
 
+    // Desktop only (.run-panel-tab__content is only applied when isDesktop
+    // - transactions.tsx). .transactions's actual immediate parent is
+    // .dc-tabs__content (the shared Tabs component's sub-tab content area -
+    // tabs.scss), which is display: grid with grid-template-rows: auto 1fr
+    // - a completely different sizing mechanism than flex, and one that
+    // does NOT hand a definite height down to an ordinary block child on
+    // its own. The flex-column work below (display: flex on .transactions,
+    // flex: 1 1 auto on .transactions__content, replacing upstream's
+    // hardcoded height: calc(100% - 11rem), unverified in this fork - git
+    // blame e7d659d) was correct but incomplete: it only governs how
+    // .transactions distributes space among ITS OWN children, not whether
+    // .transactions itself receives a height from ITS OWN parent in the
+    // first place - it didn't, so there was nothing to distribute.
+    // height: 100% here is that missing piece - the grid's 1fr track
+    // already computes a definite height for .dc-tabs__content, this just
+    // has .transactions actually claim it, the same way .dc-tabs__content
+    // itself does (tabs.scss:28). AutoSizer (react-virtualized,
+    // data-list.tsx) measures its own immediate parent's rendered pixels
+    // directly, not a CSS percentage chain, and was measuring 0 as a
+    // result - rows never rendered, only the (separately, non-virtualised)
+    // header showed.
+    &.run-panel-tab__content {
+        display: flex;
+        height: 100%;
+
+        // Download/View Detail tight under the tab bar: download.scss's
+        // padding: 12px and all-round 1px border shrink to a 0.6rem/1.6rem
+        // inset with only a bottom separator (the tab bar's own 2px
+        // border-bottom already sits above). 6 + 32 + 6 + 1 = 45px.
+        .download__container {
+            flex: 0 0 auto;
+            padding: 0.6rem 1.6rem;
+            border-width: 0 0 1px;
+        }
+
+        // The gap: &__header's height: 6.4rem below - a fixed 64px box
+        // with align-items: center, so the label text sits mid-box with
+        // empty band above it. Sized by content instead here; desktop
+        // only, the base rule (and mobile) is unchanged.
+        .transactions__header {
+            flex: 0 0 auto;
+            height: auto;
+        }
+
+        .transactions__content {
+            flex: 1 1 auto;
+            min-height: 0;
+            height: auto;
+        }
+    }
+
     .ReactVirtualized__Grid__innerScrollContainer {
         & > :first-child,
         :before,

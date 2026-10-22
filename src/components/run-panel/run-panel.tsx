@@ -11,7 +11,7 @@ import Text from '@/components/shared_ui/text';
 import Summary from '@/components/summary';
 import TradeAnimation from '@/components/trade-animation';
 import Transactions from '@/components/transactions';
-import { RUN_BAR_HIDDEN_TABS } from '@/constants/bot-contents';
+import { DBOT_TABS, RUN_BAR_HIDDEN_TABS } from '@/constants/bot-contents';
 import { popover_zindex } from '@/constants/z-indexes';
 import { useStore } from '@/hooks/useStore';
 import { Localize, localize } from '@deriv-com/translations';
@@ -144,6 +144,11 @@ const DrawerContent = ({ active_index, is_drawer_open, active_tour, setActiveTab
         };
     }, [is_drawer_open, isDesktop]);
 
+    // Desktop: stats only on Summary (index 0). On Transactions it took
+    // 160px of a ~342px content area, leaving the list almost nothing.
+    // Mobile keeps upstream's rule (hidden on Journal only), untouched.
+    const show_stats = isDesktop ? active_index === 0 : active_index !== 2;
+
     return (
         <>
             <Tabs active_index={active_index} onTabItemClick={setActiveTabIndex} top>
@@ -157,7 +162,7 @@ const DrawerContent = ({ active_index, is_drawer_open, active_tour, setActiveTab
                     <Journal />
                 </div>
             </Tabs>
-            {((is_drawer_open && active_index !== 2) || active_tour) && <StatisticsSummary {...props} />}
+            {((is_drawer_open && show_stats) || active_tour) && <StatisticsSummary {...props} />}
         </>
     );
 };
@@ -254,6 +259,7 @@ const RunPanel = observer(() => {
     const {
         active_index,
         is_drawer_open,
+        is_running,
         is_statistics_info_modal_open,
         is_clear_stat_disabled,
         onClearStatClick,
@@ -267,6 +273,7 @@ const RunPanel = observer(() => {
     const { statistics } = transactions;
     const { active_tour, active_tab } = dashboard;
     const { total_payout, total_profit, total_stake, won_contracts, lost_contracts, number_of_runs } = statistics;
+    const { BOT_BUILDER } = DBOT_TABS;
 
     React.useEffect(() => {
         onMount();
@@ -279,6 +286,26 @@ const RunPanel = observer(() => {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // Desktop tab-based default visibility (runpanel): permanent on Bot
+    // Builder; every other tab starts collapsed (only the chevron sliver
+    // shows - the same mechanism Drawer already provides for manual
+    // open/close, run-panel.tsx's own toggleDrawer/is_drawer_open), unless
+    // a bot is actually running, in which case it shows regardless of tab
+    // so a running strategy is never hidden. Re-evaluates on every tab
+    // switch or running-state change; a manual chevron toggle in between
+    // is respected until the next one of those changes resets it to that
+    // tab's own default - deliberate, not an oversight, since "hidden by
+    // default on every other tab" is the explicit requirement. Does NOT
+    // replace the RUN_BAR_HIDDEN_TABS check in run-strategy.tsx/
+    // MobileDrawerFooter below (Tbots/DTrader specifically hide the Run
+    // button itself, a separate, narrower concern from this tab's
+    // panel-visibility default).
+    React.useEffect(() => {
+        if (!isDesktop) return;
+        toggleDrawer(is_running || active_tab === BOT_BUILDER);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [active_tab, is_running, isDesktop]);
 
     const content = (
         <DrawerContent
@@ -309,11 +336,13 @@ const RunPanel = observer(() => {
         />
     );
 
-    // Permanent on every desktop tab now (runpanel) - previously restricted
-    // to Bot Builder/Chart only, matching upstream's own show_run_panel
-    // check, which predates this fork's Tbots/Market Tool/DTrader/
-    // TradingView tabs entirely. active_tour is unrelated to which tab is
-    // active; kept as-is.
+    // The component itself always mounts on desktop now (across every
+    // tab, not just Bot Builder/Chart the way upstream's own
+    // show_run_panel restricted it) - see the effect above for per-tab
+    // default visibility (collapsed vs shown), which needs the Drawer's
+    // chevron to always be reachable so a hidden tab's panel can still be
+    // opened manually. active_tour is unrelated to which tab is active;
+    // this specific early-return is unchanged from before.
     if (active_tour === 'bot_builder') return null;
 
     return (
