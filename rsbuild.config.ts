@@ -55,6 +55,9 @@ export default defineConfig({
                 BUILD_COMMIT: JSON.stringify(buildInfo.commit),
                 BUILD_TIME: JSON.stringify(buildInfo.built_at),
                 CLIENT_ID: JSON.stringify(process.env.CLIENT_ID),
+                // Local-dev-only opt-in (.env, gitignored) - see
+                // useProductionHostsLocally, src/components/shared/utils/config/config.ts
+                FORCE_PRODUCTION_HOSTS: JSON.stringify(process.env.FORCE_PRODUCTION_HOSTS),
                 APP_ID: JSON.stringify(process.env.APP_ID),
                 GD_CLIENT_ID: JSON.stringify(process.env.GD_CLIENT_ID),
                 GD_APP_ID: JSON.stringify(process.env.GD_APP_ID),
@@ -89,6 +92,32 @@ export default defineConfig({
             {
                 from: 'node_modules/@deriv-com/smartcharts-champion/dist/assets/shaders/*',
                 to: 'assets/shaders/[name][ext]',
+            },
+            // The two rules above (assets/fonts, assets/shaders) only ever
+            // covered those two top-level subfolders - assets/packages/**
+            // (deriv_chart's own icon font + ~101 market-symbol PNGs, nested
+            // under packages/deriv_chart/assets/...) was never addressed by
+            // any rule, upstream or ours (confirmed identical in
+            // upstream/master - this predates our fork). The broad
+            // assets/* rule above doesn't recurse into subdirectories
+            // either, so this whole subtree was silently missing from
+            // dist/ - the browser's requests for it were falling through
+            // to Cloudflare's SPA fallback (index.html) instead of 404ing
+            // cleanly. [path] preserves the matched glob's own relative
+            // directory structure instead of flattening every file into one
+            // folder (which is what the rules above do). context is
+            // rspack's own required pairing for that ("should be explicitly
+            // set only when from contains a glob" - RawCopyPattern docs) -
+            // but it's PREPENDED to `from`, not merely used for output-path
+            // trimming (confirmed by a failed build: setting both to the
+            // same full path duplicated it, "unable to locate
+            // .../packages\node_modules/.../packages/**/*"). So context
+            // carries the full directory, and from is just the glob
+            // relative to it.
+            {
+                from: '**/*',
+                to: 'assets/packages/[path][name][ext]',
+                context: 'node_modules/@deriv-com/smartcharts-champion/dist/assets/packages',
             },
             { from: path.join(__dirname, 'public') },
         ],

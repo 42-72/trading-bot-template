@@ -9,7 +9,6 @@ import TransactionDetailsModal from '@/components/transaction-details';
 import { api_base, ApiHelpers, ServerTime } from '@/external/bot-skeleton';
 import { CONNECTION_STATUS } from '@/external/bot-skeleton/services/api/observables/connection-status-stream';
 import { useApiBase } from '@/hooks/useApiBase';
-import useDevMode from '@/hooks/useDevMode';
 import { useStore } from '@/hooks/useStore';
 import useThemeSwitcher from '@/hooks/useThemeSwitcher';
 import { ThemeProvider } from '@deriv-com/quill-ui';
@@ -37,9 +36,6 @@ const AppContent = observer(() => {
     const is_subscribed_to_msg_listener = React.useRef(false);
     const msg_listener = React.useRef(null);
     const { connectionStatus } = useApiBase();
-
-    // Initialize dev mode keyboard shortcuts
-    useDevMode();
 
     const livechat_client_information = {
         is_client_store_initialized: client?.is_logged_in ? true : !!client,

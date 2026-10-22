@@ -1,4 +1,4 @@
-import { isProduction } from '@/components/shared';
+import { isProduction, useProductionHostsLocally } from '@/components/shared';
 import brandConfig from '../../brand.config.json';
 
 /**
@@ -56,7 +56,12 @@ export class DerivWSAccountsService {
      * @returns DerivWS base URL (e.g., "https://api.derivws.com/trading/v1/")
      */
     private static getDerivWSBaseURL(): string {
-        const environment = isProduction() ? 'production' : 'staging';
+        // See useProductionHostsLocally (config.ts) - local-dev-only opt-in.
+        // This is the account-fetch + OTP-minting host used right after
+        // login, so it has to agree with generateOAuthURL/getOAuth2BaseURL
+        // or the flow fails here even after a successful redirect + token
+        // exchange.
+        const environment = isProduction() || useProductionHostsLocally() ? 'production' : 'staging';
         return brandConfig.platform.derivws.url[environment];
     }
 

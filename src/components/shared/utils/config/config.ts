@@ -44,8 +44,19 @@ export const isProduction = () => {
 
 export const isLocal = () => /localhost(:\d+)?$/i.test(window.location.hostname);
 
+// Local-dev-only opt-in to use PRODUCTION Deriv hosts (auth + WS) even on
+// localhost, where isProduction() correctly stays false - that's its own,
+// separate, unchanged domain check. staging-auth.deriv.com is firewalled
+// and returns "Access Denied / Blocked by security systems" for local
+// requests, so without this, local login can never succeed at all: it
+// never even reaches the redirect_uri check. Gated on FORCE_PRODUCTION_
+// HOSTS (.env, gitignored - never present in a real build) so this is a
+// deliberate, explicit opt-in rather than making localhost unconditionally
+// "production".
+export const useProductionHostsLocally = () => isLocal() && process.env.FORCE_PRODUCTION_HOSTS === 'true';
+
 const getDefaultServerURL = () => {
-    const isProductionEnv = isProduction();
+    const isProductionEnv = isProduction() || useProductionHostsLocally();
 
     try {
         return isProductionEnv ? WS_SERVERS.PRODUCTION : WS_SERVERS.STAGING;
@@ -232,7 +243,7 @@ export const clearCSRFToken = (): void => {
 export const generateOAuthURL = async (prompt?: string) => {
     try {
         // Use brand config for login URLs
-        const environment = isProduction() ? 'production' : 'staging';
+        const environment = isProduction() || useProductionHostsLocally() ? 'production' : 'staging';
         const hostname = brandConfig?.platform.auth2_url?.[environment];
         const clientId = process.env.CLIENT_ID;
 

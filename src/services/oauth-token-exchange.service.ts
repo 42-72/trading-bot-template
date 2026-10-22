@@ -1,4 +1,4 @@
-import { clearCodeVerifier, getCodeVerifier, isProduction } from '@/components/shared';
+import { clearCodeVerifier, getCodeVerifier, isProduction, useProductionHostsLocally } from '@/components/shared';
 import { ErrorLogger } from '@/utils/error-logger';
 import brandConfig from '../../brand.config.json';
 
@@ -36,7 +36,12 @@ export class OAuthTokenExchangeService {
      * @returns OAuth2 base URL (staging or production)
      */
     private static getOAuth2BaseURL(): string {
-        const environment = isProduction() ? 'production' : 'staging';
+        // See useProductionHostsLocally (config.ts) - local-dev-only opt-in
+        // so the token exchange (right after Deriv redirects back) hits the
+        // same host the initial redirect (generateOAuthURL) used, instead
+        // of falling back to the firewalled staging-auth host and failing
+        // one step after login appeared to succeed.
+        const environment = isProduction() || useProductionHostsLocally() ? 'production' : 'staging';
         return brandConfig.platform.auth2_url[environment];
     }
 
