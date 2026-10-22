@@ -386,20 +386,6 @@ const RunPanel = observer(() => {
                     footer={isDesktop && footer}
                     is_open={is_drawer_open}
                     toggleDrawer={toggleDrawer}
-                    // Drawer computes its own collapse-to-a-sliver transform
-                    // from this number in JS (translateX(width - 16px)), but
-                    // the actual rendered width is now the responsive
-                    // --run-panel-width (app.scss, clamp(360px, 31%, 620px))
-                    // - the two can only match exactly at the viewport width
-                    // where the clamp's 31% resolves to ~600px (close to the
-                    // 1918px reference this was measured against). At other
-                    // widths the collapse will be close but not pixel-exact
-                    // (a few px more or less of sliver than the intended
-                    // 16px). Flagged as a known approximation, not silently
-                    // guessed - a fully robust fix would replace this with a
-                    // CSS-driven transform using var(--run-panel-width)
-                    // directly instead of a JS-computed one.
-                    width={600}
                     zIndex={popover_zindex.RUN_PANEL}
                 >
                     {content}

@@ -22,7 +22,7 @@ const Drawer = ({
     contentClassName,
     footer,
     header,
-    width = 250,
+    width,
     zIndex = 4,
     ...props
 }: React.PropsWithChildren<TDrawer>) => {
@@ -49,8 +49,11 @@ const Drawer = ({
             })}
             style={{
                 zIndex,
+                // Only for callers that size the drawer by a fixed width. The
+                // run panel (the only caller) sizes and slides itself in CSS
+                // (--run-panel-width, dashboard.scss) and passes no width.
                 transform:
-                    is_open && isDesktop
+                    is_open && isDesktop && width !== undefined
                         ? anchor === 'left'
                             ? `translateX(calc(${width}px - 16px))`
                             : `translateX(calc(-${width}px + 16px))`

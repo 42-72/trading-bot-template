@@ -1,8 +1,15 @@
 @use 'components/shared/styles/mixins' as *;
 
 .bot-dashboard {
-    --translate-panel-rtl: -367px;
-    --translate-panel-ltr: 367px;
+    // Closed run panel slide distance: its own full width less the 16px
+    // toggle (drawer.scss $toggler-width), so only the toggle stays on
+    // screen. 100% inside translateX() is the panel's own width, i.e. the
+    // resolved var(--run-panel-width) - the var itself can't be used here,
+    // because its 31% would then resolve against the panel's own width
+    // instead of .bot-dashboard's. Was 367px, sized for upstream's fixed
+    // 366px panel.
+    --translate-panel-rtl: calc(-100% + 16px);
+    --translate-panel-ltr: calc(100% - 16px);
     --translate-panel-reset: 0px;
 
     position: relative;

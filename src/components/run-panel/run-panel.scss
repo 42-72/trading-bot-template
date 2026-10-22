@@ -34,6 +34,9 @@
         // Scoped here because StatisticsSummary also renders on mobile.
         .run-panel__stat {
             flex: 0 0 auto;
+            // Base rule below is width: 35rem, sized for upstream's fixed
+            // 366px panel; fill the (now responsive) column instead.
+            width: 100%;
 
             &--info {
                 padding: 0.8rem 0 0.2rem;
@@ -256,25 +259,16 @@
 
     &-tab {
         &__content {
-            // Was `height: calc(100vh - 42rem)` (420px, given this app's
-            // 62.5% root font-size) - on a laptop with OS display scaling
-            // this goes to zero or negative and the whole tab area
-            // disappears. .run-panel__content (the parent, above) is
-            // already `display: flex; flex-direction: column`, so this
-            // takes whatever space is actually left in it - correct by
-            // construction at any viewport height, no magic number. This
-            // also makes the old &--no-stat modifier (a second, separately
-            // hand-tuned subtraction for when Journal has no stats block
-            // above it) unnecessary: flex reallocates space based on the
-            // stats block's real height automatically, stats present or
-            // not, instead of needing two different guessed constants for
-            // the two cases - so it's removed rather than kept as dead
-            // weight. overflow-y: auto (was overflow: hidden) so this pane
-            // scrolls its own content instead of clipping it, matching
-            // what @media (max-width: 760px) below already does on mobile.
-            // Desktop only - mobile uses &--mobile below, untouched.
-            flex: 1 1 auto;
-            min-height: 0;
+            // Was `height: calc(100vh - 42rem)`, which went to zero or
+            // negative on laptops with OS display scaling. No height or flex
+            // here now: this element's parent is .dc-tabs__content, a plain
+            // block box filling the .dc-tabs grid's 1fr row (tabs.scss), not
+            // a flex container - so flex props would do nothing. Each tab
+            // that needs a definite height sets height: 100% itself (e.g.
+            // .transactions, for AutoSizer - transactions.scss).
+            // overflow-y: auto so this pane scrolls its own content instead
+            // of clipping it. Desktop only - mobile uses &--mobile below,
+            // untouched.
             overflow-y: auto;
 
             &--mobile {
