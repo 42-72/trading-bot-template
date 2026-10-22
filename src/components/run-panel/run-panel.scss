@@ -7,17 +7,14 @@
     height: 0;
 
     &__container {
-        // top now lives in dashboard.scss (.bot-dashboard .run-panel__
-        // container), computed from --run-strategy-bar-height so the panel
-        // always starts exactly where the Run/Pause/Stop strip ends - see
-        // that rule's own comment. bottom: 3.6rem is NOT dead space - it is
+        // top lives in dashboard.scss (.bot-dashboard .run-panel__
+        // container). bottom: 3.6rem is NOT dead space - it is
         // exactly the desktop .app-footer (footer.scss: position: fixed;
         // bottom: 0; height: 3.6rem; rendered only when isDesktop -
         // layout/index.tsx). .bot-dashboard reaches the window bottom, so
         // bottom: 0 would slide the panel (z-index 6) over the footer's
         // right end, where its row-reverse layout puts the footer controls.
-        // width is the same --run-panel-width the strip uses (app.scss), so
-        // the two can't drift out of sync. Desktop only - mobile uses
+        // width is --run-panel-width (app.scss). Desktop only - mobile uses
         // &--mobile below, untouched.
         bottom: 3.6rem;
         width: var(--run-panel-width) !important;
@@ -32,13 +29,19 @@
         // width unambiguously determine the box.
         left: auto;
 
-        // With the stats block now Summary-only (run-panel.tsx), the tabs
-        // take every pixel .run-panel__content has. .run-panel__content is
-        // a flex column, so flex props DO apply to .dc-tabs here (it's the
-        // grid's own children they don't apply to - see transactions.scss).
-        .run-panel__content > .dc-tabs {
-            flex: 1 1 auto;
-            min-height: 0;
+        // Smaller stat tiles on desktop (64px -> 48px rows, info padding
+        // 16px -> 8px top): the stats block is 120px instead of 160px.
+        // Scoped here because StatisticsSummary also renders on mobile.
+        .run-panel__stat {
+            flex: 0 0 auto;
+
+            &--info {
+                padding: 0.8rem 0 0.2rem;
+            }
+
+            &--tiles {
+                grid-template: 4.8rem 4.8rem / 1fr 1fr 1fr;
+            }
         }
 
         // Reset never gives up height to the content above it.
@@ -201,6 +204,33 @@
                 padding: 0 0.8rem;
             }
         }
+    }
+
+    // Desktop only - run-panel.tsx renders these three wrappers only when
+    // isDesktop. Run bar, tabs and stats stacked in one flex column inside
+    // .run-panel__content, whose height is already definite (drawer
+    // container, top + bottom), so the chain down to AutoSizer stays
+    // definite: layout -> scroll (flexed) -> .dc-tabs (height: 100%) ->
+    // .dc-tabs__content (1fr row) -> .transactions (height: 100%).
+    &__layout {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+
+    &__controls {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        padding: 0.6rem 0.8rem;
+    }
+
+    &__scroll {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
     }
 
     &__buttons {

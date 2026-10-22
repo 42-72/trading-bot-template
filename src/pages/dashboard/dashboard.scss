@@ -5,29 +5,6 @@
     --translate-panel-ltr: 367px;
     --translate-panel-reset: 0px;
 
-    // RunStrategy (run-strategy.tsx) returns null on RUN_BAR_HIDDEN_TABS
-    // (Tbots, DTrader). #id-tbots/#id-dtrader are NOT the tab panels -
-    // Tabs (tabs.tsx) passes the `id` prop from each child straight to Tab
-    // (tab.tsx:63, `<li id={id} ...>`), i.e. the tab STRIP BUTTON, which is
-    // always in the DOM for every tab regardless of which is active - only
-    // the content area is conditionally rendered, and it renders
-    // `child.props.children`, stripping the id entirely. So `:has(#id-
-    // tbots)` alone matched on every tab, not just Tbots. The active
-    // button additionally gets .dc-tabs__active (tab.tsx:52, unconditional
-    // on `is_active` - not scoped to the className prop Tabs was given in
-    // main.tsx), so pairing the id with that class is true only while that
-    // specific tab is selected. Sets the SAME --run-strategy-bar-height
-    // (app.scss) to 0 on exactly those tabs, so .run-panel__container's
-    // existing calc(6.6rem + var(--run-strategy-bar-height, 6.4rem))
-    // (below) produces the right answer everywhere through the one
-    // variable, rather than a second constant or a duplicate rule to keep
-    // in sync. 0px, not 0 - calc() can't add a bare number to a length;
-    // the whole declaration is invalid and dropped if it's unitless.
-    &:has(#id-tbots.dc-tabs__active),
-    &:has(#id-dtrader.dc-tabs__active) {
-        --run-strategy-bar-height: 0px;
-    }
-
     position: relative;
     height: calc(100vh - var(--header-height, 5.6rem)); /* fallback for engines without svh */
     height: calc(100svh - var(--header-height, 5.6rem));
@@ -61,11 +38,11 @@
         // account for the nav tab row, not the header at all. top reuses
         // 6.6rem - not a new number: it's .bot-builder's own value
         // (main.scss), live-measured against this same nav row
-        // (.dc-tabs__list bottom minus --header-height, bb78d90) - offset
-        // by --run-strategy-bar-height so the panel still starts exactly
-        // where the Run/Pause/Stop strip ends, no gap.
+        // (.dc-tabs__list bottom minus --header-height, bb78d90). The Run
+        // bar now lives inside the panel (.run-panel__controls), so there
+        // is no strip above it to offset by any more.
         position: absolute;
-        top: calc(6.6rem + var(--run-strategy-bar-height, 6.4rem));
+        top: 6.6rem;
         // This element also carries .run-panel (run-panel.tsx's outer
         // wrapper class), whose own height: 0 (run-panel.scss) was winning:
         // with top, bottom (run-panel.scss) AND height all specified on an
