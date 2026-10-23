@@ -1,5 +1,6 @@
 import localForage from 'localforage';
 import LZString from 'lz-string';
+import { isAiEngineStrategyId } from '@/utils/library-strategies';
 import { config } from '../constants';
 import { save_types } from '../constants/save-type';
 import DBotStore from '../scratch/dbot-store';
@@ -19,6 +20,8 @@ export const saveWorkspaceToRecent = async (xml, save_type = save_types.UNSAVED)
     } = DBotStore.instance;
 
     const workspace_id = window.Blockly.derivWorkspace.current_strategy_id || window.Blockly.utils.idGenerator.genUid();
+    // The AI Scanner's engine never goes to Recent (library-strategies.ts).
+    if (isAiEngineStrategyId(workspace_id)) return;
     const workspaces = await getSavedWorkspaces();
     const current_xml = Blockly.Xml.domToText(xml_dom);
     const current_timestamp = Date.now();

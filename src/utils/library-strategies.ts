@@ -41,3 +41,14 @@ export const removeLibraryStrategyId = (id?: string | null) => {
 };
 
 export const isLibraryStrategyId = (id?: string | null) => !!id && readIds().includes(id);
+
+// AI Scanner engine bots (constants/ai-engine.ts) are loaded with a strategy id
+// carrying this prefix. Such a workspace is never written to Recent
+// (saveWorkspaceToRecent) - it holds one run's locked values, so it must not be
+// reopened by hand or resumed on startup with stale ones. The prefix, not a
+// stored list, so there is nothing to lose or let grow.
+const AI_ENGINE_ID_PREFIX = 'ai-engine-';
+
+export const createAiEngineStrategyId = () => `${AI_ENGINE_ID_PREFIX}${Date.now()}`;
+
+export const isAiEngineStrategyId = (id?: string | null) => !!id && id.startsWith(AI_ENGINE_ID_PREFIX);

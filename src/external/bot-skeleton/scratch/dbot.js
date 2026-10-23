@@ -1,4 +1,4 @@
-import { isLibraryStrategyId } from '@/utils/library-strategies';
+import { isAiEngineStrategyId, isLibraryStrategyId } from '@/utils/library-strategies';
 import { save_types } from '../constants';
 import { config } from '../constants/config';
 import { api_base } from '../services/api/api-base';
@@ -182,7 +182,10 @@ class DBot {
                 // Resume the newest Recent workspace, skipping bots loaded from
                 // the Tbots library (library-strategies.ts) so they only open when
                 // loaded deliberately. None left -> main.xml, upstream's default.
-                const latest_file = recent_files?.find(file => !isLibraryStrategyId(file?.id));
+                // AI Scanner engines never reach Recent; skipped here as well.
+                const latest_file = recent_files?.find(
+                    file => !isLibraryStrategyId(file?.id) && !isAiEngineStrategyId(file?.id)
+                );
                 if (latest_file) {
                     window.Blockly.derivWorkspace.strategy_to_load = latest_file.xml;
                     window.Blockly.getMainWorkspace().strategy_to_load = latest_file.xml;
