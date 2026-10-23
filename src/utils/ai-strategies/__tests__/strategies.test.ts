@@ -9,7 +9,8 @@ const windows = [
 ];
 
 describe('Over/Under strategy slots', () => {
-    it.each(['over', 'under'] as const)('the default %s strategy never qualifies and never enters', id => {
+    // Over has a real strategy now (over.test.ts); Under is still the default.
+    it.each(['under'] as const)('the default %s strategy never qualifies and never enters', id => {
         const strategy = OVER_UNDER_STRATEGIES[id];
         windows.forEach(digits => {
             expect(strategy.condition(digits).qualified).toBe(false);

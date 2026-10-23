@@ -50,7 +50,10 @@ export const contractWinRate = (setup: TOverUnderSetup, barrier: number) =>
     setup.ai_direction === 1 ? (9 - barrier) * 10 : barrier * 10;
 
 export const AI_SCANNER_TICK_WINDOW = 600;
-export const AI_SCANNER_DEFAULT_ENTRY_WAIT_SECONDS = 60;
+// How long Load & Run may spend FINDING a qualifying market. Once a market is
+// locked the limit no longer applies - it waits for the entry for as long as
+// the condition holds (AiScannerStore).
+export const AI_SCANNER_SCAN_LIMIT_SECONDS = 300;
 
 // v1 supports USD accounts only. Deriv publishes no structured minimum stake
 // per currency on this API (contracts_for carries none; it is only quoted in a

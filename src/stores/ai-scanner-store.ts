@@ -3,8 +3,8 @@ import {
     AI_ENGINE_BOT_NAME,
     AI_ENGINE_OVER_UNDER_XML,
     AI_SCANNER_CURRENCY,
-    AI_SCANNER_DEFAULT_ENTRY_WAIT_SECONDS,
     AI_SCANNER_MIN_STAKE,
+    AI_SCANNER_SCAN_LIMIT_SECONDS,
     AI_SCANNER_TICK_WINDOW,
     OVER_UNDER_SETUPS,
     TOverUnderStrategyId,
@@ -48,7 +48,6 @@ export type TAiScannerForm = {
     martingale: string;
     take_profit: string;
     stop_loss: string;
-    entry_wait_seconds: string;
 };
 
 export type TAiScannerLocked = {
@@ -57,7 +56,6 @@ export type TAiScannerLocked = {
     martingale: number;
     take_profit: number;
     stop_loss: number;
-    entry_wait_seconds: number;
     use_test_strategy: boolean;
     loginid: string;
 };
@@ -71,8 +69,9 @@ export type TFeedStatus = { status: string; n: number };
 type TFormErrors = Partial<Record<keyof TAiScannerForm, string>>;
 
 const FORM_STORAGE_KEY = 'ai_scanner_form';
-const MIN_ENTRY_WAIT_SECONDS = 5;
-const MAX_ENTRY_WAIT_SECONDS = 600;
+export const CONDITIONS_NOT_MET_MESSAGE = `Conditions not met — no market qualified in ${
+    AI_SCANNER_SCAN_LIMIT_SECONDS / 60
+} minutes.`;
 
 const DEFAULT_FORM: TAiScannerForm = {
     strategy: 'over',
@@ -80,7 +79,6 @@ const DEFAULT_FORM: TAiScannerForm = {
     martingale: '2',
     take_profit: '',
     stop_loss: '',
-    entry_wait_seconds: String(AI_SCANNER_DEFAULT_ENTRY_WAIT_SECONDS),
 };
 
 const readStoredForm = (): TAiScannerForm => {
@@ -155,10 +153,12 @@ export default class AiScannerStore {
     /** Last thing the pipeline wants the trader to know (why it went back to scanning, why it stopped...). */
     message = '';
     final_profit: number | null = null;
+    /** When the search for a market gives up (ms since epoch) - set at Load & Run. */
+    scan_deadline: number | null = null;
 
     // Not observable: bookkeeping for one pipeline run.
     private run_token = 0;
-    private wait_timer: ReturnType<typeof setTimeout> | null = null;
+    private scan_timer: ReturnType<typeof setTimeout> | null = null;
     private engine_strategy_id: string | null = null;
     private engine_values: TEngineValues | null = null;
     // Tick feeds currently mounted (market-feed.tsx). Run waits for this to
@@ -180,6 +180,7 @@ export default class AiScannerStore {
             feed_status: observable,
             message: observable,
             final_profit: observable,
+            scan_deadline: observable,
             is_active: computed,
             is_pre_run: computed,
             owns_workspace: computed,
@@ -268,10 +269,6 @@ export default class AiScannerStore {
         const stop_loss = parseAmount(this.form.stop_loss);
         if (!Number.isFinite(stop_loss) || stop_loss <= 0) errors.stop_loss = 'Above 0';
         else if (decimals(this.form.stop_loss) > 2) errors.stop_loss = 'At most 2 decimal places';
-        const wait = parseAmount(this.form.entry_wait_seconds);
-        if (!Number.isInteger(wait) || wait < MIN_ENTRY_WAIT_SECONDS || wait > MAX_ENTRY_WAIT_SECONDS) {
-            errors.entry_wait_seconds = `${MIN_ENTRY_WAIT_SECONDS}-${MAX_ENTRY_WAIT_SECONDS} seconds`;
-        }
         return errors;
     }
 
@@ -370,7 +367,6 @@ export default class AiScannerStore {
             martingale: parseAmount(this.form.martingale),
             take_profit: parseAmount(this.form.take_profit),
             stop_loss: parseAmount(this.form.stop_loss),
-            entry_wait_seconds: parseAmount(this.form.entry_wait_seconds),
             use_test_strategy: this.use_test_strategy,
             loginid: this.root_store.client.loginid,
         };
@@ -381,6 +377,25 @@ export default class AiScannerStore {
         this.feed_status = {};
         this.message = '';
         this.stage = 'scanning';
+
+        // Each feed seeds its window from ticks_history (count 600) the
+        // moment it mounts, and condition() runs on that history straight
+        // away - no warm-up. The limit covers finding a market only.
+        const token = this.run_token;
+        const limit_ms = AI_SCANNER_SCAN_LIMIT_SECONDS * 1000;
+        this.scan_deadline = Date.now() + limit_ms;
+        this.clearScanTimer();
+        this.scan_timer = setTimeout(
+            action(() => {
+                this.scan_timer = null;
+                // A locked market (loading / waiting) keeps waiting past the
+                // limit for as long as its condition holds.
+                if (token === this.run_token && this.stage === 'scanning') {
+                    this.finish('idle', CONDITIONS_NOT_MET_MESSAGE);
+                }
+            }),
+            limit_ms
+        );
 
         // Saved now, while it is still the trader's: loading the engine
         // replaces it, and nothing else would have put unsaved edits in Recent.
@@ -443,15 +458,19 @@ export default class AiScannerStore {
         }
     };
 
-    private clearWaitTimer() {
-        if (this.wait_timer) {
-            clearTimeout(this.wait_timer);
-            this.wait_timer = null;
+    private clearScanTimer() {
+        if (this.scan_timer) {
+            clearTimeout(this.scan_timer);
+            this.scan_timer = null;
         }
     }
 
+    /** The locked market is let go: scan again while the limit lasts, else stop. */
     private goBackToScanning(message: string) {
-        this.clearWaitTimer();
+        if (this.scan_deadline === null || Date.now() >= this.scan_deadline) {
+            this.finish('idle', CONDITIONS_NOT_MET_MESSAGE);
+            return;
+        }
         this.target = null;
         this.message = message;
         this.stage = 'scanning';
@@ -459,7 +478,8 @@ export default class AiScannerStore {
 
     private finish(stage: 'idle' | 'stopped', message: string) {
         this.run_token += 1;
-        this.clearWaitTimer();
+        this.clearScanTimer();
+        this.scan_deadline = null;
         this.stage = stage;
         this.message = message;
         if (stage === 'idle') this.target = null;
@@ -525,18 +545,11 @@ export default class AiScannerStore {
             if (token !== this.run_token || this.stage !== 'loading') return;
             this.stage = 'waiting';
             this.message = '';
-            const seconds = (this.locked as TAiScannerLocked).entry_wait_seconds;
-            this.clearWaitTimer();
-            this.wait_timer = setTimeout(() => {
-                if (token !== this.run_token || this.stage !== 'waiting') return;
-                this.goBackToScanning(`No entry within ${seconds}s on ${target.text}.`);
-            }, seconds * 1000);
         });
     }
 
     /** Entry hit: press Run through the Run button's own path. */
     private async pressRun(token: number) {
-        this.clearWaitTimer();
         const { run_panel } = this.root_store;
         const values = this.engine_values;
 
@@ -557,6 +570,7 @@ export default class AiScannerStore {
             return;
         }
 
+        this.clearScanTimer();
         this.stage = 'starting';
         // 'starting' unmounts the feeds. Run only once their streams are
         // forgotten: the bot subscribes the same symbol on the same socket,

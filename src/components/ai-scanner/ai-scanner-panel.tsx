@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import clsx from 'clsx';
 import { observer } from 'mobx-react-lite';
 import {
@@ -74,12 +75,26 @@ const FIELDS: { key: Exclude<keyof TAiScannerForm, 'strategy'>; label: () => str
     { key: 'martingale', label: () => localize('Martingale'), hint: () => localize('Stake × this after a loss') },
     { key: 'take_profit', label: () => `${localize('Take profit')} (${AI_SCANNER_CURRENCY})`, hint: () => '' },
     { key: 'stop_loss', label: () => `${localize('Stop loss')} (${AI_SCANNER_CURRENCY})`, hint: () => '' },
-    {
-        key: 'entry_wait_seconds',
-        label: () => localize('Entry wait (seconds)'),
-        hint: () => localize('Back to scanning after this'),
-    },
 ];
+
+const formatRemaining = (ms: number) => {
+    const total_seconds = Math.max(0, Math.ceil(ms / 1000));
+    return `${Math.floor(total_seconds / 60)}:${String(total_seconds % 60).padStart(2, '0')}`;
+};
+
+/** "Scanning… 3:42 left", re-rendered every second from the store's deadline. */
+const ScanCountdown = ({ deadline }: { deadline: number }) => {
+    const [now, setNow] = useState(() => Date.now());
+    useEffect(() => {
+        const timer = setInterval(() => setNow(Date.now()), 1000);
+        return () => clearInterval(timer);
+    }, []);
+    return (
+        <p className='ai-scanner-panel__headline'>
+            {localize('Scanning… {{remaining}} left', { remaining: formatRemaining(deadline - now) })}
+        </p>
+    );
+};
 
 const OverUnderForm = observer(() => {
     const { ai_scanner } = useStore();
@@ -145,7 +160,7 @@ const OverUnderForm = observer(() => {
 
 const RunStatus = observer(() => {
     const { ai_scanner } = useStore();
-    const { stage, locked, target, message, feed_status, markets, final_profit } = ai_scanner;
+    const { stage, locked, target, message, feed_status, markets, final_profit, scan_deadline } = ai_scanner;
     if (!locked) return null;
     const setup = OVER_UNDER_SETUPS[locked.strategy];
     const current = stageIndex(stage);
@@ -154,6 +169,16 @@ const RunStatus = observer(() => {
 
     return (
         <div className='ai-scanner-panel__status'>
+            {stage === 'scanning' && scan_deadline !== null && <ScanCountdown deadline={scan_deadline} />}
+            {(stage === 'loading' || stage === 'waiting') && target && (
+                <div className='ai-scanner-panel__locked'>
+                    <p className='ai-scanner-panel__headline'>{target.text}</p>
+                    <p className='ai-scanner-panel__locked-stage'>
+                        {stage === 'loading' ? localize('Loading the engine…') : localize('Waiting for entry')}
+                    </p>
+                    <p className='ai-scanner-panel__locked-reason'>{target.reason}</p>
+                </div>
+            )}
             <ol className='ai-scanner-panel__stages'>
                 {STAGES.map((item, index) => (
                     <li
@@ -210,8 +235,6 @@ const RunStatus = observer(() => {
                 <dd>{money(locked.take_profit)}</dd>
                 <dt>{localize('Stop loss')}</dt>
                 <dd>{money(locked.stop_loss)}</dd>
-                <dt>{localize('Entry wait')}</dt>
-                <dd>{locked.entry_wait_seconds}s</dd>
             </dl>
 
             {message && <p className='ai-scanner-panel__message'>{message}</p>}
@@ -291,8 +314,10 @@ const AiScannerPanel = observer(({ style, is_desktop }: TAiScannerPanel) => {
             </div>
 
             <div className='ai-scanner-panel__body'>
-                {shows_status ? <RunStatus /> : <OverUnderForm />}
+                {/* Why the last scan ended (e.g. no market qualified) - above the
+                    form, which keeps its values for the next Load & Run. */}
                 {!shows_status && message && <p className='ai-scanner-panel__message'>{message}</p>}
+                {shows_status ? <RunStatus /> : <OverUnderForm />}
             </div>
         </section>
     );

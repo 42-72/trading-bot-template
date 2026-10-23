@@ -337,6 +337,38 @@ $ai-scanner-z: 5;
         color: var(--text-prominent);
     }
 
+    &__headline {
+        margin: 0;
+        font-size: 1.6rem;
+        font-weight: 700;
+        color: var(--text-prominent);
+        font-variant-numeric: tabular-nums;
+    }
+
+    &__locked {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+        padding: 1rem;
+        border: 0.1rem solid var(--brand-primary, #3b82f6);
+        border-radius: 0.8rem;
+    }
+
+    &__locked-stage {
+        margin: 0;
+        font-size: 1.3rem;
+        font-weight: 700;
+        color: var(--brand-primary, #3b82f6);
+    }
+
+    &__locked-reason {
+        margin: 0;
+        font-size: 1.2rem;
+        line-height: 1.4;
+        overflow-wrap: anywhere;
+        color: var(--text-general);
+    }
+
     &__stages {
         display: flex;
         flex-direction: column;

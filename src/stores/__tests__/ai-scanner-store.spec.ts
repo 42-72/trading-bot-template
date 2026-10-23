@@ -3,7 +3,7 @@ import { observable, runInAction } from 'mobx';
 import path from 'path';
 import { readEngineValues } from '@/utils/ai-engine-xml';
 import { loadBotIntoBuilder } from '@/utils/load-bot-into-builder';
-import AiScannerStore from '../ai-scanner-store';
+import AiScannerStore, { CONDITIONS_NOT_MET_MESSAGE } from '../ai-scanner-store';
 import RootStore from '../root-store';
 
 // jest stubs *.xml imports - hand the store the real engine.
@@ -167,14 +167,14 @@ describe('AiScannerStore', () => {
         expect(store.start_blocker).toMatch(/USD/);
     });
 
-    it('with the default strategy, scans forever and never loads or runs anything', async () => {
+    it('with the default (Under) strategy, scans and never loads or runs anything', async () => {
         const root = makeRoot();
 
         const store = new AiScannerStore(root);
 
         store.setMarkets(MARKETS);
 
-        fillForm(store);
+        fillForm(store, 'under');
 
         store.start();
 
@@ -318,40 +318,6 @@ describe('AiScannerStore', () => {
         expect(store.use_test_strategy).toBe(false);
     });
 
-    it('goes back to scanning when the entry wait times out', async () => {
-        jest.useFakeTimers();
-
-        try {
-            const root = makeRoot();
-
-            const store = new AiScannerStore(root);
-
-            store.setMarkets(MARKETS);
-
-            fillForm(store);
-
-            store.setFormField('entry_wait_seconds', '30');
-
-            store.setUseTestStrategy(true);
-
-            store.start();
-
-            store.onMarketTick('1HZ10V', full(), 5);
-
-            await flush();
-
-            expect(store.stage).toBe('waiting');
-
-            jest.advanceTimersByTime(30000);
-
-            expect(store.stage).toBe('scanning');
-
-            expect(store.message).toMatch(/No entry within 30s/);
-        } finally {
-            jest.useRealTimers();
-        }
-    });
-
     it('does not run an engine whose blocks were edited while waiting', async () => {
         const root = makeRoot();
 
@@ -456,5 +422,108 @@ describe('AiScannerStore', () => {
 
     it('ships the engine unmodified', () => {
         expect(readEngineValues(ENGINE).stake).toBe(20);
+    });
+
+    describe('5-minute scan limit (real Over strategy)', () => {
+        // Over qualifies: three of 6-9 at 64+ and each of 0-2 at 58 or fewer.
+        //                    0   1   2   3   4   5   6   7   8   9
+        const QUALIFYING = [58, 58, 58, 57, 57, 56, 64, 64, 64, 64];
+        const windowOf = (counts: number[]) => counts.flatMap((count, digit) => new Array(count).fill(digit));
+        // Ends ...9,9,9 - qualifies but is not an entry (entry needs 1 or 2).
+        const qualifying = windowOf(QUALIFYING);
+        const faded = full(5);
+        const MIN = 60 * 1000;
+
+        let root: ReturnType<typeof makeRoot>;
+        let store: AiScannerStore;
+
+        beforeEach(() => {
+            jest.useFakeTimers();
+            root = makeRoot();
+            store = new AiScannerStore(root);
+            store.setMarkets(MARKETS);
+            fillForm(store, 'over');
+            store.start();
+        });
+
+        afterEach(() => {
+            store.cancel();
+            jest.useRealTimers();
+        });
+
+        const lockOn = async (symbol = 'JD25') => {
+            store.onMarketTick(symbol, qualifying, 9, true);
+            await flush();
+            expect(store.stage).toBe('waiting');
+            expect(store.target?.symbol).toBe(symbol);
+        };
+
+        it('qualifies on the seeded history at 0:00 and loads the engine at once', async () => {
+            expect(store.scan_deadline).toBe(Date.now() + 5 * MIN);
+            store.onMarketTick('JD25', qualifying, 9, true); // the ticks_history seed, no live tick yet
+            expect(store.stage).toBe('loading');
+            expect(loadBotIntoBuilder).toHaveBeenCalledTimes(1);
+            await flush();
+            expect(store.stage).toBe('waiting');
+            expect(store.target?.reason).toMatch(/4 of 6-9 at 10.6%\+/);
+        });
+
+        it('locked at 4:50 and still holding at 6:00 keeps waiting - the limit no longer applies', async () => {
+            jest.advanceTimersByTime(4 * MIN + 50 * 1000);
+            await lockOn();
+            jest.advanceTimersByTime(70 * 1000); // 6:00
+            store.onMarketTick('JD25', qualifying, 9);
+            expect(store.stage).toBe('waiting');
+            expect(store.message).toBe('');
+        });
+
+        it('locked market fading at 3:00 goes back to scanning all markets', async () => {
+            await lockOn();
+            jest.advanceTimersByTime(3 * MIN);
+            store.onMarketTick('JD25', faded, 5);
+            expect(store.stage).toBe('scanning');
+            expect(store.target).toBeNull();
+            // Every market is checked again, and can lock again.
+            await lockOn('1HZ10V');
+        });
+
+        it('locked market fading at 5:30 stops with "Conditions not met"', async () => {
+            await lockOn();
+            jest.advanceTimersByTime(5 * MIN + 30 * 1000);
+            expect(store.stage).toBe('waiting');
+            store.onMarketTick('JD25', faded, 5);
+            expect(store.stage).toBe('idle');
+            expect(store.message).toBe(CONDITIONS_NOT_MET_MESSAGE);
+            expect(root.run_panel.onRunButtonClick).not.toHaveBeenCalled();
+        });
+
+        it('nothing qualifies: stops at exactly 5:00, feeds closed, Load & Run usable again', () => {
+            MARKETS.forEach(market => store.onMarketTick(market.symbol, faded, 5, true));
+            jest.advanceTimersByTime(5 * MIN - 1);
+            expect(store.stage).toBe('scanning');
+            expect(store.are_feeds_wanted).toBe(true);
+            jest.advanceTimersByTime(1);
+            expect(store.stage).toBe('idle');
+            expect(store.message).toBe(CONDITIONS_NOT_MET_MESSAGE);
+            expect(store.message).toBe('Conditions not met — no market qualified in 5 minutes.');
+            expect(store.are_feeds_wanted).toBe(false);
+            expect(loadBotIntoBuilder).not.toHaveBeenCalled();
+            expect(root.run_panel.onRunButtonClick).not.toHaveBeenCalled();
+            // Form kept; the same Load & Run button starts a fresh scan.
+            expect(store.form).toMatchObject({ strategy: 'over', stake: '0.35', take_profit: '5', stop_loss: '10' });
+            expect(store.can_start).toBe(true);
+            store.start();
+            expect(store.stage).toBe('scanning');
+            expect(store.scan_deadline).toBe(Date.now() + 5 * MIN);
+        });
+
+        it('an engine loaded but never run is left as it is, Run never pressed', async () => {
+            await lockOn();
+            jest.advanceTimersByTime(6 * MIN);
+            store.onMarketTick('JD25', faded, 5);
+            expect(store.stage).toBe('idle');
+            expect(workspace.current_strategy_id).toMatch(/^ai-engine-/);
+            expect(root.run_panel.onRunButtonClick).not.toHaveBeenCalled();
+        });
     });
 });
