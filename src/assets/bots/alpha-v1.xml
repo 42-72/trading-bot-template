@@ -55,7 +55,7 @@
             <field name="VAR" id="W4$:ZQCmEz#8+=4ysv5Y">Loss</field>
             <value name="VALUE">
               <block type="math_number" id="{TpcuVb,~K#zZ#}lS({J">
-                <field name="NUM">1000</field>
+                <field name="NUM">100</field>
               </block>
             </value>
             <next>
@@ -63,7 +63,7 @@
                 <field name="VAR" id="mXtFswo{p,|%W1:V-$+r">Target Profit</field>
                 <value name="VALUE">
                   <block type="math_number" id="W.5F|X1T}Ki@]^K3PM34">
-                    <field name="NUM">500</field>
+                    <field name="NUM">50</field>
                   </block>
                 </value>
                 <next>
@@ -71,7 +71,7 @@
                     <field name="VAR" id="j}8O`Vs+RJljIwPu-_:_">Stake</field>
                     <value name="VALUE">
                       <block type="math_number" id="cwQn8]iJ[{izD*!JTkSu">
-                        <field name="NUM">50</field>
+                        <field name="NUM">30</field>
                       </block>
                     </value>
                     <next>
@@ -79,7 +79,7 @@
                         <field name="VAR" id="%L?;380E6Lr^3b.%}t5Q">stake 2</field>
                         <value name="VALUE">
                           <block type="math_number" id="u6AbX[*ix9:/IqF)oh3^">
-                            <field name="NUM">50</field>
+                            <field name="NUM">30</field>
                           </block>
                         </value>
                       </block>
@@ -253,43 +253,6 @@
                         </value>
                       </block>
                     </value>
-                    <next>
-                      <block type="controls_if" id="{AKD%4?DSJiCYZh}k3Gu">
-                        <value name="IF0">
-                          <block type="logic_compare" id="eL(1yq:c##Ul,d].lPc.">
-                            <field name="OP">GTE</field>
-                            <value name="A">
-                              <block type="math_single" id="(kh8:cv/x_6A/IaQg@lU">
-                                <field name="OP">ABS</field>
-                                <value name="NUM">
-                                  <shadow type="math_number" id="wm-2T5L~}O[$0k.(n1i[">
-                                    <field name="NUM">9</field>
-                                  </shadow>
-                                  <block type="read_details" id="^a9yD{/-56r=R2!qec76">
-                                    <field name="DETAIL_INDEX">4</field>
-                                  </block>
-                                </value>
-                              </block>
-                            </value>
-                            <value name="B">
-                              <block type="variables_get" id="|JZc!Xh{!|vEFgn[:Vi=">
-                                <field name="VAR" id="W4$:ZQCmEz#8+=4ysv5Y">Loss</field>
-                              </block>
-                            </value>
-                          </block>
-                        </value>
-                        <statement name="DO0">
-                          <block type="variables_set" id="YGQL7nDsy{fSD/K2dn*H">
-                            <field name="VAR" id="j}8O`Vs+RJljIwPu-_:_">Stake</field>
-                            <value name="VALUE">
-                              <block type="variables_get" id="l:KzQPQF]UK~zqAplRhn">
-                                <field name="VAR" id="%L?;380E6Lr^3b.%}t5Q">stake 2</field>
-                              </block>
-                            </value>
-                          </block>
-                        </statement>
-                      </block>
-                    </next>
                   </block>
                 </next>
               </block>
@@ -332,8 +295,38 @@
                 </value>
                 <next>
                   <block type="controls_if" id="vMERE88|zg2c=#/]$?xV">
-                    <mutation xmlns="http://www.w3.org/1999/xhtml" else="1"></mutation>
+                    <mutation xmlns="http://www.w3.org/1999/xhtml" elseif="1" else="1"></mutation>
                     <value name="IF0">
+                      <block type="logic_compare" id="dollar-one-sl-compare">
+                        <field name="OP">LTE</field>
+                        <value name="A">
+                          <block type="total_profit" id="dollar-one-sl-profit"></block>
+                        </value>
+                        <value name="B">
+                          <block type="math_single" id="dollar-one-sl-negate">
+                            <field name="OP">NEG</field>
+                            <value name="NUM">
+                              <shadow type="math_number" id="dollar-one-sl-shadow">
+                                <field name="NUM">9</field>
+                              </shadow>
+                              <block type="variables_get" id="dollar-one-sl-lossvar">
+                                <field name="VAR" id="W4$:ZQCmEz#8+=4ysv5Y">Loss</field>
+                              </block>
+                            </value>
+                          </block>
+                        </value>
+                      </block>
+                    </value>
+                    <statement name="DO0">
+                      <block type="text_print" id="dollar-one-sl-print">
+                        <value name="TEXT">
+                          <shadow type="text" id="dollar-one-sl-text">
+                            <field name="TEXT">SL hit, f*ck everyone</field>
+                          </shadow>
+                        </value>
+                      </block>
+                    </statement>
+                    <value name="IF1">
                       <block type="logic_compare" id="4jp7,@;t-VaiB*A{O(9q">
                         <field name="OP">LT</field>
                         <value name="A">
@@ -346,7 +339,7 @@
                         </value>
                       </block>
                     </value>
-                    <statement name="DO0">
+                    <statement name="DO1">
                       <block type="trade_again" id="oMzV#w4Ry*oj!34)iD]."></block>
                     </statement>
                     <statement name="ELSE">
