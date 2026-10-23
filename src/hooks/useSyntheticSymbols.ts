@@ -2,15 +2,20 @@ import { useEffect, useState } from 'react';
 import { ApiHelpers } from '@/external/bot-skeleton';
 import { useApiBase } from '@/hooks/useApiBase';
 
-export type TSyntheticSymbol = { text: string; value: string };
+export type TSyntheticSymbol = { text: string; value: string; submarket: string };
+
+// Submarkets Market Tool offers: the Volatility indices (R_10-R_100 and the
+// 1HZ variants) and the Jump indices (JD10-JD100). Also what the Bot Builder
+// sync treats as "ours" (market-tool-sync.ts).
+export const MARKET_TOOL_SUBMARKETS = ['random_index', 'jump_index'];
 
 type TBotSymbol = { text: string; value: string; submarket?: string };
 
 /**
- * Synthetic indices (R_10/25/50/75/100 and the 1HZ variants) from the app's
+ * Volatility and Jump indices (MARKET_TOOL_SUBMARKETS) from the app's
  * own active_symbols list (ApiHelpers.instance.active_symbols.getSymbolsForBot,
- * already used the same way - and filtered to the same submarket - by the
- * Bot Builder's quick-strategy symbol select), not a hardcoded list.
+ * the same source the Bot Builder's quick-strategy symbol select uses), not a
+ * hardcoded list.
  */
 export const useSyntheticSymbols = (): TSyntheticSymbol[] => {
     const [symbols, setSymbols] = useState<TSyntheticSymbol[]>([]);
@@ -25,8 +30,8 @@ export const useSyntheticSymbols = (): TSyntheticSymbol[] => {
             };
             const all = instance?.active_symbols?.getSymbolsForBot?.() ?? [];
             const synthetics = all
-                .filter(s => s.submarket === 'random_index')
-                .map(s => ({ text: s.text, value: s.value }));
+                .filter(s => !!s.submarket && MARKET_TOOL_SUBMARKETS.includes(s.submarket))
+                .map(s => ({ text: s.text, value: s.value, submarket: s.submarket as string }));
             if (synthetics.length) setSymbols(synthetics);
             return synthetics.length > 0;
         };

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import classNames from 'classnames';
 import { useDigitAnalysis } from '@/hooks/useDigitAnalysis';
+import { useStore } from '@/hooks/useStore';
 import { useSyntheticSymbols } from '@/hooks/useSyntheticSymbols';
 import {
     computeEvenOddStats,
@@ -14,6 +15,7 @@ import {
     MIN_WINDOW_SIZE,
     rankDigits,
 } from '@/utils/digit-stats';
+import { readStoredMarketToolSymbol, storeMarketToolSymbol, syncBotBuilderSymbol } from '@/utils/market-tool-sync';
 import DigitCircle from './digit-circle';
 import StatPanel from './stat-panel';
 import TickRibbon from './tick-ribbon';
@@ -31,20 +33,40 @@ const RISE_FALL_TONE: Record<'Rise' | 'Fall', TTone> = { Rise: 'tone-green', Fal
 
 const MarketTool = () => {
     const symbols = useSyntheticSymbols();
+    const { run_panel } = useStore();
     const [symbol, setSymbol] = useState('');
     const [windowInput, setWindowInput] = useState(String(DEFAULT_WINDOW_SIZE));
     const [windowSize, setWindowSize] = useState(DEFAULT_WINDOW_SIZE);
     const [barrier, setBarrier] = useState(4);
     const [matchDigit, setMatchDigit] = useState(0);
 
-    // Default to the first available synthetic index once the list loads;
-    // never hardcoded - see useSyntheticSymbols.
+    // Once the list loads: the last symbol the user picked here (persisted
+    // across reloads), else R_100, else the first available. Never hardcoded
+    // beyond that preference - see useSyntheticSymbols. Restoring it does NOT
+    // sync the Bot Builder; only a deliberate change (onSymbolChange) does.
     useEffect(() => {
         if (!symbol && symbols.length > 0) {
-            const preferred = symbols.find(s => s.value === 'R_100') ?? symbols[0];
+            const stored = readStoredMarketToolSymbol();
+            const preferred =
+                symbols.find(s => s.value === stored) ?? symbols.find(s => s.value === 'R_100') ?? symbols[0];
             setSymbol(preferred.value);
         }
     }, [symbols, symbol]);
+
+    // One-way: Market Tool -> Bot Builder's trade_definition_market block, live.
+    // Rules (enforced in syncBotBuilderSymbol): never while a bot is running or
+    // a contract is open, and only when the strategy is already on one of the
+    // symbols offered here. On a sync, the workspace is saved to Recent so the
+    // Bot Builder reopens on the new symbol after a reload.
+    const onSymbolChange = (next: string) => {
+        setSymbol(next);
+        storeMarketToolSymbol(next);
+        const result = syncBotBuilderSymbol(next, {
+            is_bot_live: run_panel.is_stop_button_visible,
+            offered: symbols.map(s => s.value),
+        });
+        if (result === 'synced') run_panel.dbot.saveRecentWorkspace();
+    };
 
     // Debounced commit: typing 1000 -> 1500 shouldn't fire a resubscribe per keystroke.
     useEffect(() => {
@@ -134,11 +156,11 @@ const MarketTool = () => {
         <div className='market-tool'>
             <div className='market-tool__controls'>
                 <div className='market-tool__control market-tool__control--symbol'>
-                    <label htmlFor='market-tool-symbol'>Volatility index</label>
+                    <label htmlFor='market-tool-symbol'>Synthetic index</label>
                     <select
                         id='market-tool-symbol'
                         value={symbol}
-                        onChange={e => setSymbol(e.target.value)}
+                        onChange={e => onSymbolChange(e.target.value)}
                         disabled={symbols.length === 0}
                     >
                         {symbols.length === 0 && <option value=''>Loading…</option>}
