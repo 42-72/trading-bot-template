@@ -17,6 +17,32 @@
 }
 
 .journal {
+    // The Journal list renders through DataList/AutoSizer, which needs a
+    // definite height above it - .journal__item-list's calc(100% - 7.2rem)
+    // is a percentage of this element. Upstream gave it one through
+    // .run-panel-tab__content--no-stat (calc(100vh - 233px)); 73f1a78
+    // removed that rule (and its variable) on every width, which left
+    // .journal content-sized, AutoSizer measuring 0, and Grid rendering no
+    // rows at all - on desktop and mobile. height: 100% claims the
+    // definite height .dc-tabs__content (the .dc-tabs grid's 1fr row,
+    // tabs.scss) already has, the same pattern as .transactions; no
+    // viewport arithmetic. Scoped to the Journal's own root (not plain
+    // .journal, which DataList's root also carries).
+    // Desktop: .run-panel__scroll -> .dc-tabs -> .dc-tabs__content.
+    &.run-panel-tab__content {
+        height: 100%;
+    }
+
+    // Below 1280px (useDevice().isDesktop false, so no .run-panel-tab__
+    // content): the chain is the fixed mobile drawer (calc(100% - 10.1rem)
+    // of the viewport, drawer.scss) -> .dc-drawer__container -> the flexed
+    // .run-panel__content -> .dc-tabs -> .dc-tabs__content, all definite.
+    @include mobile-or-tablet-screen {
+        &.run-panel-tab__content--no-stat {
+            height: 100%;
+        }
+    }
+
     .ReactVirtualized__Grid__innerScrollContainer {
         & > :first-child,
         :before,
