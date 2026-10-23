@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { AI_SCANNER_TICK_WINDOW } from '@/constants/ai-engine';
 import { useDigitAnalysis } from '@/hooks/useDigitAnalysis';
-import { useStore } from '@/hooks/useStore';
+import { useAiScanner } from './use-ai-scanner';
 
 /**
  * One market's live last-600-digit window for the AI Scanner, through Market
@@ -11,7 +11,7 @@ import { useStore } from '@/hooks/useStore';
  * scanner is scanning or waiting (ai-scanner.tsx).
  */
 const MarketFeed = ({ symbol }: { symbol: string }) => {
-    const { ai_scanner } = useStore();
+    const ai_scanner = useAiScanner();
     const { digits, lastDigit, lastTickAt, status, n } = useDigitAnalysis(symbol, AI_SCANNER_TICK_WINDOW);
 
     // Whether the window was already live before this tick: the first

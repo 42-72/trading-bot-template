@@ -9,9 +9,9 @@ import {
     TOverUnderSetup,
     TOverUnderStrategyId,
 } from '@/constants/ai-engine';
-import { useStore } from '@/hooks/useStore';
 import type { TAiScannerForm, TAiScannerStage } from '@/stores/ai-scanner-store';
 import { localize } from '@deriv-com/translations';
+import { useAiScanner } from './use-ai-scanner';
 
 // Contract facts only - the panel never shows a confidence, a score or
 // anything implying the scanner's condition improves these odds.
@@ -36,7 +36,7 @@ const stageIndex = (stage: TAiScannerStage) => {
 const money = (value: number) => `${value.toFixed(2)} ${AI_SCANNER_CURRENCY}`;
 
 const StrategyPicker = observer(() => {
-    const { ai_scanner } = useStore();
+    const ai_scanner = useAiScanner();
     return (
         <div className='ai-scanner-panel__strategies' role='radiogroup' aria-label={localize('Strategy')}>
             {(Object.keys(OVER_UNDER_SETUPS) as TOverUnderStrategyId[]).map(id => {
@@ -97,7 +97,7 @@ const ScanCountdown = ({ deadline }: { deadline: number }) => {
 };
 
 const OverUnderForm = observer(() => {
-    const { ai_scanner } = useStore();
+    const ai_scanner = useAiScanner();
     const { form, form_errors, start_blocker, can_start, can_use_test_strategy, use_test_strategy } = ai_scanner;
 
     return (
@@ -159,7 +159,7 @@ const OverUnderForm = observer(() => {
 });
 
 const RunStatus = observer(() => {
-    const { ai_scanner } = useStore();
+    const ai_scanner = useAiScanner();
     const { stage, locked, target, message, feed_status, markets, final_profit, scan_deadline } = ai_scanner;
     if (!locked) return null;
     const setup = OVER_UNDER_SETUPS[locked.strategy];
@@ -270,7 +270,7 @@ const RunStatus = observer(() => {
 type TAiScannerPanel = { style: React.CSSProperties; is_desktop: boolean };
 
 const AiScannerPanel = observer(({ style, is_desktop }: TAiScannerPanel) => {
-    const { ai_scanner } = useStore();
+    const ai_scanner = useAiScanner();
     const { active_tab, locked, stage, message } = ai_scanner;
     const shows_status = !!locked && stage !== 'idle';
 

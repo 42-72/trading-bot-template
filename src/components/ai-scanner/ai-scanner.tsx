@@ -8,6 +8,7 @@ import AiScannerButton from './ai-scanner-button';
 import { getSafeBounds, TBounds, TPoint } from './ai-scanner-layout';
 import AiScannerPanel from './ai-scanner-panel';
 import MarketFeed from './market-feed';
+import { useAiScanner } from './use-ai-scanner';
 import './ai-scanner.scss';
 
 const PANEL_WIDTH = 360;
@@ -49,7 +50,8 @@ const panelStyle = (layout: TLayout | null, is_desktop: boolean): React.CSSPrope
  * market. The pipeline itself is AiScannerStore.
  */
 const AiScanner = observer(() => {
-    const { ai_scanner, run_panel } = useStore();
+    const { run_panel } = useStore();
+    const ai_scanner = useAiScanner();
     const { isDesktop } = useDevice();
     const symbols = useSyntheticSymbols();
     const [layout, setLayout] = useState<TLayout | null>(null);

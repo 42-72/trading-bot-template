@@ -63,7 +63,7 @@ const MarketTool = () => {
         storeMarketToolSymbol(next);
         const result = syncBotBuilderSymbol(next, {
             is_bot_live: run_panel.is_stop_button_visible,
-            is_ai_scanner_active: ai_scanner.owns_workspace,
+            is_ai_scanner_active: !!ai_scanner?.owns_workspace,
             offered: symbols.map(s => s.value),
         });
         if (result === 'synced') run_panel.dbot.saveRecentWorkspace();

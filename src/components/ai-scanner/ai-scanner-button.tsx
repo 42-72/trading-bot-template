@@ -12,6 +12,7 @@ import {
     TBounds,
     TPoint,
 } from './ai-scanner-layout';
+import { useAiScanner } from './use-ai-scanner';
 
 // Movement under this many px is a tap, not a drag.
 const DRAG_THRESHOLD = 6;
@@ -28,7 +29,8 @@ type TAiScannerButton = {
  * run bar - including after a tab switch or the run panel sliding open.
  */
 const AiScannerButton = observer(({ is_desktop, onLayout }: TAiScannerButton) => {
-    const { ai_scanner, run_panel, dashboard } = useStore();
+    const { run_panel, dashboard } = useStore();
+    const ai_scanner = useAiScanner();
     const button_ref = useRef<HTMLButtonElement>(null);
     const drag_ref = useRef<{ pointer_id: number; start: TPoint; origin: TPoint; moved: boolean } | null>(null);
     const [stored, setStored] = useState<TPoint | null>(() => readStoredPosition(is_desktop));

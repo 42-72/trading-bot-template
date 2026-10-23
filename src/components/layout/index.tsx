@@ -156,8 +156,9 @@ const Layout = observer(() => {
                 <Outlet />
             </Body>
             {!isCallbackPage && isDesktop && <Footer />}
-            {/* App-wide floating AI Scanner; the store is null until StoreProvider has created it. */}
-            {!isCallbackPage && store && <AiScanner />}
+            {/* App-wide floating AI Scanner. store is null until StoreProvider has
+                created it; store.ai_scanner is null while its hidden switch is off. */}
+            {!isCallbackPage && store?.ai_scanner && <AiScanner />}
         </div>
     );
 });
