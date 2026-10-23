@@ -1,15 +1,9 @@
 import fs from 'fs';
-
 import { observable, runInAction } from 'mobx';
-
 import path from 'path';
-
 import { readEngineValues } from '@/utils/ai-engine-xml';
-
 import { loadBotIntoBuilder } from '@/utils/load-bot-into-builder';
-
 import AiScannerStore from '../ai-scanner-store';
-
 import RootStore from '../root-store';
 
 // jest stubs *.xml imports - hand the store the real engine.
@@ -47,17 +41,19 @@ const makeRoot = () => {
 
             has_open_contract: false,
 
-            get is_stop_button_visible() {
+            get is_stop_button_visible(): boolean {
                 return this.is_running || this.has_open_contract;
             },
 
             clearStat: jest.fn(),
 
-            onRunButtonClick: jest.fn(async () => {
+            onRunButtonClick: jest.fn(async (): Promise<void> => {
                 runInAction(() => (run_panel.is_running = true));
             }),
 
-            onStopBotClick: jest.fn(() => runInAction(() => (run_panel.is_running = false))),
+            onStopBotClick: jest.fn((): void => {
+                runInAction(() => (run_panel.is_running = false));
+            }),
 
             dbot: { saveRecentWorkspace: jest.fn() },
         },

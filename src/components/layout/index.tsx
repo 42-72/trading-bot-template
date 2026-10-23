@@ -5,6 +5,7 @@ import { Outlet } from 'react-router-dom';
 import { api_base } from '@/external/bot-skeleton';
 import { useStore } from '@/hooks/useStore';
 import { useDevice } from '@deriv-com/ui';
+import AiScanner from '../ai-scanner';
 import LandingPage from '../landing-page';
 import { crypto_currencies_display_order, fiat_currencies_display_order } from '../shared';
 import Footer from './footer';
@@ -155,6 +156,8 @@ const Layout = observer(() => {
                 <Outlet />
             </Body>
             {!isCallbackPage && isDesktop && <Footer />}
+            {/* App-wide floating AI Scanner; the store is null until StoreProvider has created it. */}
+            {!isCallbackPage && store && <AiScanner />}
         </div>
     );
 });
