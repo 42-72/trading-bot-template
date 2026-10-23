@@ -148,11 +148,11 @@ const OverUnderForm = observer(() => {
                 </label>
             )}
             <p className='ai-scanner-panel__notice'>
-                {localize('Load & Run replaces the bot open in Bot Builder. Your current workspace is kept in Recent.')}
+                {localize('Scan & Run replaces the bot open in Bot Builder. Your current workspace is kept in Recent.')}
             </p>
             {start_blocker && <p className='ai-scanner-panel__blocker'>{start_blocker}</p>}
             <button type='submit' className='ai-scanner-panel__primary' disabled={!can_start}>
-                {localize('Load & Run')}
+                {localize('Scan & Run')}
             </button>
         </form>
     );
