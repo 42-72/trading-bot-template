@@ -20,17 +20,19 @@ const winRateLine = (setup: TOverUnderSetup) =>
         'after a loss'
     )} ${setup.label} ${setup.recovery_barrier}: ${contractWinRate(setup, setup.recovery_barrier)}%`;
 
-const STAGES: { stage: TAiScannerStage; label: () => string }[] = [
-    { stage: 'scanning', label: () => localize('Scanning all markets') },
-    { stage: 'loading', label: () => localize('Condition met - loading the engine') },
-    { stage: 'waiting', label: () => localize('Waiting for the entry point') },
-    { stage: 'starting', label: () => localize('Entry hit - pressing Run') },
-    { stage: 'running', label: () => localize('Running') },
+const STAGES: { key: string; label: () => string }[] = [
+    { key: 'scanning', label: () => localize('Scanning all markets') },
+    { key: 'qualified', label: () => localize('Waiting for entry') },
+    { key: 'starting', label: () => localize('Entry hit - pressing Run') },
+    { key: 'running', label: () => localize('Running') },
 ];
 
-const stageIndex = (stage: TAiScannerStage) => {
-    if (stage === 'stopping' || stage === 'stopped') return STAGES.length;
-    return STAGES.findIndex(item => item.stage === stage);
+// 'Waiting for entry' is part of scanning: at least one market qualified.
+const stageIndex = (stage: TAiScannerStage, has_qualified: boolean) => {
+    if (stage === 'scanning') return has_qualified ? 1 : 0;
+    if (stage === 'starting') return 2;
+    if (stage === 'running') return 3;
+    return STAGES.length;
 };
 
 const money = (value: number) => `${value.toFixed(2)} ${AI_SCANNER_CURRENCY}`;
@@ -91,7 +93,9 @@ const ScanCountdown = ({ deadline }: { deadline: number }) => {
     }, []);
     return (
         <p className='ai-scanner-panel__headline'>
-            {localize('Scanning… {{remaining}} left', { remaining: formatRemaining(deadline - now) })}
+            {deadline > now
+                ? localize('Scanning… {{remaining}} left', { remaining: formatRemaining(deadline - now) })
+                : localize('Past 5:00 - still scanning while a market is qualified')}
         </p>
     );
 };
@@ -163,9 +167,12 @@ const clockTime = (ms: number) => {
     return [date.getHours(), date.getMinutes(), date.getSeconds()].map(part => String(part).padStart(2, '0')).join(':');
 };
 
-/** Real numbers only: markets checked, when, and the nearest market with its strategy's own reason. */
+/**
+ * Real numbers only: markets checked and when; every qualified market with
+ * its strategy's own reason, or - with none qualified - the nearest one.
+ */
 const ScanProgress = observer(() => {
-    const { scan_progress } = useAiScanner();
+    const { scan_progress, qualified } = useAiScanner();
     if (!scan_progress) return <p className='ai-scanner-panel__meta'>{localize('Waiting for the first check…')}</p>;
     return (
         <div className='ai-scanner-panel__progress'>
@@ -175,7 +182,19 @@ const ScanProgress = observer(() => {
                     time: clockTime(scan_progress.last_check_at),
                 })}
             </p>
-            {scan_progress.closest && (
+            {qualified.length > 0 && (
+                <div className='ai-scanner-panel__qualified'>
+                    <p className='ai-scanner-panel__qualified-title'>
+                        {localize('Waiting for entry on')}: {qualified.map(market => market.text).join(', ')}
+                    </p>
+                    {qualified.map(market => (
+                        <p key={market.symbol} className='ai-scanner-panel__qualified-reason'>
+                            {market.text}: {market.reason}
+                        </p>
+                    ))}
+                </div>
+            )}
+            {qualified.length === 0 && scan_progress.closest && (
                 <p className='ai-scanner-panel__closest'>
                     {localize('Closest')}: {scan_progress.closest.text} — {scan_progress.closest.reason}
                 </p>
@@ -186,10 +205,10 @@ const ScanProgress = observer(() => {
 
 const RunStatus = observer(() => {
     const ai_scanner = useAiScanner();
-    const { stage, locked, target, message, feed_status, markets, final_profit, scan_deadline } = ai_scanner;
+    const { stage, locked, target, message, feed_status, markets, final_profit, scan_deadline, qualified } = ai_scanner;
     if (!locked) return null;
     const setup = OVER_UNDER_SETUPS[locked.strategy];
-    const current = stageIndex(stage);
+    const current = stageIndex(stage, qualified.length > 0);
     const live = markets.filter(market => feed_status[market.symbol]?.status === 'live').length;
     const failed = markets.filter(market => feed_status[market.symbol]?.status === 'failed').length;
 
@@ -197,19 +216,10 @@ const RunStatus = observer(() => {
         <div className='ai-scanner-panel__status'>
             {stage === 'scanning' && scan_deadline !== null && <ScanCountdown deadline={scan_deadline} />}
             {stage === 'scanning' && <ScanProgress />}
-            {(stage === 'loading' || stage === 'waiting') && target && (
-                <div className='ai-scanner-panel__locked'>
-                    <p className='ai-scanner-panel__headline'>{target.text}</p>
-                    <p className='ai-scanner-panel__locked-stage'>
-                        {stage === 'loading' ? localize('Loading the engine…') : localize('Waiting for entry')}
-                    </p>
-                    <p className='ai-scanner-panel__locked-reason'>{target.reason}</p>
-                </div>
-            )}
             <ol className='ai-scanner-panel__stages'>
                 {STAGES.map((item, index) => (
                     <li
-                        key={item.stage}
+                        key={item.key}
                         className={clsx('ai-scanner-panel__stage', {
                             'ai-scanner-panel__stage--done': index < current,
                             'ai-scanner-panel__stage--current': index === current,

@@ -345,7 +345,7 @@ $ai-scanner-z: 5;
         font-variant-numeric: tabular-nums;
     }
 
-    &__locked {
+    &__qualified {
         display: flex;
         flex-direction: column;
         gap: 0.4rem;
@@ -354,14 +354,14 @@ $ai-scanner-z: 5;
         border-radius: 0.8rem;
     }
 
-    &__locked-stage {
+    &__qualified-title {
         margin: 0;
         font-size: 1.3rem;
         font-weight: 700;
         color: var(--brand-primary, #3b82f6);
     }
 
-    &__locked-reason {
+    &__qualified-reason {
         margin: 0;
         font-size: 1.2rem;
         line-height: 1.4;
