@@ -1,3 +1,4 @@
+import AiScannerStore from './ai-scanner-store';
 import AppStore from './app-store';
 import BlocklyStore from './blockly-store';
 import ChartStore from './chart-store';
@@ -41,6 +42,7 @@ export default class RootStore {
     public chart_store: ChartStore;
     public blockly_store: BlocklyStore;
     public data_collection_store: DataCollectionStore;
+    public ai_scanner: AiScannerStore;
 
     public ui: UiStore;
     public client: ClientStore;
@@ -83,5 +85,7 @@ export default class RootStore {
         this.chart_store = new ChartStore(this);
         this.blockly_store = new BlocklyStore(this);
         this.data_collection_store = new DataCollectionStore(this, this.core);
+        // Reacts to run_panel and client, so it comes after both.
+        this.ai_scanner = new AiScannerStore(this);
     }
 }

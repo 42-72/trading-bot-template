@@ -33,7 +33,7 @@ const RISE_FALL_TONE: Record<'Rise' | 'Fall', TTone> = { Rise: 'tone-green', Fal
 
 const MarketTool = () => {
     const symbols = useSyntheticSymbols();
-    const { run_panel } = useStore();
+    const { run_panel, ai_scanner } = useStore();
     const [symbol, setSymbol] = useState('');
     const [windowInput, setWindowInput] = useState(String(DEFAULT_WINDOW_SIZE));
     const [windowSize, setWindowSize] = useState(DEFAULT_WINDOW_SIZE);
@@ -63,6 +63,7 @@ const MarketTool = () => {
         storeMarketToolSymbol(next);
         const result = syncBotBuilderSymbol(next, {
             is_bot_live: run_panel.is_stop_button_visible,
+            is_ai_scanner_active: ai_scanner.owns_workspace,
             offered: symbols.map(s => s.value),
         });
         if (result === 'synced') run_panel.dbot.saveRecentWorkspace();

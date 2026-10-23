@@ -10,6 +10,7 @@ export const MARKET_TOOL_SYMBOL_KEY = 'market_tool_symbol';
 export type TSyncResult =
     | 'synced'
     | 'bot-live' // rule 1: bot running or a contract still open
+    | 'ai-scanner' // rule 1b: the AI Scanner's engine is in the workspace for a run
     | 'no-workspace'
     | 'no-block'
     | 'multiple-blocks'
@@ -68,6 +69,8 @@ export const storeMarketToolSymbol = (symbol: string) => {
  * Leaves the workspace alone when:
  *  - is_bot_live: a bot is running or a contract is still open (rule 1) -
  *    never switch the market under a live bot;
+ *  - is_ai_scanner_active: the AI Scanner has loaded (or is loading) its
+ *    engine for a run (rule 1b) - the market it picked is never overwritten;
  *  - the strategy's current symbol is not in `offered` (rule 2) - a forex or
  *    commodity strategy is never pulled onto a synthetic;
  *  - there is not exactly one enabled market block inside a trade_definition.
@@ -81,9 +84,14 @@ export const storeMarketToolSymbol = (symbol: string) => {
  */
 export const syncBotBuilderSymbol = (
     target: string,
-    { is_bot_live, offered }: { is_bot_live: boolean; offered: string[] }
+    {
+        is_bot_live,
+        is_ai_scanner_active = false,
+        offered,
+    }: { is_bot_live: boolean; is_ai_scanner_active?: boolean; offered: string[] }
 ): TSyncResult => {
     if (is_bot_live) return 'bot-live';
+    if (is_ai_scanner_active) return 'ai-scanner';
 
     const Blockly = (window as unknown as { Blockly?: TBlocklyGlobal }).Blockly;
     const workspace = Blockly?.derivWorkspace;
