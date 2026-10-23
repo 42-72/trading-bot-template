@@ -1,4 +1,5 @@
 import alphaV1Xml from '../assets/bots/alpha-v1.xml';
+import bullXml from '../assets/bots/bull.xml';
 import diamondsXml from '../assets/bots/diamonds.xml';
 import silverXml from '../assets/bots/silver.xml';
 
@@ -34,5 +35,12 @@ export const BOT_LIBRARY: TBotLibraryEntry[] = [
         name: 'Silver',
         description: 'this bot trades under 7, recovery mode under 6 & over 3',
         file: silverXml,
+    },
+    {
+        id: 'bull',
+        number: 4,
+        name: 'BULL',
+        description: 'good at rise/fall, even/odd',
+        file: bullXml,
     },
 ];
