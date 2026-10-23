@@ -218,6 +218,59 @@ export const useDigitAnalysis = (symbol: string, windowSize: number) => {
             }, WATCHDOG_TIMEOUT_MS);
         };
 
+        // Shared by a normal subscribe and the AlreadySubscribed fallback.
+        const seed = (response: TTicksHistoryResponse) => {
+            const resolvedPipSize = Number(response?.pip_size ?? 0);
+            pipSizeRef.current = resolvedPipSize;
+
+            const prices = (response?.history?.prices ?? []).map(Number);
+            const seedDigits = prices.map(price => getLastDigit(price, resolvedPipSize));
+            // Direction needs a previous price, so it's one entry shorter
+            // than the digit window - the very first historical price has
+            // nothing before it to compare against.
+            const seedDirections: TDirection[] = prices.slice(1).map((price, i) => (price >= prices[i] ? 'R' : 'F'));
+
+            previousQuoteRef.current = prices.length ? prices[prices.length - 1] : null;
+
+            dispatch({
+                type: 'SEED',
+                digits: seedDigits,
+                directions: seedDirections,
+                currentQuote: previousQuoteRef.current,
+                windowSize,
+            });
+            setStatus('live');
+            armWatchdog();
+        };
+
+        // true when the window was seeded and the shared stream is in use;
+        // false sends the caller down the normal retry path.
+        const seedFromSharedStream = async (): Promise<boolean> => {
+            if (!api_base.api) return false;
+            let timeout_id: ReturnType<typeof setTimeout> | undefined;
+            try {
+                const request = api_base.api.send({
+                    ticks_history: symbol,
+                    end: 'latest',
+                    count: windowSize,
+                    style: 'ticks',
+                }) as unknown as Promise<TTicksHistoryResponse>;
+                const timeout = new Promise<never>((_, reject) => {
+                    timeout_id = setTimeout(() => reject({ error: { code: 'RequestTimeout' } }), REQUEST_TIMEOUT_MS);
+                });
+                const response = await Promise.race([request, timeout]);
+                if (response?.error) throw response;
+                if (cancelled) return true;
+                console.warn(`[DigitAnalysis] ${symbol} is already streamed on this socket - sharing that stream`);
+                seed(response);
+                return true;
+            } catch {
+                return false;
+            } finally {
+                clearTimeout(timeout_id);
+            }
+        };
+
         const attempt = async (attempt_no: number) => {
             // Overlap guard: an earlier request for this same symbol/window (a
             // previous effect run, or an attempt that timed out) may still be
@@ -280,36 +333,25 @@ export const useDigitAnalysis = (symbol: string, windowSize: number) => {
                     return;
                 }
 
-                const resolvedPipSize = Number(response?.pip_size ?? 0);
-                pipSizeRef.current = resolvedPipSize;
                 subscriptionIdRef.current = subscription_id;
-
-                const prices = (response?.history?.prices ?? []).map(Number);
-                const seedDigits = prices.map(price => getLastDigit(price, resolvedPipSize));
-                // Direction needs a previous price, so it's one entry shorter
-                // than the digit window - the very first historical price has
-                // nothing before it to compare against.
-                const seedDirections: TDirection[] = prices
-                    .slice(1)
-                    .map((price, i) => (price >= prices[i] ? 'R' : 'F'));
-
-                previousQuoteRef.current = prices.length ? prices[prices.length - 1] : null;
-
-                dispatch({
-                    type: 'SEED',
-                    digits: seedDigits,
-                    directions: seedDirections,
-                    currentQuote: previousQuoteRef.current,
-                    windowSize,
-                });
-                setStatus('live');
-                armWatchdog();
+                seed(response);
             } catch (error) {
                 clearTimeout(timeout_id);
                 abandoned = true;
                 if (cancelled) return;
 
                 const { code, message } = describeError(error);
+
+                // Another consumer on this same socket (the AI Scanner, Market
+                // Tool, the bot's own ticks service) already holds this
+                // symbol's tick stream, so the server refuses a second one.
+                // Seed the window from a plain, unsubscribed ticks_history and
+                // read that existing stream - the listener above already
+                // accepts every tick for this symbol. subscriptionIdRef stays
+                // null: the stream isn't ours, so it's never forgotten from
+                // here. If its owner forgets it, the watchdog goes off after
+                // 10s and start() subscribes in our own right.
+                if (code === 'AlreadySubscribed' && (await seedFromSharedStream())) return;
                 console.error(
                     `[DigitAnalysis] ticks_history ${symbol} failed (attempt ${attempt_no}/${MAX_ATTEMPTS}): ` +
                         `${code ?? 'unknown'} - ${message ?? 'no message'}`,

@@ -171,4 +171,65 @@ describe('useDigitAnalysis', () => {
         expect(forgetCalls()).toContain('first-sub'); // superseded stream closed first
         expect(ticksHistoryCalls()).toHaveLength(2); // only then the new request
     });
+
+    it('with nothing else subscribed, sends exactly one subscribing request and owns its stream', async () => {
+        const { result, unmount } = renderHook(() => useDigitAnalysis('R_100', 1000));
+        await flush();
+        pending[0].resolve(history('R_100', 'own-sub'));
+        await flush();
+        expect(result.current.status).toBe('live');
+        expect(ticksHistoryCalls()).toHaveLength(1);
+        expect(ticksHistoryCalls()[0][0]).toMatchObject({ ticks_history: 'R_100', subscribe: 1 });
+        unmount();
+        expect(forgetCalls()).toEqual(['own-sub']);
+    });
+
+    it('on AlreadySubscribed, seeds without subscribing and never forgets the shared stream', async () => {
+        const { result, unmount } = renderHook(() => useDigitAnalysis('1HZ100V', 600));
+        await flush();
+        pending[0].reject(apiError('AlreadySubscribed'));
+        await flush();
+
+        expect(ticksHistoryCalls()).toHaveLength(2);
+        const seedRequest = ticksHistoryCalls()[1][0];
+        expect(seedRequest).toMatchObject({ ticks_history: '1HZ100V', count: 600 });
+        expect(seedRequest).not.toHaveProperty('subscribe');
+
+        const { subscription, ...unsubscribed } = history('1HZ100V'); // eslint-disable-line @typescript-eslint/no-unused-vars
+        pending[1].resolve(unsubscribed);
+        await flush();
+        expect(result.current.status).toBe('live');
+        expect(result.current.n).toBe(3);
+
+        unmount();
+        expect(forgetCalls()).toHaveLength(0);
+    });
+
+    it('re-subscribes in its own right once a shared stream goes quiet', async () => {
+        const { result } = renderHook(() => useDigitAnalysis('1HZ100V', 600));
+        await flush();
+        pending[0].reject(apiError('AlreadySubscribed'));
+        await flush();
+        pending[1].resolve({ ...history('1HZ100V'), subscription: undefined });
+        await flush();
+
+        await advance(10000); // watchdog: the owner forgot its stream
+        expect(ticksHistoryCalls()).toHaveLength(3);
+        expect(ticksHistoryCalls()[2][0]).toMatchObject({ subscribe: 1 });
+        pending[2].resolve(history('1HZ100V', 'now-ours'));
+        await flush();
+        expect(result.current.status).toBe('live');
+    });
+
+    it('falls back to the normal retry path when the unsubscribed seed also fails', async () => {
+        const { result } = renderHook(() => useDigitAnalysis('1HZ100V', 600));
+        await flush();
+        pending[0].reject(apiError('AlreadySubscribed'));
+        await flush();
+        pending[1].reject(apiError('InternalServerError'));
+        await flush();
+        expect(result.current.status).toBe('retrying');
+        await advance(1000);
+        expect(ticksHistoryCalls()).toHaveLength(3);
+    });
 });
