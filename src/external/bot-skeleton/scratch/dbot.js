@@ -1,3 +1,4 @@
+import { isLibraryStrategyId } from '@/utils/library-strategies';
 import { save_types } from '../constants';
 import { config } from '../constants/config';
 import { api_base } from '../services/api/api-base';
@@ -178,8 +179,11 @@ class DBot {
                 window.Blockly.getMainWorkspace().RTL = isDbotRTL();
 
                 let file_name = config().default_file_name;
-                if (recent_files && recent_files.length) {
-                    const latest_file = recent_files[0];
+                // Resume the newest Recent workspace, skipping bots loaded from
+                // the Tbots library (library-strategies.ts) so they only open when
+                // loaded deliberately. None left -> main.xml, upstream's default.
+                const latest_file = recent_files?.find(file => !isLibraryStrategyId(file?.id));
+                if (latest_file) {
                     window.Blockly.derivWorkspace.strategy_to_load = latest_file.xml;
                     window.Blockly.getMainWorkspace().strategy_to_load = latest_file.xml;
                     file_name = latest_file.name;

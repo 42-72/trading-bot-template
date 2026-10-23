@@ -10,6 +10,7 @@ import {
     save_types,
     saveWorkspaceToRecent,
 } from '@/external/bot-skeleton';
+import { removeLibraryStrategyId } from '@/utils/library-strategies';
 import { localize } from '@deriv-com/translations';
 import { TStrategy } from 'Types';
 import RootStore from './root-store';
@@ -169,6 +170,9 @@ export default class SaveModalStore implements ISaveModalStore {
             if (main_strategy) await loadStrategyToBuilder(main_strategy);
         } else {
             await saveWorkspaceToRecent(xml, is_local ? save_types.LOCAL : save_types.GOOGLE_DRIVE);
+            // An explicit save makes it the user's own strategy - resume it on
+            // startup even if it started life as a Tbots library bot.
+            removeLibraryStrategyId(window.Blockly?.derivWorkspace?.current_strategy_id);
         }
         this.toggleSaveModal();
     };

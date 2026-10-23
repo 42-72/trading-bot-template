@@ -1,9 +1,10 @@
 import { useCallback } from 'react';
-import { TBotLibraryEntry } from '@/constants/bot-library';
-import { DBOT_TABS } from '@/constants/bot-contents';
 import { botNotification } from '@/components/bot-notification/bot-notification';
+import { DBOT_TABS } from '@/constants/bot-contents';
+import { TBotLibraryEntry } from '@/constants/bot-library';
 import { load, observer as globalObserver, save_types } from '@/external/bot-skeleton';
 import { useStore } from '@/hooks/useStore';
+import { addLibraryStrategyId } from '@/utils/library-strategies';
 import { localize } from '@deriv-com/translations';
 
 /**
@@ -38,6 +39,9 @@ export const useLoadBotFromLibrary = () => {
                 // parse/validation failure - don't switch tabs on top of that.
                 if (result?.error) return;
 
+                // load() gave the workspace a fresh current_strategy_id; tag it so
+                // Bot Builder doesn't reopen this bot on the next startup.
+                addLibraryStrategyId(window.Blockly?.derivWorkspace?.current_strategy_id);
                 setActiveTab(DBOT_TABS.BOT_BUILDER);
             } catch (error) {
                 console.error('Failed to load bot from library:', error); // eslint-disable-line no-console
