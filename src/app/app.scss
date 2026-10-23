@@ -17,6 +17,17 @@
     --drawer-content-height-mobile: calc(100% - 233px);
     --tab-content-height: calc(100vh - 16.6rem);
     --tab-content-height-mobile: calc(100vh - 12.6rem);
+
+    // svh, like .layout / .bot-dashboard / .main: on a real phone 100vh is the
+    // large viewport (address bar hidden), so boxes sized from this ran past
+    // the visible area and were clipped at .bot-dashboard's bottom. @supports
+    // rather than a second declaration: a custom property never fails to
+    // parse, so a plain override would also win in engines without svh and
+    // leave var() invalid there instead of falling back to the vh value.
+    @supports (height: 100svh) {
+        --tab-content-height-mobile: calc(100svh - 12.6rem);
+    }
+
     --zindex-drawer: 5;
     --zindex-modal: 6;
     --zindex-draggable-modal: 7;

@@ -262,7 +262,8 @@
             }
 
             @include mobile-or-tablet-screen {
-                height: calc(100vh - 19rem);
+                height: calc(100vh - 19rem); /* fallback for engines without svh */
+                height: calc(100svh - 19rem); /* see .main in main.scss */
                 align-items: flex-start;
                 padding: 1.6rem;
             }

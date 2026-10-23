@@ -53,7 +53,13 @@
     padding: 1.6rem;
 
     @include mobile-or-tablet-screen {
-        height: calc(100vh - 6rem);
+        height: calc(100vh - 6rem); /* fallback for engines without svh */
+        // svh, like .layout and .bot-dashboard (bbae1b9): on a real phone
+        // 100vh is the LARGE viewport (address bar hidden), so this box was
+        // taller than .bot-dashboard and its bottom - including the end of
+        // the Tbots / Market Tool scroll range - was clipped by
+        // .bot-dashboard's overflow: hidden. Identical wherever vh == svh.
+        height: calc(100svh - 6rem);
         padding: 0;
     }
 
