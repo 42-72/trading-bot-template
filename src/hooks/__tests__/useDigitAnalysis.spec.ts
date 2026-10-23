@@ -232,4 +232,41 @@ describe('useDigitAnalysis', () => {
         await advance(1000);
         expect(ticksHistoryCalls()).toHaveLength(3);
     });
+
+    it('a tick delivered twice (two subscriptions to one symbol) enters the window once', async () => {
+        let deliver: (message: unknown) => void = () => undefined;
+        (api_base as unknown as { api: unknown }).api = {
+            send,
+            onMessage: () => ({
+                subscribe: (listener: (message: unknown) => void) => {
+                    deliver = listener;
+                    return { unsubscribe: jest.fn() };
+                },
+            }),
+        };
+        const tick = (epoch: number, quote: number) => ({
+            data: { msg_type: 'tick', tick: { symbol: '1HZ30V', quote, epoch } },
+        });
+
+        const { result } = renderHook(() => useDigitAnalysis('1HZ30V', 1000));
+        await flush();
+        pending[0].resolve(history('1HZ30V')); // 3 prices, times 1-3
+        await flush();
+        expect(result.current.n).toBe(3);
+
+        // The stream's first tick repeats the history's last one - not new.
+        act(() => deliver(tick(3, 100.11)));
+        expect(result.current.n).toBe(3);
+
+        act(() => deliver(tick(4, 100.17)));
+        act(() => deliver(tick(4, 100.17))); // the same tick from the second subscription
+        expect(result.current.n).toBe(4);
+        expect(result.current.lastDigit).toBe(7);
+
+        act(() => deliver(tick(5, 100.19)));
+        act(() => deliver(tick(5, 100.19)));
+        act(() => deliver(tick(4, 100.17))); // late copy of an older tick
+        expect(result.current.n).toBe(5);
+        expect(result.current.digits).toEqual([2, 5, 1, 7, 9]);
+    });
 });

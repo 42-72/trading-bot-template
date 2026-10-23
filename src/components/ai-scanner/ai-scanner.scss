@@ -369,6 +369,20 @@ $ai-scanner-z: 5;
         color: var(--text-general);
     }
 
+    &__progress {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+
+    &__closest {
+        margin: 0;
+        font-size: 1.2rem;
+        line-height: 1.4;
+        overflow-wrap: anywhere;
+        color: var(--text-general);
+    }
+
     &__stages {
         display: flex;
         flex-direction: column;

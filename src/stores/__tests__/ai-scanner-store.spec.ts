@@ -526,4 +526,87 @@ describe('AiScannerStore', () => {
             expect(root.run_panel.onRunButtonClick).not.toHaveBeenCalled();
         });
     });
+
+    describe('TEST strategy, every time', () => {
+        it.each(['over', 'under'] as const)(
+            'with %s selected: condition met on the first check of the seeded history, entry a tick later',
+            async strategy => {
+                const root = makeRoot();
+                const store = new AiScannerStore(root);
+                store.setMarkets(MARKETS);
+                fillForm(store, strategy);
+                store.setUseTestStrategy(true);
+                expect(store.use_test_strategy).toBe(true);
+                store.start();
+                expect(store.locked?.use_test_strategy).toBe(true);
+
+                // The very first check: the ticks_history seed of the first market.
+                store.onMarketTick('1HZ10V', full(), 5, true);
+                expect(store.stage).toBe('loading');
+                expect(store.target?.symbol).toBe('1HZ10V');
+                expect(store.target?.reason).toMatch(/^TEST strategy/);
+                await flush();
+                expect(store.stage).toBe('waiting');
+
+                store.onMarketTick('1HZ10V', full(), 4); // first live tick
+                await flush();
+                expect(root.run_panel.onRunButtonClick).toHaveBeenCalledTimes(1);
+            }
+        );
+
+        it('qualifies even when the seeded window holds fewer than 600 digits', () => {
+            const store = new AiScannerStore(makeRoot());
+            store.setMarkets(MARKETS);
+            fillForm(store);
+            store.setUseTestStrategy(true);
+            store.start();
+            store.onMarketTick('JD25', new Array(450).fill(3), 3, true);
+            expect(store.stage).toBe('loading');
+        });
+
+        it('the real Over strategy still needs the full 600', () => {
+            const store = new AiScannerStore(makeRoot());
+            store.setMarkets(MARKETS);
+            fillForm(store, 'over');
+            store.start();
+            store.onMarketTick('JD25', new Array(450).fill(9), 9, true);
+            expect(store.stage).toBe('scanning');
+            expect(store.scan_progress?.closest?.reason).toBe('Not enough ticks yet (450 of 600).');
+        });
+    });
+
+    describe('scan progress (real numbers only)', () => {
+        afterEach(() => jest.useRealTimers());
+
+        it('counts checked markets, stamps the last check, names the closest with its real reason, once a second', () => {
+            jest.useFakeTimers();
+            jest.setSystemTime(new Date(2026, 9, 23, 14, 5, 9));
+            const store = new AiScannerStore(makeRoot());
+            store.setMarkets(MARKETS);
+            fillForm(store, 'over');
+            store.start();
+            expect(store.scan_progress).toBeNull();
+
+            //                    0   1   2   3   4   5   6   7   8   9
+            const near = [58, 58, 58, 58, 58, 57, 64, 64, 63, 62]; // 2 of 6-9 at 64+
+            const window = (counts: number[]) => counts.flatMap((count, digit) => new Array(count).fill(digit));
+            store.onMarketTick('1HZ10V', full(5), 5, true);
+            expect(store.scan_progress).toMatchObject({ checked: 1, last_check_at: Date.now() });
+
+            // Within the same second: recorded, but the panel isn't refreshed yet.
+            store.onMarketTick('JD25', window(near), 9, true);
+            expect(store.scan_progress?.checked).toBe(1);
+
+            jest.advanceTimersByTime(1000);
+            store.onMarketTick('1HZ10V', full(5), 5);
+            const progress = store.scan_progress;
+            expect(progress?.checked).toBe(2);
+            expect(progress?.last_check_at).toBe(Date.now());
+            // JD25 is 1 tick short; 1HZ10V (all 5s) is far off.
+            expect(progress?.closest?.text).toBe('Jump 25 Index');
+            expect(progress?.closest?.reason).toMatch(
+                /^6: 10.7% · 7: 10.7% · 8: 10.5% · 9: 10.3% — 2 of 6-9 at 10.6%\+/
+            );
+        });
+    });
 });

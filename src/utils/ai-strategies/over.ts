@@ -28,7 +28,11 @@ const describe = (counts: number[], digits: number[]) =>
  */
 export const condition: TAiStrategy['condition'] = digits => {
     if (digits.length < WINDOW) {
-        return { qualified: false, reason: `Not enough ticks yet (${digits.length} of ${WINDOW}).` };
+        return {
+            qualified: false,
+            reason: `Not enough ticks yet (${digits.length} of ${WINDOW}).`,
+            shortfall: WINDOW - digits.length,
+        };
     }
 
     const counts = new Array(10).fill(0);
@@ -42,6 +46,14 @@ export const condition: TAiStrategy['condition'] = digits => {
 
     const high_text = `${describe(counts, HIGH_DIGITS)} — ${high_count} of 6-9 at 10.6%+`;
     const low_text = `${describe(counts, LOW_DIGITS)} — ${rule_2 ? 'all under 9.8%' : 'not all under 9.8%'}`;
+    // Ticks short: the best three of 6-9 up to 64, each of 0-2 down to 58.
+    const shortfall =
+        HIGH_DIGITS.map(digit => counts[digit])
+            .sort((a, b) => b - a)
+            .slice(0, HIGH_DIGITS_NEEDED)
+            .reduce((sum, count) => sum + Math.max(0, HIGH_MIN_COUNT - count), 0) +
+        LOW_DIGITS.reduce((sum, digit) => sum + Math.max(0, counts[digit] - LOW_MAX_COUNT), 0);
+
     const failed = [
         !rule_1 && `needs 3 of 6-9 at 10.6%+, has ${high_count}`,
         !rule_2 && 'needs each of 0, 1, 2 under 9.8%',
@@ -50,6 +62,7 @@ export const condition: TAiStrategy['condition'] = digits => {
     return {
         qualified: rule_1 && rule_2,
         reason: `${high_text} | ${low_text}${failed.length ? ` (not met: ${failed.join('; ')})` : ''}`,
+        shortfall,
     };
 };
 

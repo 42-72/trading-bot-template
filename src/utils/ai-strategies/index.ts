@@ -14,7 +14,11 @@ export const OVER_UNDER_STRATEGIES: Record<TOverUnderStrategyId, TAiStrategy> = 
  * for whichever of Over / Under is selected.
  */
 export const TEST_STRATEGY: TAiStrategy = {
-    condition: () => ({ qualified: true, reason: 'TEST strategy (demo only): qualifies the first market at once.' }),
+    condition: () => ({
+        qualified: true,
+        reason: 'TEST strategy (demo only): qualifies the first market at once.',
+        shortfall: 0,
+    }),
     entry: () => true,
 };
 

@@ -5,13 +5,12 @@ import {
     AI_SCANNER_CURRENCY,
     AI_SCANNER_MIN_STAKE,
     AI_SCANNER_SCAN_LIMIT_SECONDS,
-    AI_SCANNER_TICK_WINDOW,
     OVER_UNDER_SETUPS,
     TOverUnderStrategyId,
 } from '@/constants/ai-engine';
 import { DBOT_TABS } from '@/constants/bot-contents';
 import { readEngineValues, TEngineValues, writeEngineValues } from '@/utils/ai-engine-xml';
-import { getOverUnderStrategy } from '@/utils/ai-strategies';
+import { getOverUnderStrategy, TConditionResult } from '@/utils/ai-strategies';
 import { createAiEngineStrategyId } from '@/utils/library-strategies';
 import { loadBotIntoBuilder } from '@/utils/load-bot-into-builder';
 import RootStore from './root-store';
@@ -155,6 +154,13 @@ export default class AiScannerStore {
     final_profit: number | null = null;
     /** When the search for a market gives up (ms since epoch) - set at Load & Run. */
     scan_deadline: number | null = null;
+    /**
+     * Proof of scanning, refreshed at most once a second: how many markets have
+     * been checked, when the last check ran, and the market nearest to
+     * qualifying with that strategy's own reason text.
+     */
+    scan_progress: { checked: number; last_check_at: number; closest: { text: string; reason: string } | null } | null =
+        null;
 
     // Not observable: bookkeeping for one pipeline run.
     private run_token = 0;
@@ -164,6 +170,10 @@ export default class AiScannerStore {
     // Tick feeds currently mounted (market-feed.tsx). Run waits for this to
     // reach 0 - see pressRun.
     private mounted_feeds = 0;
+    // Latest condition() result per market during a scan, and when
+    // scan_progress was last published from it.
+    private scan_results = new Map<string, { text: string; reason: string; shortfall?: number; at: number }>();
+    private scan_progress_published_at = 0;
 
     constructor(root_store: RootStore) {
         this.root_store = root_store;
@@ -181,6 +191,7 @@ export default class AiScannerStore {
             message: observable,
             final_profit: observable,
             scan_deadline: observable,
+            scan_progress: observable.ref,
             is_active: computed,
             is_pre_run: computed,
             owns_workspace: computed,
@@ -376,6 +387,9 @@ export default class AiScannerStore {
         this.engine_values = null;
         this.feed_status = {};
         this.message = '';
+        this.scan_results.clear();
+        this.scan_progress = null;
+        this.scan_progress_published_at = 0;
         this.stage = 'scanning';
 
         // Each feed seeds its window from ticks_history (count 600) the
@@ -428,7 +442,10 @@ export default class AiScannerStore {
 
     /** Called by each market's tick feed (components/ai-scanner/market-feed.tsx) on every new tick. */
     onMarketTick = (symbol: string, digits: number[], new_digit: number, is_seed = false) => {
-        if (!this.locked || digits.length < AI_SCANNER_TICK_WINDOW) return;
+        // No window-length gate here: each strategy decides what it needs
+        // (Over requires all 600). A gate here also held back TEST, whose
+        // condition must qualify on the very first check.
+        if (!this.locked || digits.length === 0) return;
         if (this.locked.use_test_strategy && !this.can_use_test_strategy) {
             this.finish('idle', 'Cancelled: the TEST strategy only runs on a demo account.');
             return;
@@ -438,6 +455,7 @@ export default class AiScannerStore {
             const market = this.markets.find(item => item.symbol === symbol);
             if (!market) return;
             const result = this.strategy.condition(digits);
+            this.recordCheck(market, result, result.qualified);
             if (!result.qualified) return;
             this.target = { ...market, reason: result.reason };
             this.stage = 'loading';
@@ -457,6 +475,34 @@ export default class AiScannerStore {
             if (!is_seed && this.strategy.entry(digits, new_digit)) this.pressRun(this.run_token);
         }
     };
+
+    private recordCheck(market: TAiScannerMarket, result: TConditionResult, force_publish: boolean) {
+        const now = Date.now();
+        this.scan_results.set(market.symbol, {
+            text: market.text,
+            reason: result.reason,
+            shortfall: result.shortfall,
+            at: now,
+        });
+        if (!force_publish && now - this.scan_progress_published_at < 1000) return;
+        this.scan_progress_published_at = now;
+
+        // Nearest to qualifying by the strategy's own shortfall; a strategy
+        // that reports none just shows the market checked most recently.
+        let closest: { text: string; reason: string; shortfall?: number; at: number } | null = null;
+        this.scan_results.forEach(entry => {
+            if (!closest) closest = entry;
+            else if (entry.shortfall !== undefined && closest.shortfall !== undefined) {
+                if (entry.shortfall < closest.shortfall) closest = entry;
+            } else if (entry.at > closest.at) closest = entry;
+        });
+        const best = closest as { text: string; reason: string } | null;
+        this.scan_progress = {
+            checked: this.scan_results.size,
+            last_check_at: now,
+            closest: best ? { text: best.text, reason: best.reason } : null,
+        };
+    }
 
     private clearScanTimer() {
         if (this.scan_timer) {

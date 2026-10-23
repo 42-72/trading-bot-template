@@ -158,6 +158,32 @@ const OverUnderForm = observer(() => {
     );
 });
 
+const clockTime = (ms: number) => {
+    const date = new Date(ms);
+    return [date.getHours(), date.getMinutes(), date.getSeconds()].map(part => String(part).padStart(2, '0')).join(':');
+};
+
+/** Real numbers only: markets checked, when, and the nearest market with its strategy's own reason. */
+const ScanProgress = observer(() => {
+    const { scan_progress } = useAiScanner();
+    if (!scan_progress) return <p className='ai-scanner-panel__meta'>{localize('Waiting for the first check…')}</p>;
+    return (
+        <div className='ai-scanner-panel__progress'>
+            <p className='ai-scanner-panel__meta'>
+                {localize('{{count}} markets · last check {{time}}', {
+                    count: scan_progress.checked,
+                    time: clockTime(scan_progress.last_check_at),
+                })}
+            </p>
+            {scan_progress.closest && (
+                <p className='ai-scanner-panel__closest'>
+                    {localize('Closest')}: {scan_progress.closest.text} — {scan_progress.closest.reason}
+                </p>
+            )}
+        </div>
+    );
+});
+
 const RunStatus = observer(() => {
     const ai_scanner = useAiScanner();
     const { stage, locked, target, message, feed_status, markets, final_profit, scan_deadline } = ai_scanner;
@@ -170,6 +196,7 @@ const RunStatus = observer(() => {
     return (
         <div className='ai-scanner-panel__status'>
             {stage === 'scanning' && scan_deadline !== null && <ScanCountdown deadline={scan_deadline} />}
+            {stage === 'scanning' && <ScanProgress />}
             {(stage === 'loading' || stage === 'waiting') && target && (
                 <div className='ai-scanner-panel__locked'>
                     <p className='ai-scanner-panel__headline'>{target.text}</p>

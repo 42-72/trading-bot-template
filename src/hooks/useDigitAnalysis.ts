@@ -156,6 +156,12 @@ export const useDigitAnalysis = (symbol: string, windowSize: number) => {
     // from the last historical price so the first live tick's direction is
     // still relative to something real, not treated as a fresh start.
     const previousQuoteRef = useRef<number | null>(null);
+    // Epoch of the newest tick already in the window (seeded from the
+    // history's last time). Two subscriptions to the same symbol on this
+    // socket (Market Tool and the AI Scanner, say) deliver every tick twice,
+    // and the listener below only filters by symbol - a tick that isn't newer
+    // than this is a duplicate and never enters the window again.
+    const lastEpochRef = useRef<number | null>(null);
     const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     // The ticks_history request still waiting for its reply, if any. Outlives
     // a single effect run on purpose: a re-run for the same symbol/window must
@@ -231,6 +237,8 @@ export const useDigitAnalysis = (symbol: string, windowSize: number) => {
             const seedDirections: TDirection[] = prices.slice(1).map((price, i) => (price >= prices[i] ? 'R' : 'F'));
 
             previousQuoteRef.current = prices.length ? prices[prices.length - 1] : null;
+            const times = response?.history?.times ?? [];
+            lastEpochRef.current = times.length ? Number(times[times.length - 1]) : null;
 
             dispatch({
                 type: 'SEED',
@@ -378,6 +386,7 @@ export const useDigitAnalysis = (symbol: string, windowSize: number) => {
             dispatch({ type: 'RESET' });
             pipSizeRef.current = null;
             previousQuoteRef.current = null;
+            lastEpochRef.current = null;
             setStatus('connecting');
 
             if (!api_base.api) return;
@@ -385,13 +394,22 @@ export const useDigitAnalysis = (symbol: string, windowSize: number) => {
             // Registered before the history/subscribe request resolves, so
             // no tick arriving in that gap is missed. Kept across retries.
             messageSubscriptionRef.current = api_base.api.onMessage().subscribe((message: unknown) => {
-                const data = (message as { data?: { msg_type?: string; tick?: { symbol?: string; quote?: unknown } } })
-                    ?.data;
+                const data = (
+                    message as {
+                        data?: { msg_type?: string; tick?: { symbol?: string; quote?: unknown; epoch?: unknown } };
+                    }
+                )?.data;
                 if (data?.msg_type !== 'tick' || !data.tick) return;
                 // Guards against a stray tick for a symbol this hook has
                 // already moved away from (e.g. mid-switch race).
                 if (data.tick.symbol !== symbol) return;
                 if (pipSizeRef.current === null) return; // history hasn't resolved yet
+
+                const epoch = Number(data.tick.epoch);
+                if (Number.isFinite(epoch)) {
+                    if (lastEpochRef.current !== null && epoch <= lastEpochRef.current) return;
+                    lastEpochRef.current = epoch;
+                }
 
                 const quote = Number(data.tick.quote);
                 const digit = getLastDigit(quote, pipSizeRef.current);
