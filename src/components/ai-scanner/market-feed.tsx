@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { AI_SCANNER_TICK_WINDOW } from '@/constants/ai-engine';
 import { useDigitAnalysis } from '@/hooks/useDigitAnalysis';
 import { useStore } from '@/hooks/useStore';
@@ -14,6 +14,10 @@ const MarketFeed = ({ symbol }: { symbol: string }) => {
     const { ai_scanner } = useStore();
     const { digits, lastDigit, lastTickAt, status, n } = useDigitAnalysis(symbol, AI_SCANNER_TICK_WINDOW);
 
+    // Whether the window was already live before this tick: the first
+    // lastTickAt after a (re)subscribe is the ticks_history seed, not a tick.
+    const was_live_ref = useRef(false);
+
     useEffect(() => ai_scanner.registerFeed(), [ai_scanner]);
 
     useEffect(() => {
@@ -22,8 +26,13 @@ const MarketFeed = ({ symbol }: { symbol: string }) => {
 
     // lastTickAt changes on every accepted tick (and on the seed).
     useEffect(() => {
-        if (lastTickAt === null || lastDigit === null) return;
-        ai_scanner.onMarketTick(symbol, digits, lastDigit);
+        if (lastTickAt === null || lastDigit === null) {
+            was_live_ref.current = false;
+            return;
+        }
+        const is_seed = !was_live_ref.current;
+        was_live_ref.current = true;
+        ai_scanner.onMarketTick(symbol, digits, lastDigit, is_seed);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [lastTickAt]);
 

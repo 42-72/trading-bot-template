@@ -288,6 +288,24 @@ describe('AiScannerStore', () => {
         expect(root.run_panel.onRunButtonClick).toHaveBeenCalledTimes(1);
     });
 
+    it('never enters on a re-seed of the window, only on a live tick', async () => {
+        const root = makeRoot();
+        const store = new AiScannerStore(root);
+        store.setMarkets(MARKETS);
+        fillForm(store);
+        store.setUseTestStrategy(true);
+        store.start();
+        store.onMarketTick('1HZ10V', full(), 5, true);
+        await flush();
+        expect(store.stage).toBe('waiting');
+        store.onMarketTick('1HZ10V', full(), 5, true);
+        await flush();
+        expect(root.run_panel.onRunButtonClick).not.toHaveBeenCalled();
+        store.onMarketTick('1HZ10V', full(), 5);
+        await flush();
+        expect(root.run_panel.onRunButtonClick).toHaveBeenCalledTimes(1);
+    });
+
     it('never runs the TEST strategy on a real account', () => {
         const root = makeRoot();
 

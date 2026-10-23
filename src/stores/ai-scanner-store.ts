@@ -412,7 +412,7 @@ export default class AiScannerStore {
     }
 
     /** Called by each market's tick feed (components/ai-scanner/market-feed.tsx) on every new tick. */
-    onMarketTick = (symbol: string, digits: number[], new_digit: number) => {
+    onMarketTick = (symbol: string, digits: number[], new_digit: number, is_seed = false) => {
         if (!this.locked || digits.length < AI_SCANNER_TICK_WINDOW) return;
         if (this.locked.use_test_strategy && !this.can_use_test_strategy) {
             this.finish('idle', 'Cancelled: the TEST strategy only runs on a demo account.');
@@ -437,7 +437,9 @@ export default class AiScannerStore {
                 return;
             }
             this.target = { ...this.target, reason: result.reason };
-            if (this.strategy.entry(digits, new_digit)) this.pressRun(this.run_token);
+            // A re-seed (stream re-subscribed) only re-checks the condition: its
+            // last digit is history, not a new tick to enter on.
+            if (!is_seed && this.strategy.entry(digits, new_digit)) this.pressRun(this.run_token);
         }
     };
 
