@@ -10,6 +10,24 @@ import { countDigits, createEmptyCounts, getLastDigit } from '@/utils/digit-stat
 // and safer than waiting indefinitely for a tick that will never come.
 const WATCHDOG_TIMEOUT_MS = 10000;
 
+// Retry policy for a ticks_history subscribe that fails or never replies.
+// Deriv's server intermittently answers a valid request with
+// InternalServerError (seen on the authorized /demo socket; the identical
+// payload succeeds on the public socket), and before this, one failure left
+// the symbol blank forever. 4 attempts in total, waiting 1s, 2s, then 4s
+// between them: a transient server fault normally clears within seconds,
+// and the cap turns a real outage into a visible "couldn't load" within ~7s
+// (fast errors) or ~47s (every attempt timing out) instead of an endless
+// spinner.
+const MAX_ATTEMPTS = 4;
+const RETRY_DELAYS_MS = [1000, 2000, 4000];
+// A request with no reply at all (the await would otherwise hang forever,
+// with no watchdog armed) counts as a failed attempt after this long.
+const REQUEST_TIMEOUT_MS = 10000;
+
+/** idle: nothing to load yet (no symbol). failed: retries exhausted - the UI must say so. */
+export type TStreamStatus = 'idle' | 'connecting' | 'retrying' | 'live' | 'failed';
+
 export type TDirection = 'R' | 'F';
 
 type TState = {
@@ -118,12 +136,13 @@ const describeError = (error: unknown): { code?: string; message?: string } => {
  * and whenever `isAuthorized` flips (login completing, or an account
  * switch) - a subscribe sent while the socket is mid-authorize can be
  * silently dropped, and a dead subscription from before either transition
- * is never silently reused. A 10s no-tick watchdog re-subscribes even when
- * neither signal fires (e.g. a subscription that "succeeded" but was
- * already stale server-side). Always unsubscribes both the local message
- * listener and the server-side subscription (via `forget`) on cleanup - a
- * leaked tick stream per symbol/window switch is exactly the bug this
- * guards against.
+ * is never silently reused. A 10s no-tick watchdog re-subscribes a stream
+ * that went quiet. A subscribe that fails or never replies is retried
+ * (MAX_ATTEMPTS / RETRY_DELAYS_MS); after the last attempt `status` is
+ * 'failed' and `retry()` starts over. Always unsubscribes both the local
+ * message listener and the server-side subscription (via `forget`) on
+ * cleanup - including a subscription that only arrives after the request
+ * that asked for it was abandoned.
  */
 export const useDigitAnalysis = (symbol: string, windowSize: number) => {
     const [state, dispatch] = useReducer(reducer, initialState);
@@ -138,15 +157,30 @@ export const useDigitAnalysis = (symbol: string, windowSize: number) => {
     // still relative to something real, not treated as a fresh start.
     const previousQuoteRef = useRef<number | null>(null);
     const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    // True from the moment a (re)subscribe attempt starts until either the
-    // seed data or an error comes back - lets the UI show "Connecting..."
-    // instead of leaving a dead stream indistinguishable from a quiet one.
-    const [isConnecting, setIsConnecting] = useState(true);
+    // The ticks_history request still waiting for its reply, if any. Outlives
+    // a single effect run on purpose: a re-run for the same symbol/window must
+    // not subscribe again while an earlier request for it is unanswered.
+    const inFlightRef = useRef<{ key: string; settled: Promise<void> } | null>(null);
+    const [status, setStatus] = useState<TStreamStatus>('idle');
+    // Bumped by retry() - an effect dependency, so a manual retry just starts over.
+    const [retryNonce, setRetryNonce] = useState(0);
 
     useEffect(() => {
         if (connectionStatus !== CONNECTION_STATUS.OPENED) return undefined;
+        // Market Tool mounts with symbol '' until its list loads - never send
+        // ticks_history for that.
+        if (!symbol) {
+            setStatus('idle');
+            return undefined;
+        }
 
         let cancelled = false;
+        let retryTimer: ReturnType<typeof setTimeout> | null = null;
+        const key = `${symbol}|${windowSize}`;
+
+        const forget = (subscription_id?: string | null) => {
+            if (subscription_id) api_base.api?.send({ forget: subscription_id });
+        };
 
         const clearWatchdog = () => {
             if (watchdogRef.current) {
@@ -155,14 +189,20 @@ export const useDigitAnalysis = (symbol: string, windowSize: number) => {
             }
         };
 
+        const clearRetry = () => {
+            if (retryTimer) {
+                clearTimeout(retryTimer);
+                retryTimer = null;
+            }
+        };
+
         const cleanupSubscription = () => {
             clearWatchdog();
+            clearRetry();
             messageSubscriptionRef.current?.unsubscribe();
             messageSubscriptionRef.current = null;
-            if (subscriptionIdRef.current) {
-                api_base.api?.send({ forget: subscriptionIdRef.current });
-                subscriptionIdRef.current = null;
-            }
+            forget(subscriptionIdRef.current);
+            subscriptionIdRef.current = null;
         };
 
         // Re-armed on every tick and right after a successful (re)subscribe -
@@ -171,71 +211,78 @@ export const useDigitAnalysis = (symbol: string, windowSize: number) => {
             clearWatchdog();
             watchdogRef.current = setTimeout(() => {
                 if (cancelled) return;
-                console.warn(`[DigitAnalysis] No tick for ${WATCHDOG_TIMEOUT_MS / 1000}s on ${symbol} - re-subscribing`);
+                console.warn(
+                    `[DigitAnalysis] No tick for ${WATCHDOG_TIMEOUT_MS / 1000}s on ${symbol} - re-subscribing`
+                );
                 start();
             }, WATCHDOG_TIMEOUT_MS);
         };
 
-        const start = async () => {
-            cleanupSubscription();
-            dispatch({ type: 'RESET' });
-            pipSizeRef.current = null;
-            previousQuoteRef.current = null;
-            setIsConnecting(true);
+        const attempt = async (attempt_no: number) => {
+            // Overlap guard: an earlier request for this same symbol/window (a
+            // previous effect run, or an attempt that timed out) may still be
+            // unanswered. If it later succeeded, the server would hold that
+            // stream while we ask for another. Wait for it to settle first -
+            // it forgets its own subscription when it's no longer wanted.
+            const previous = inFlightRef.current;
+            if (previous && previous.key === key) await previous.settled;
+            if (cancelled || !api_base.api) return;
 
-            if (!api_base.api) return;
+            // Set once this attempt's reply is no longer wanted (failed, timed
+            // out or superseded): a subscription that still arrives is forgotten.
+            let abandoned = false;
+            const request = api_base.api.send({
+                ticks_history: symbol,
+                end: 'latest',
+                count: windowSize,
+                style: 'ticks',
+                subscribe: 1,
+            }) as unknown as Promise<TTicksHistoryResponse>;
+            const entry = {
+                key,
+                settled: request.then(
+                    response => {
+                        if (abandoned) forget(response?.subscription?.id);
+                    },
+                    () => undefined
+                ),
+            };
+            inFlightRef.current = entry;
+            entry.settled.then(() => {
+                if (inFlightRef.current === entry) inFlightRef.current = null;
+            });
 
-            // Registered before the history/subscribe request resolves, so
-            // no tick arriving in that gap is missed.
-            messageSubscriptionRef.current = api_base.api.onMessage().subscribe((message: unknown) => {
-                const data = (message as { data?: { msg_type?: string; tick?: { symbol?: string; quote?: unknown } } })
-                    ?.data;
-                if (data?.msg_type !== 'tick' || !data.tick) return;
-                // Guards against a stray tick for a symbol this hook has
-                // already moved away from (e.g. mid-switch race).
-                if (data.tick.symbol !== symbol) return;
-                if (pipSizeRef.current === null) return; // history hasn't resolved yet
-
-                const quote = Number(data.tick.quote);
-                const digit = getLastDigit(quote, pipSizeRef.current);
-                const direction: TDirection =
-                    previousQuoteRef.current === null || quote >= previousQuoteRef.current ? 'R' : 'F';
-                previousQuoteRef.current = quote;
-                dispatch({ type: 'PUSH', digit, direction, quote, windowSize });
-                armWatchdog();
+            let timeout_id: ReturnType<typeof setTimeout> | undefined;
+            const timeout = new Promise<never>((_, reject) => {
+                timeout_id = setTimeout(
+                    () =>
+                        reject({
+                            error: { code: 'RequestTimeout', message: `no reply within ${REQUEST_TIMEOUT_MS / 1000}s` },
+                        }),
+                    REQUEST_TIMEOUT_MS
+                );
             });
 
             try {
-                const response = (await api_base.api.send({
-                    ticks_history: symbol,
-                    end: 'latest',
-                    count: windowSize,
-                    style: 'ticks',
-                    subscribe: 1,
-                })) as unknown as TTicksHistoryResponse;
+                // deriv-api rejects with the whole response when it carries an
+                // error; a resolved response with .error is treated the same.
+                const response = await Promise.race([request, timeout]);
+                clearTimeout(timeout_id);
+                if (response?.error) throw response;
 
-                if (response?.error) {
-                    const { code, message } = describeError(response.error);
-                    console.error('[DigitAnalysis] ticks_history error:', { code, message, raw: response.error });
-                    if (!cancelled) setIsConnecting(false);
+                const subscription_id = response?.subscription?.id ?? null;
+                if (cancelled) {
+                    // Torn down (symbol/window change or unmount) while waiting -
+                    // forget this subscription by its own id; never touch
+                    // subscriptionIdRef, which may belong to a newer request.
+                    abandoned = true;
+                    forget(subscription_id);
                     return;
                 }
 
                 const resolvedPipSize = Number(response?.pip_size ?? 0);
-                const subscriptionId = response?.subscription?.id ?? null;
-
-                if (cancelled) {
-                    // This effect instance was torn down (symbol/window
-                    // change or unmount) before the response arrived - forget
-                    // the now-unwanted subscription by its own id rather than
-                    // leaking it; do not touch subscriptionIdRef, which may
-                    // already belong to a newer, still-active request.
-                    if (subscriptionId) api_base.api?.send({ forget: subscriptionId });
-                    return;
-                }
-
                 pipSizeRef.current = resolvedPipSize;
-                subscriptionIdRef.current = subscriptionId;
+                subscriptionIdRef.current = subscription_id;
 
                 const prices = (response?.history?.prices ?? []).map(Number);
                 const seedDigits = prices.map(price => getLastDigit(price, resolvedPipSize));
@@ -255,13 +302,65 @@ export const useDigitAnalysis = (symbol: string, windowSize: number) => {
                     currentQuote: previousQuoteRef.current,
                     windowSize,
                 });
-                setIsConnecting(false);
+                setStatus('live');
                 armWatchdog();
             } catch (error) {
+                clearTimeout(timeout_id);
+                abandoned = true;
+                if (cancelled) return;
+
                 const { code, message } = describeError(error);
-                console.error('[DigitAnalysis] Failed to subscribe to ticks_history:', { code, message, raw: error });
-                if (!cancelled) setIsConnecting(false);
+                console.error(
+                    `[DigitAnalysis] ticks_history ${symbol} failed (attempt ${attempt_no}/${MAX_ATTEMPTS}): ` +
+                        `${code ?? 'unknown'} - ${message ?? 'no message'}`,
+                    error
+                );
+
+                if (attempt_no < MAX_ATTEMPTS) {
+                    setStatus('retrying');
+                    retryTimer = setTimeout(
+                        () => {
+                            retryTimer = null;
+                            if (!cancelled) attempt(attempt_no + 1);
+                        },
+                        RETRY_DELAYS_MS[attempt_no - 1]
+                    );
+                } else {
+                    setStatus('failed');
+                }
             }
+        };
+
+        const start = () => {
+            cleanupSubscription();
+            dispatch({ type: 'RESET' });
+            pipSizeRef.current = null;
+            previousQuoteRef.current = null;
+            setStatus('connecting');
+
+            if (!api_base.api) return;
+
+            // Registered before the history/subscribe request resolves, so
+            // no tick arriving in that gap is missed. Kept across retries.
+            messageSubscriptionRef.current = api_base.api.onMessage().subscribe((message: unknown) => {
+                const data = (message as { data?: { msg_type?: string; tick?: { symbol?: string; quote?: unknown } } })
+                    ?.data;
+                if (data?.msg_type !== 'tick' || !data.tick) return;
+                // Guards against a stray tick for a symbol this hook has
+                // already moved away from (e.g. mid-switch race).
+                if (data.tick.symbol !== symbol) return;
+                if (pipSizeRef.current === null) return; // history hasn't resolved yet
+
+                const quote = Number(data.tick.quote);
+                const digit = getLastDigit(quote, pipSizeRef.current);
+                const direction: TDirection =
+                    previousQuoteRef.current === null || quote >= previousQuoteRef.current ? 'R' : 'F';
+                previousQuoteRef.current = quote;
+                dispatch({ type: 'PUSH', digit, direction, quote, windowSize });
+                armWatchdog();
+            });
+
+            attempt(1);
         };
 
         start();
@@ -270,7 +369,7 @@ export const useDigitAnalysis = (symbol: string, windowSize: number) => {
             cancelled = true;
             cleanupSubscription();
         };
-    }, [symbol, windowSize, connectionStatus, isAuthorized]);
+    }, [symbol, windowSize, connectionStatus, isAuthorized, retryNonce]);
 
     return {
         digits: state.digits,
@@ -283,6 +382,8 @@ export const useDigitAnalysis = (symbol: string, windowSize: number) => {
         n: state.digits.length,
         pipSize: pipSizeRef.current,
         isLive: connectionStatus === CONNECTION_STATUS.OPENED,
-        isConnecting,
+        isConnecting: status === 'connecting' || status === 'retrying',
+        status,
+        retry: () => setRetryNonce(nonce => nonce + 1),
     };
 };

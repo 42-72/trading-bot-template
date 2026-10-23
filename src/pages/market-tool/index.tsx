@@ -77,8 +77,10 @@ const MarketTool = () => {
         return () => clearTimeout(timer);
     }, [windowInput]);
 
-    const { digits, counts, directions, lastDigit, lastTickAt, currentQuote, pipSize, n, isLive, isConnecting } =
+    const { digits, counts, directions, lastDigit, lastTickAt, currentQuote, pipSize, n, isLive, status, retry } =
         useDigitAnalysis(symbol, windowSize);
+    const is_failed = status === 'failed';
+    const is_stream_live = isLive && status === 'live';
 
     const ranks = useMemo(() => rankDigits(counts), [counts]);
 
@@ -126,7 +128,23 @@ const MarketTool = () => {
     const quoteMain = quoteText ? quoteText.slice(0, -1) : '—';
     const quoteLastDigit = quoteText ? quoteText.slice(-1) : '';
 
-    const tickCountLabel = n >= windowSize ? 'Full' : n > 0 ? `${n} of ${windowSize}` : 'Waiting…';
+    const tickCountLabel = is_failed
+        ? 'Unavailable'
+        : n >= windowSize
+          ? 'Full'
+          : n > 0
+            ? `${n} of ${windowSize}`
+            : 'Waiting…';
+
+    // Never show "Live price" unless ticks are actually flowing - a dead
+    // stream used to fall through to it once a request had failed.
+    const price_label_text = is_failed
+        ? "Couldn't load"
+        : status === 'retrying'
+          ? 'Retrying…'
+          : is_stream_live
+            ? 'Live price'
+            : 'Connecting…';
 
     // Rendered twice (see market-tool.scss) rather than moved with CSS
     // alone: desktop shows it as its own row above the ribbon (originally
@@ -140,9 +158,14 @@ const MarketTool = () => {
     // different parent containers, only which of these two copies is
     // display: none at a given width.
     const price_label = (
-        <span className={classNames('market-tool__live-label', { 'market-tool__live-label--live': isLive && !isConnecting })}>
+        <span
+            className={classNames('market-tool__live-label', {
+                'market-tool__live-label--live': is_stream_live,
+                'market-tool__live-label--failed': is_failed,
+            })}
+        >
             <span className='market-tool__live-dot' aria-hidden='true' />
-            {isConnecting ? 'Connecting…' : 'Live price'}
+            {price_label_text}
         </span>
     );
     const price_quote = (
@@ -195,6 +218,17 @@ const MarketTool = () => {
                 {price_label}
                 {price_quote}
             </div>
+
+            {is_failed && (
+                <div className='market-tool__error' role='alert'>
+                    <span>
+                        Couldn&apos;t load live data for {symbols.find(s => s.value === symbol)?.text ?? symbol}.
+                    </span>
+                    <button type='button' className='market-tool__error-retry' onClick={retry}>
+                        Retry
+                    </button>
+                </div>
+            )}
 
             <TickRibbon digits={ribbonDigits} />
 

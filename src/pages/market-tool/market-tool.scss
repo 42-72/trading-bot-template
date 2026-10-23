@@ -205,6 +205,45 @@
     }
 }
 
+// Retries exhausted (useDigitAnalysis status 'failed'). Colours are the
+// .tone-red values above, so failure reads the same as the tool's own red.
+.market-tool__live-label--failed {
+    color: #a3001f;
+
+    .market-tool__live-dot {
+        background: #ff0f45;
+    }
+}
+
+.market-tool__error {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.2rem;
+    padding: 1rem 1.4rem;
+    border: 1px solid rgb(255 15 69 / 45%);
+    border-radius: 0.8rem;
+    background: rgb(255 15 69 / 12%);
+    color: #a3001f;
+    font-size: 1.3rem;
+    font-weight: 600;
+}
+
+.market-tool__error-retry {
+    flex: 0 0 auto;
+    padding: 0.6rem 1.4rem;
+    border: 1px solid #a3001f;
+    border-radius: 0.6rem;
+    background: transparent;
+    color: #a3001f;
+    font: inherit;
+    cursor: pointer;
+
+    &:hover {
+        background: rgb(255 15 69 / 12%);
+    }
+}
+
 .market-tool__quote {
     font-family: 'IBM Plex Sans', 'SFMono-Regular', Consolas, monospace;
     font-variant-numeric: tabular-nums;
