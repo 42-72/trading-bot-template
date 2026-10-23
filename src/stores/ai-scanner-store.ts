@@ -161,6 +161,9 @@ export default class AiScannerStore {
     private wait_timer: ReturnType<typeof setTimeout> | null = null;
     private engine_strategy_id: string | null = null;
     private engine_values: TEngineValues | null = null;
+    // Tick feeds currently mounted (market-feed.tsx). Run waits for this to
+    // reach 0 - see pressRun.
+    private mounted_feeds = 0;
 
     constructor(root_store: RootStore) {
         this.root_store = root_store;
@@ -191,6 +194,7 @@ export default class AiScannerStore {
             setUseTestStrategy: action,
             setMarkets: action,
             setFeedStatus: action,
+            dismiss: action,
             onMarketTick: action,
             start: action,
             cancel: action,
@@ -322,6 +326,40 @@ export default class AiScannerStore {
         this.feed_status[symbol] = status;
     };
 
+    registerFeed = () => {
+        this.mounted_feeds += 1;
+        return () => {
+            this.mounted_feeds -= 1;
+        };
+    };
+
+    /** Feeds render only while scanning, loading or waiting. */
+    get are_feeds_wanted() {
+        return this.is_pre_run;
+    }
+
+    /** Stopped -> back to the form. */
+    dismiss = () => {
+        if (this.stage !== 'stopped') return;
+        this.stage = 'idle';
+        this.target = null;
+        this.message = '';
+        this.final_profit = null;
+    };
+
+    // Resolves once every scanner feed has unmounted - each one's cleanup
+    // has sent `forget` for its stream (useDigitAnalysis) - or after 2s.
+    private waitForFeedsToStop() {
+        return new Promise<void>(resolve => {
+            const started = Date.now();
+            const check = () => {
+                if (this.mounted_feeds <= 0 || Date.now() - started > 2000) resolve();
+                else setTimeout(check, 20);
+            };
+            check();
+        });
+    }
+
     /** Load & Run: lock the form and start scanning. */
     start = () => {
         if (!this.can_start) return;
@@ -351,6 +389,11 @@ export default class AiScannerStore {
 
     /** Cancel at any stage. A running bot is stopped through the Stop button's own path. */
     cancel = () => {
+        // Still waiting for the feeds to stop - Run hasn't been pressed.
+        if (this.stage === 'starting' && !this.root_store.run_panel.is_stop_button_visible) {
+            this.finish('idle', 'Cancelled.');
+            return;
+        }
         if (this.stage === 'running' || this.stage === 'starting') {
             this.run_token += 1;
             this.stage = 'stopping';
@@ -513,6 +556,17 @@ export default class AiScannerStore {
         }
 
         this.stage = 'starting';
+        // 'starting' unmounts the feeds. Run only once their streams are
+        // forgotten: the bot subscribes the same symbol on the same socket,
+        // and if it got AlreadySubscribed and leaned on our stream, our
+        // forget would then starve it of ticks.
+        await this.waitForFeedsToStop();
+        if (token !== this.run_token) return;
+        if (run_panel.is_stop_button_visible) {
+            runInAction(() => this.finish('idle', 'Cancelled: a bot is already running.'));
+            return;
+        }
+
         // Take profit and stop loss are measured from zero: the engine's
         // total_profit is session-wide (Total.js) and only clearStat resets it.
         run_panel.clearStat();
@@ -532,7 +586,7 @@ export default class AiScannerStore {
     private onBotStopped() {
         const { total_profit } = this.root_store.transactions.statistics;
         const locked = this.locked;
-        let message = 'The bot stopped.';
+        let message = 'The bot stopped. See the Journal for why.';
         if (locked && total_profit >= locked.take_profit) message = 'Take profit reached - the bot stopped itself.';
         else if (locked && total_profit <= -locked.stop_loss) message = 'Stop loss reached - the bot stopped itself.';
         else if (this.stage === 'stopping') message = 'Cancelled - the bot was stopped.';
