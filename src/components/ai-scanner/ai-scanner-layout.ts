@@ -12,8 +12,18 @@ const EDGE_GAP = 8;
 
 // Header, desktop Run bar (run-strategy.tsx), desktop run panel column with
 // its toggle (run-panel.tsx), desktop footer, mobile run bar
-// (.controls__section) and the mobile run drawer with its toggle.
-const BLOCKERS = ['.deriv-header', '.run-strategy-bar', '.run-panel__container', '.app-footer', '.controls__section'];
+// (.controls__section), and the run drawer's toggle bar on its own: below
+// 1280px the closed drawer's container measures 0 tall while its full-width
+// ▲ toggle bar still shows, so the container alone missed it. The toggle bar
+// gets a 12px gap (clampToBounds adds EDGE_GAP, the rest is added here).
+const BLOCKERS: { selector: string; gap: number }[] = [
+    { selector: '.deriv-header', gap: EDGE_GAP },
+    { selector: '.run-strategy-bar', gap: EDGE_GAP },
+    { selector: '.run-panel__container', gap: EDGE_GAP },
+    { selector: '.dc-drawer__toggle', gap: 12 },
+    { selector: '.app-footer', gap: EDGE_GAP },
+    { selector: '.controls__section', gap: EDGE_GAP },
+];
 
 const visibleRect = (element: Element) => {
     const rect = element.getBoundingClientRect();
@@ -29,19 +39,20 @@ export const getSafeBounds = (): TBounds => {
     const vh = window.innerHeight;
     const bounds: TBounds = { top: 0, left: 0, right: vw, bottom: vh };
 
-    BLOCKERS.forEach(selector => {
+    BLOCKERS.forEach(({ selector, gap }) => {
+        const extra = gap - EDGE_GAP;
         document.querySelectorAll(selector).forEach(element => {
             const rect = visibleRect(element);
             if (!rect) return;
             if (rect.width >= vw * 0.6) {
                 // A band across the screen: it caps the top or the bottom,
                 // whichever half it's in.
-                if (rect.top + rect.height / 2 < vh / 2) bounds.top = Math.max(bounds.top, rect.bottom);
-                else bounds.bottom = Math.min(bounds.bottom, rect.top);
+                if (rect.top + rect.height / 2 < vh / 2) bounds.top = Math.max(bounds.top, rect.bottom + extra);
+                else bounds.bottom = Math.min(bounds.bottom, rect.top - extra);
             } else if (rect.right >= vw - 1) {
                 // A column on the right (the desktop run panel, or just its
                 // toggle sliver when closed).
-                bounds.right = Math.min(bounds.right, rect.left);
+                bounds.right = Math.min(bounds.right, rect.left - extra);
             }
         });
     });
