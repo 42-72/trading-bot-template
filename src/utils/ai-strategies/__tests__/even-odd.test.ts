@@ -7,6 +7,7 @@ import { condition, entry } from '../even-odd';
  * and never stretches a run of odd digits (and the reverse for `odd_last`).
  */
 const windowOf = (counts: number[], tail: number[] = [], odd_last = false) => {
+    expect(counts.reduce((sum, count) => sum + count, 0)).toBe(600);
     const remaining = counts.slice();
     tail.forEach(digit => {
         remaining[digit] -= 1;
@@ -15,32 +16,57 @@ const windowOf = (counts: number[], tail: number[] = [], odd_last = false) => {
     const of = (parity: number) =>
         remaining.flatMap((count, digit) => (digit % 2 === parity ? new Array(count).fill(digit) : []));
     const body = odd_last ? [...of(0), ...of(1)] : [...of(1), ...of(0)];
-    const digits = [...body, ...tail];
-    expect(digits).toHaveLength(600);
-    return digits;
+    return [...body, ...tail];
 };
 // d -> 9 - d turns every even digit odd and back: the ODD side is the mirror.
 const mirrorCounts = (counts: number[]) => counts.map((_, digit) => counts[9 - digit]);
 
 //               0   1   2   3   4   5   6   7   8   9
-const EVEN = [64, 59, 68, 58, 71, 59, 64, 50, 64, 43]; // most 4, 2nd 2, 5 even at 64+, least 9
+const EVEN = [68, 59, 62, 57, 72, 58, 60, 50, 66, 48]; // top 3: 4, 0, 8 - all even; 3 even at 64+; least 9
 
 describe('Even/Odd condition', () => {
-    it('EVEN: most and 2nd even, 3+ even at 64+, a single odd least digit', () => {
+    it('EVEN: the top 3 even, 3+ even at 64+, a single odd least digit', () => {
         const result = condition(windowOf(EVEN));
         expect(result).toMatchObject({ qualified: true, side: 'even', leastDigit: 9 });
-        expect(result.reason).toBe('Most 4 (11.8%), 2nd 2 (11.3%) · 5 even at 10.6%+ (0,2,4,6,8) · least 9 (7.2%)');
+        expect(result.reason).toBe('Top 3: 4 (12.0%), 0 (11.3%), 8 (11.0%) · 3 even at 10.6%+ · least 9 (8.0%)');
     });
 
     it('ODD: the exact mirror', () => {
         const result = condition(windowOf(mirrorCounts(EVEN)));
         expect(result).toMatchObject({ qualified: true, side: 'odd', leastDigit: 0 });
-        expect(result.reason).toBe('Most 5 (11.8%), 2nd 7 (11.3%) · 5 odd at 10.6%+ (1,3,5,7,9) · least 0 (7.2%)');
+        expect(result.reason).toBe('Top 3: 5 (12.0%), 9 (11.3%), 1 (11.0%) · 3 odd at 10.6%+ · least 0 (8.0%)');
+    });
+
+    it('the 3rd most appearing digit odd fails EVEN (most and 2nd even are no longer enough)', () => {
+        //                   0   1   2   3   4   5   6   7   8   9
+        const third_odd = [68, 58, 62, 56, 72, 66, 60, 50, 64, 44];
+        const result = condition(windowOf(third_odd));
+        expect(result.qualified).toBe(false);
+        expect(result.reason).toMatch(/^Top 3: 4 \(12.0%\), 0 \(11.3%\), 5 \(11.0%\) · /);
+        expect(result.reason).toMatch(/even: top 3 not all even;/);
+        expect(condition(windowOf(mirrorCounts(third_odd))).qualified).toBe(false);
+    });
+
+    it('a tie straddling 3rd place brings in every tied digit - all must be even', () => {
+        //                       0   1   2   3   4   5   6   7   8   9
+        const tie_all_even = [68, 59, 65, 57, 72, 58, 60, 50, 65, 46];
+        const result = condition(windowOf(tie_all_even));
+        expect(result).toMatchObject({ qualified: true, side: 'even' });
+        expect(result.reason).toMatch(/^Top 3: 4 \(12.0%\), 0 \(11.3%\), 2 \(10.8%\), 8 \(10.8%\) · /);
+        expect(condition(windowOf(mirrorCounts(tie_all_even)))).toMatchObject({ qualified: true, side: 'odd' });
+
+        //                        0   1   2   3   4   5   6   7   8   9
+        const tie_with_odd = [68, 58, 62, 56, 72, 65, 60, 50, 65, 44];
+        const mixed = condition(windowOf(tie_with_odd));
+        expect(mixed.qualified).toBe(false);
+        expect(mixed.reason).toMatch(/^Top 3: 4 \(12.0%\), 0 \(11.3%\), 5 \(10.8%\), 8 \(10.8%\) · /);
+        expect(mixed.reason).toMatch(/top 3 \(with ties\) not all even/);
+        expect(condition(windowOf(mirrorCounts(tie_with_odd))).qualified).toBe(false);
     });
 
     it('a tie for least never qualifies, either side', () => {
         //                0   1   2   3   4   5   6   7   8   9
-        const tied = [64, 59, 68, 59, 71, 59, 64, 46, 64, 46];
+        const tied = [68, 59, 62, 59, 72, 58, 60, 48, 66, 48];
         [tied, mirrorCounts(tied)].forEach(counts => {
             const result = condition(windowOf(counts));
             expect(result.qualified).toBe(false);
@@ -50,42 +76,14 @@ describe('Even/Odd condition', () => {
         });
     });
 
-    it('several tied for most are the top two - all must be the right parity', () => {
-        //                     0   1   2   3   4   5   6   7   8   9
-        const both_even = [64, 59, 70, 58, 70, 58, 64, 50, 64, 43];
-        expect(condition(windowOf(both_even))).toMatchObject({ qualified: true, side: 'even' });
-        expect(condition(windowOf(both_even)).reason).toMatch(/^Most 2, 4 \(11.7%\) · /);
-        expect(condition(windowOf(mirrorCounts(both_even)))).toMatchObject({ qualified: true, side: 'odd' });
-
-        const even_and_odd = [64, 58, 64, 58, 70, 70, 64, 45, 64, 43];
-        const result = condition(windowOf(even_and_odd));
-        expect(result.qualified).toBe(false);
-        expect(result.reason).toMatch(/most \(tied\) not all even/);
-        expect(condition(windowOf(mirrorCounts(even_and_odd))).qualified).toBe(false);
-    });
-
-    it('several tied for 2nd must all be the right parity', () => {
-        //                      0   1   2   3   4   5   6   7   8   9
-        const second_even = [64, 59, 66, 58, 72, 58, 66, 50, 64, 43];
-        expect(condition(windowOf(second_even))).toMatchObject({ qualified: true, side: 'even' });
-        expect(condition(windowOf(second_even)).reason).toMatch(/^Most 4 \(12.0%\), 2nd 2, 6 \(11.0%\)/);
-        expect(condition(windowOf(mirrorCounts(second_even)))).toMatchObject({ qualified: true, side: 'odd' });
-
-        const second_mixed = [64, 58, 66, 66, 72, 58, 60, 49, 64, 43];
-        const result = condition(windowOf(second_mixed));
-        expect(result.qualified).toBe(false);
-        expect(result.reason).toMatch(/most \/ 2nd not both even/);
-        expect(condition(windowOf(mirrorCounts(second_mixed))).qualified).toBe(false);
-    });
-
     it('three even digits at 64 qualify; one of them at 63 does not', () => {
         //                0   1   2   3   4   5   6   7   8   9
-        const three = [64, 60, 66, 60, 72, 59, 60, 56, 60, 43];
+        const three = [66, 60, 62, 59, 72, 59, 60, 56, 64, 42];
         expect(condition(windowOf(three))).toMatchObject({ qualified: true, side: 'even' });
-        expect(condition(windowOf(three)).reason).toMatch(/· 3 even at 10.6%\+ \(0,2,4\) ·/);
+        expect(condition(windowOf(three)).reason).toMatch(/· 3 even at 10.6%\+ ·/);
         expect(condition(windowOf(mirrorCounts(three)))).toMatchObject({ qualified: true, side: 'odd' });
 
-        const two = [63, 60, 66, 60, 72, 59, 61, 56, 60, 43];
+        const two = [66, 60, 62, 59, 72, 59, 61, 56, 63, 42];
         const result = condition(windowOf(two));
         expect(result.qualified).toBe(false);
         expect(result.reason).toMatch(/only 2 even at 10.6%\+/);
@@ -94,7 +92,7 @@ describe('Even/Odd condition', () => {
 
     it('an even least digit fails the EVEN side', () => {
         //                     0   1   2   3   4   5   6   7   8   9
-        const least_even = [64, 59, 68, 58, 71, 59, 64, 58, 49, 50]; // least 8
+        const least_even = [68, 59, 66, 58, 72, 58, 62, 57, 44, 56]; // least 8
         const result = condition(windowOf(least_even));
         expect(result.qualified).toBe(false);
         expect(result.reason).toMatch(/least 8 is even/);
@@ -108,34 +106,36 @@ describe('Even/Odd condition', () => {
 
 describe('Even/Odd entry', () => {
     //                    0   1   2   3   4   5   6   7   8   9
-    const LEAST_3 = [64, 59, 68, 43, 71, 59, 64, 50, 64, 58]; // EVEN side, least digit 3
+    const LEAST_3 = [68, 59, 62, 44, 72, 58, 60, 56, 66, 55]; // EVEN side, least digit 3
 
     it('the window really has 3 as its single least, on the EVEN side', () => {
         expect(condition(windowOf(LEAST_3))).toMatchObject({ qualified: true, side: 'even', leastDigit: 3 });
     });
 
-    // EVEN: an even digit after a run of 2+ odd digits that hit the 3 before its last tick.
+    // EVEN: an even digit after a run of odd digits that hit the 3, then 2+ more odd digits.
     it.each([
-        [[3, 5, 4], true],
-        [[3, 1, 7, 8], true],
-        [[1, 3, 5, 2], true],
-        [[3, 4], false], // the run is only the 3
-        [[5, 3, 4], false], // no odd digit after the 3
-        [[9, 1, 2], false], // no 3 in the run
-        [[3, 5, 7], false], // the new digit is odd
+        [[3, 5, 7, 4], true],
+        [[3, 1, 9, 5, 2], true],
+        [[1, 3, 5, 7, 8], true],
+        [[3, 5, 4], false], // only one odd after the 3
+        [[5, 3, 1, 4], false], // only one odd after the 3
+        [[3, 4], false],
+        [[9, 1, 5, 2], false], // no 3 in the run
+        [[3, 5, 7, 9], false], // the new digit is odd
     ])('EVEN (least 3): ...%p -> %p', (tail, expected) => {
         expect(entry(windowOf(LEAST_3, tail), tail[tail.length - 1], { side: 'even' })).toBe(expected);
     });
 
-    // ODD: the mirror - least 6, an odd digit after a run of 2+ even digits that hit the 6.
+    // ODD: the mirror (d -> 9 - d) - least 6, an odd digit after the 6 and 2+ more even digits.
     it.each([
-        [[6, 4, 5], true],
-        [[6, 8, 2, 1], true],
-        [[8, 6, 4, 7], true],
+        [[6, 4, 2, 5], true],
+        [[6, 8, 0, 4, 7], true],
+        [[8, 6, 4, 2, 1], true],
+        [[6, 4, 5], false],
+        [[4, 6, 8, 5], false],
         [[6, 5], false],
-        [[4, 6, 5], false],
-        [[0, 8, 7], false],
-        [[6, 4, 2], false],
+        [[0, 8, 4, 7], false],
+        [[6, 4, 2, 0], false],
     ])('ODD (least 6): ...%p -> %p', (tail, expected) => {
         const odd_side = windowOf(mirrorCounts(LEAST_3), tail, true); // body ends with odd digits
         expect(condition(odd_side)).toMatchObject({ qualified: true, side: 'odd', leastDigit: 6 });
@@ -144,13 +144,13 @@ describe('Even/Odd entry', () => {
 
     it('a tie for least: entry is false', () => {
         //                0   1   2   3   4   5   6   7   8   9
-        const tied = [73, 59, 68, 46, 71, 59, 64, 50, 64, 46]; // 3 and 9 tie for least
-        const digits = windowOf(tied, [3, 5, 4]);
+        const tied = [68, 59, 62, 48, 72, 58, 60, 59, 66, 48]; // 3 and 9 tie for least
+        const digits = windowOf(tied, [3, 5, 7, 4]);
         expect(entry(digits, 4, { side: 'even' })).toBe(false);
     });
 
     it('uses the side it is given (the armed side), not the live one', () => {
-        const digits = windowOf(LEAST_3, [3, 5, 4]);
+        const digits = windowOf(LEAST_3, [3, 5, 7, 4]);
         expect(entry(digits, 4, { side: 'even' })).toBe(true);
         expect(entry(digits, 4, { side: 'odd' })).toBe(false);
     });

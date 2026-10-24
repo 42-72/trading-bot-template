@@ -11,6 +11,10 @@ import type { TAiStrategy, TConditionResult, TSide } from './types';
 const WINDOW = 600;
 const MIN_COUNT = 64;
 const DIGITS_NEEDED = 3;
+// Rule 1 looks at the TOP_PLACES most appearing digits.
+const TOP_PLACES = 3;
+// Entry: odd digits (for EVEN) that must follow the red bar inside the run.
+const AFTER_RED_BAR = 2;
 
 const parityOf = (digit: number): TSide => (digit % 2 === 0 ? 'even' : 'odd');
 const opposite = (side: TSide): TSide => (side === 'even' ? 'odd' : 'even');
@@ -18,10 +22,11 @@ const percent = (count: number) => `${((count / WINDOW) * 100).toFixed(1)}%`;
 
 type TRanking = {
     counts: number[];
-    /** The most appearing digits - all of them when several tie. */
+    /**
+     * The three most appearing digits, most first (ties by digit). A tie
+     * straddling 3rd place brings in every tied digit, so there can be more.
+     */
     top: number[];
-    /** The second most appearing digits; empty when several tie for most (they are the top two). */
-    second: number[];
     /** The least appearing digits - more than one is a tie, which never qualifies. */
     least: number[];
 };
@@ -31,28 +36,21 @@ const rank = (digits: number[]): TRanking => {
     digits.slice(-WINDOW).forEach(digit => {
         counts[digit] += 1;
     });
-    const all = counts.map((_, digit) => digit);
-    const max = Math.max(...counts);
-    const top = all.filter(digit => counts[digit] === max);
-    const rest = all.filter(digit => counts[digit] < max);
-    const second_count = rest.length ? Math.max(...rest.map(digit => counts[digit])) : -1;
-    const second = top.length >= 2 ? [] : rest.filter(digit => counts[digit] === second_count);
+    const sorted = counts.map((_, digit) => digit).sort((a, b) => counts[b] - counts[a] || a - b);
+    const third_count = counts[sorted[TOP_PLACES - 1]];
+    const top = sorted.filter(digit => counts[digit] >= third_count);
     const min = Math.min(...counts);
-    const least = all.filter(digit => counts[digit] === min);
-    return { counts, top, second, least };
+    const least = sorted.filter(digit => counts[digit] === min).sort((a, b) => a - b);
+    return { counts, top, least };
 };
-
-const list = (digits: number[], counts: number[]) =>
-    `${digits.join(', ')} (${digits.length ? percent(counts[digits[0]]) : '-'})`;
 
 type TSideCheck = { qualified: boolean; failures: string[]; strong: number[]; shortfall: number };
 
-const checkSide = ({ counts, top, second, least }: TRanking, side: TSide): TSideCheck => {
+const checkSide = ({ counts, top, least }: TRanking, side: TSide): TSideCheck => {
     const failures: string[] = [];
-    // Rule 1: the most and second most appearing digits are all of this parity.
-    const leaders = [...top, ...second];
-    if (!leaders.every(digit => parityOf(digit) === side)) {
-        failures.push(top.length >= 2 ? `most (tied) not all ${side}` : `most / 2nd not both ${side}`);
+    // Rule 1: the three most appearing digits (every one tied for 3rd too) are of this parity.
+    if (!top.every(digit => parityOf(digit) === side)) {
+        failures.push(top.length > TOP_PLACES ? `top 3 (with ties) not all ${side}` : `top 3 not all ${side}`);
     }
     // Rule 2: at least three digits of this parity at 10.6%+.
     const side_digits = counts.map((_, digit) => digit).filter(digit => parityOf(digit) === side);
@@ -75,10 +73,10 @@ const checkSide = ({ counts, top, second, least }: TRanking, side: TSide): TSide
 };
 
 /**
- * EVEN qualifies when the most and second most appearing digits are even, at
- * least 3 even digits each appear 64+ times, and there is exactly one least
- * appearing digit, which is odd. ODD is the mirror. Even is checked first.
- * A tie for least never qualifies either side.
+ * EVEN qualifies when the three most appearing digits are even (all of them,
+ * when a tie straddles 3rd place), at least 3 even digits each appear 64+
+ * times, and there is exactly one least appearing digit, which is odd. ODD is
+ * the mirror. Even is checked first. A tie for least never qualifies.
  */
 export const condition: TAiStrategy['condition'] = digits => {
     if (digits.length < WINDOW) {
@@ -90,17 +88,19 @@ export const condition: TAiStrategy['condition'] = digits => {
     }
 
     const ranking = rank(digits);
-    const { counts, top, second, least } = ranking;
+    const { counts, top, least } = ranking;
     const even = checkSide(ranking, 'even');
     const odd = checkSide(ranking, 'odd');
     const side: TSide = even.qualified || (!odd.qualified && parityOf(top[0]) === 'even') ? 'even' : 'odd';
     const shown = side === 'even' ? even : odd;
 
-    const leaders =
-        top.length >= 2 ? `Most ${list(top, counts)}` : `Most ${list(top, counts)}, 2nd ${list(second, counts)}`;
-    const strong = `${shown.strong.length} ${side} at 10.6%+${shown.strong.length ? ` (${shown.strong.join(',')})` : ''}`;
-    const least_text = least.length > 1 ? `least tied: ${list(least, counts)}` : `least ${list(least, counts)}`;
-    const stats = `${leaders} · ${strong} · ${least_text}`;
+    const top_text = `Top 3: ${top.map(digit => `${digit} (${percent(counts[digit])})`).join(', ')}`;
+    const strong = `${shown.strong.length} ${side} at 10.6%+`;
+    const least_text =
+        least.length > 1
+            ? `least tied: ${least.join(', ')} (${percent(counts[least[0]])})`
+            : `least ${least[0]} (${percent(counts[least[0]])})`;
+    const stats = `${top_text} · ${strong} · ${least_text}`;
 
     const result: TConditionResult = {
         qualified: even.qualified || odd.qualified,
@@ -117,10 +117,10 @@ export const condition: TAiStrategy['condition'] = digits => {
 
 /**
  * EVEN entry: the new digit is even, and just before it is an unbroken run of
- * 2+ odd digits that contains the least appearing digit (the single red bar
- * of the current window) anywhere but its last tick - the red bar was hit,
- * then at least one more odd digit, then the first even. ODD is the mirror.
- * A tie for least never enters.
+ * odd digits containing the least appearing digit (the single red bar of the
+ * current window) followed by at least two more odd digits - the red bar was
+ * hit, then 2+ more odd digits, then the first even. ODD is the mirror. A tie
+ * for least never enters.
  *
  * `digits` already ends with `newDigit` (as for Over/Under), so the run ends
  * at length-2. `side` is the side the market armed with.
@@ -134,7 +134,6 @@ export const entry: TAiStrategy['entry'] = (digits, newDigit, context) => {
     const run_parity = opposite(side);
     const run: number[] = [];
     for (let i = digits.length - 2; i >= 0 && parityOf(digits[i]) === run_parity; i--) run.unshift(digits[i]);
-    if (run.length < 2) return false;
-    // Anywhere in the run except its last tick.
-    return run.slice(0, -1).includes(least[0]);
+    // The red bar anywhere with at least AFTER_RED_BAR run ticks after it.
+    return run.slice(0, -AFTER_RED_BAR).includes(least[0]);
 };

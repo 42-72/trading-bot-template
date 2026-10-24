@@ -679,9 +679,9 @@ describe('AiScannerStore', () => {
         const EVEN_SIDE = [64, 59, 68, 43, 71, 59, 64, 50, 64, 58]; // EVEN qualifies, least 3
         const ODD_SIDE = mirrorCounts(EVEN_SIDE); // ODD qualifies, least 6
         const even_armed = eoWindow(EVEN_SIDE);
-        const even_entering = eoWindow(EVEN_SIDE, [3, 5, 4]); // red bar 3, one more odd, then even
+        const even_entering = eoWindow(EVEN_SIDE, [3, 5, 7, 4]); // red bar 3, two more odd, then even
         const odd_armed = eoWindow(ODD_SIDE, [], true);
-        const odd_entering = eoWindow(ODD_SIDE, [6, 4, 5], true); // red bar 6, one more even, then odd
+        const odd_entering = eoWindow(ODD_SIDE, [6, 4, 2, 5], true); // red bar 6, two more even, then odd
 
         it('arms with the side, and the winner writes AI DIRECTION 1 for EVEN into the Even/Odd engine', async () => {
             const { root, store } = await startScan('over', false, 'even_odd');
