@@ -285,7 +285,7 @@
                                 <field name="TEXT"></field>
                               </shadow>
                               <block type="text" id="sniper-sl-text-01">
-                                <field name="TEXT">SL hit, f*ck everyone </field>
+                                <field name="TEXT">AI hit SL </field>
                               </block>
                             </value>
                             <next>
@@ -340,7 +340,7 @@
                                 <field name="TEXT"></field>
                               </shadow>
                               <block type="text" id=",XkP}Nx{3^!+]Wvsy}}W">
-                                <field name="TEXT">TP hit, the bull </field>
+                                <field name="TEXT">AI hit TP$$ </field>
                               </block>
                             </value>
                             <next>

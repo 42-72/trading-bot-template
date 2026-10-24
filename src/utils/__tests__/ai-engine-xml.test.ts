@@ -75,6 +75,32 @@ describe('writeEngineValues', () => {
     });
 });
 
+describe('the TP / SL messages', () => {
+    const even_odd_engine = fs.readFileSync(path.join(__dirname, '../../assets/ai-engine/bull-ai-evenodd.xml'), 'utf8');
+    it.each([
+        ['Over/Under', () => engine],
+        ['Even/Odd', () => even_odd_engine],
+    ])(
+        '%s engine: "AI hit TP$$ " / "AI hit SL " - the old texts are gone, and it still parses and reads back',
+        (_, xml) => {
+            expect(xml()).toContain('<field name="TEXT">AI hit TP$$ </field>');
+            expect(xml()).toContain('<field name="TEXT">AI hit SL </field>');
+            expect(xml()).not.toContain('TP hit, the bull');
+            expect(xml()).not.toContain('SL hit, f*ck everyone');
+            expect(() => readEngineValues(xml())).not.toThrow();
+        }
+    );
+
+    it('the TP and SL messages are still followed by the total profit, unchanged', () => {
+        [engine, even_odd_engine].forEach(xml => {
+            ['AI hit TP$$ ', 'AI hit SL '].forEach(text => {
+                const at = xml.indexOf(`<field name="TEXT">${text}</field>`);
+                expect(xml.slice(at, at + 1200)).toContain('<block type="total_profit"');
+            });
+        });
+    });
+});
+
 describe('the Even/Odd engine', () => {
     const even_odd = fs.readFileSync(path.join(__dirname, '../../assets/ai-engine/bull-ai-evenodd.xml'), 'utf8');
     const { first_barrier, recovery_barrier, ...without_barriers } = values; // eslint-disable-line @typescript-eslint/no-unused-vars

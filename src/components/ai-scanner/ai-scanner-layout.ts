@@ -34,12 +34,17 @@ const visibleRect = (element: Element) => {
     return rect;
 };
 
-export const getSafeBounds = (): TBounds => {
+/**
+ * `ignore_run_drawer`: leave the run drawer out (the mobile AI panel when the
+ * drawer is open - it covers the whole screen and would leave no room).
+ */
+export const getSafeBounds = ({ ignore_run_drawer = false } = {}): TBounds => {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const bounds: TBounds = { top: 0, left: 0, right: vw, bottom: vh };
 
     BLOCKERS.forEach(({ selector, gap }) => {
+        if (ignore_run_drawer && (selector === '.run-panel__container' || selector === '.dc-drawer__toggle')) return;
         const extra = gap - EDGE_GAP;
         document.querySelectorAll(selector).forEach(element => {
             const rect = visibleRect(element);

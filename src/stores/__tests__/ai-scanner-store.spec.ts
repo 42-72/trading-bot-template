@@ -6,6 +6,7 @@ import { readEngineValues } from '@/utils/ai-engine-xml';
 import { loadBotIntoBuilder } from '@/utils/load-bot-into-builder';
 import AiScannerStore, {
     CONDITIONS_NOT_MET_MESSAGE,
+    DEFAULT_FORM,
     NO_MARKETS_OFFERED_MESSAGE,
     SCAN_STOPPED_MESSAGE,
 } from '../ai-scanner-store';
@@ -165,11 +166,32 @@ describe('AiScannerStore', () => {
     });
 
     describe('the form', () => {
-        it('keeps Scan & Run disabled until all four values are valid', async () => {
+        it('starts on the defaults - stake 10, martingale 2, TP 20, SL 50 - which are valid', async () => {
             const store = new AiScannerStore(makeRoot());
             store.setMarkets(MARKETS);
+            expect(store.form).toEqual({
+                strategy: 'over',
+                stake: '10',
+                martingale: '2',
+                take_profit: '20',
+                stop_loss: '50',
+            });
+            expect(store.form).toEqual(DEFAULT_FORM);
+            expect(store.can_start).toBe(true);
+        });
+
+        it('keeps Scan disabled until all four values are valid - and has no upper limits', async () => {
+            const store = new AiScannerStore(makeRoot());
+            store.setMarkets(MARKETS);
+            store.setFormField('stake', '');
             expect(store.can_start).toBe(false);
             fillForm(store);
+            expect(store.can_start).toBe(true);
+            store.setFormField('stake', '100000');
+            store.setFormField('martingale', '50');
+            store.setFormField('take_profit', '999999');
+            store.setFormField('stop_loss', '999999');
+            expect(store.form_errors).toEqual({});
             expect(store.can_start).toBe(true);
             store.setFormField('stake', '0.34');
             expect(store.form_errors.stake).toBeDefined();
@@ -195,12 +217,76 @@ describe('AiScannerStore', () => {
             expect(store.start_blocker).toMatch(/USD/);
         });
 
-        it('remembers the form, including the chosen strategy', async () => {
+        it('a page load never restores the previous values - the defaults every time', async () => {
+            localStorage.setItem('ai_scanner_form', JSON.stringify({ strategy: 'under', stake: '3' }));
             const first = new AiScannerStore(makeRoot());
             fillForm(first, 'under');
-            const second = new AiScannerStore(makeRoot());
-            expect(second.form).toMatchObject({ strategy: 'under', stake: '0.35', take_profit: '5', stop_loss: '10' });
+            const second = new AiScannerStore(makeRoot()); // the reload
+            expect(second.form).toEqual(DEFAULT_FORM);
             expect(second.use_test_strategy).toBe(false);
+            expect(localStorage.getItem('ai_scanner_form')).toBeNull();
+        });
+
+        it('switching strategy - Over <-> Under, or the Even/Odd tab - puts the defaults back', async () => {
+            const store = new AiScannerStore(makeRoot());
+            store.setFormField('stake', '3');
+            store.setFormField('take_profit', '7');
+            store.setFormField('strategy', 'under');
+            expect(store.form).toEqual({ ...DEFAULT_FORM, strategy: 'under' });
+            store.setFormField('stake', '4');
+            store.setActiveTab('even_odd');
+            expect(store.form).toMatchObject({ stake: '10', martingale: '2', take_profit: '20', stop_loss: '50' });
+            store.setFormField('stop_loss', '9');
+            store.setActiveTab('over_under');
+            expect(store.form.stop_loss).toBe('50');
+            // Picking the same strategy again changes nothing.
+            store.setFormField('stake', '6');
+            store.setFormField('strategy', 'under');
+            expect(store.form.stake).toBe('6');
+        });
+
+        it('reopening the panel with nothing running starts fresh: defaults, no old result or message', async () => {
+            const { root, store } = await startScan();
+            store.setPanelOpen(true);
+            store.onMarketTick('JD25', entering, 1, true);
+            store.onMarketTick('JD25', entering, 1);
+            await flush();
+            runInAction(() => {
+                root.transactions.statistics.total_profit = 5.2;
+                root.run_panel.is_running = false;
+            });
+            expect(store.stage).toBe('stopped');
+            expect(store.message).toMatch(/Take profit/);
+            expect(store.final_profit).toBe(5.2);
+            store.setFormField('stake', '3');
+
+            store.setPanelOpen(false);
+            store.togglePanel(); // reopen
+            expect(store.is_panel_open).toBe(true);
+            expect(store.stage).toBe('idle');
+            expect(store.message).toBe('');
+            expect(store.final_profit).toBeNull();
+            expect(store.target).toBeNull();
+            expect(store.form).toEqual(DEFAULT_FORM);
+        });
+
+        it('closing mid-scan keeps scanning; reopening shows the live scan, untouched', async () => {
+            const { root, store } = await startScan();
+            store.setPanelOpen(true);
+            store.onMarketTick('JD25', qualifying, 9, true);
+            store.setPanelOpen(false);
+            expect(store.stage).toBe('scanning');
+            expect(store.are_feeds_wanted).toBe(true);
+            store.onMarketTick('JD25', entering, 1); // the entry, with the panel closed
+            await flush();
+            expect(root.run_panel.onRunButtonClick).toHaveBeenCalledTimes(1);
+            expect(store.stage).toBe('running');
+            store.setPanelOpen(true);
+            expect(store.stage).toBe('running');
+            expect(store.target?.symbol).toBe('JD25');
+            store.setPanelOpen(false); // closing never stops the bot
+            expect(root.run_panel.onStopBotClick).not.toHaveBeenCalled();
+            expect(store.stage).toBe('running');
         });
 
         it('never runs the TEST strategy on a real account', async () => {

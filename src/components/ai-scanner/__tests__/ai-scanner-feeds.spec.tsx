@@ -3,7 +3,7 @@ import { useStore } from '@/hooks/useStore';
 import AiScannerStore from '@/stores/ai-scanner-store';
 import RootStore from '@/stores/root-store';
 import { loadBotIntoBuilder } from '@/utils/load-bot-into-builder';
-import { act, render } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import AiScanner from '../ai-scanner';
 
 // The real AiScanner, MarketFeed and useDigitAnalysis against a fake socket:
@@ -17,9 +17,13 @@ jest.mock('../../../assets/ai-engine/bull-ai-overunder.xml', () => {
 jest.mock('@/utils/load-bot-into-builder', () => ({ loadBotIntoBuilder: jest.fn() }));
 jest.mock('@/hooks/useApiBase', () => ({ useApiBase: () => ({ connectionStatus: 'opened', isAuthorized: true }) }));
 jest.mock('@/hooks/useSyntheticSymbols', () => ({ useSyntheticSymbols: () => [], MARKET_TOOL_SUBMARKETS: [] }));
-jest.mock('@deriv-com/ui', () => ({ useDevice: () => ({ isDesktop: true }) }));
+const mockDevice = { isDesktop: true };
+jest.mock('@deriv-com/ui', () => ({ useDevice: () => mockDevice }));
 jest.mock('../ai-scanner-button', () => () => null);
-jest.mock('../ai-scanner-panel', () => () => null);
+jest.mock('../ai-scanner-panel', () => {
+    const MockPanel = () => <div data-testid='ai-scanner-panel' />;
+    return MockPanel;
+});
 
 type TListener = (message: unknown) => void;
 const socket = {
@@ -241,6 +245,33 @@ describe('AI Scanner feeds after the winner', () => {
         expect(run_panel.onRunButtonClick).not.toHaveBeenCalled();
         expect(loadBotIntoBuilder).not.toHaveBeenCalled();
         warn.mockRestore();
+    });
+
+    it('on a phone or tablet, Run opening the run drawer leaves the AI panel open', async () => {
+        mockDevice.isDesktop = false;
+        try {
+            const run_panel = observable({ is_running: false, has_open_contract: false, is_drawer_open: false });
+            const root = {
+                run_panel,
+                client: observable({ is_logged_in: true, currency: 'USD', is_virtual: true, loginid: 'VRTC1' }),
+                transactions: observable({ statistics: { total_profit: 0 } }),
+                dashboard: { setActiveTab: jest.fn() },
+            } as unknown as RootStore;
+            const store = new AiScannerStore(root);
+            (useStore as jest.Mock).mockReturnValue({ ...root, ai_scanner: store });
+            render(<AiScanner />);
+            act(() => store.setPanelOpen(true));
+            expect(screen.getByTestId('ai-scanner-panel')).toBeInTheDocument();
+            act(() => {
+                runInAction(() => {
+                    run_panel.is_drawer_open = true; // what onRunButtonClick does
+                    run_panel.is_running = true;
+                });
+            });
+            expect(screen.getByTestId('ai-scanner-panel')).toBeInTheDocument();
+        } finally {
+            mockDevice.isDesktop = true;
+        }
     });
 
     it('a feed that is still mounted closes itself the moment the scan ends', async () => {

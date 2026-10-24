@@ -21,11 +21,12 @@ type TLayout = { position: TPoint; size: number; bounds: TBounds };
  * inside the safe area (never over the Run bar or the run panel column).
  * Mobile: the whole safe area - below the header, above the run bar.
  */
-const panelStyle = (layout: TLayout | null, is_desktop: boolean): React.CSSProperties => {
+const panelStyle = (layout: TLayout | null, is_desktop: boolean, is_drawer_open: boolean): React.CSSProperties => {
     if (!is_desktop) {
         // Measured fresh: the button that reports `layout` is hidden while
-        // the mobile panel is open.
-        const bounds = getSafeBounds();
+        // the mobile panel is open. With the run drawer open (Run opens it)
+        // the panel sits over it rather than vanishing.
+        const bounds = getSafeBounds({ ignore_run_drawer: is_drawer_open });
         return {
             top: bounds.top + GAP,
             left: bounds.left + GAP,
@@ -75,7 +76,9 @@ const AiScanner = observer(() => {
         return () => window.removeEventListener('resize', onResize);
     }, []);
 
-    // The mobile run drawer covers the screen when open - stay out of its way.
+    // The mobile run drawer covers the screen when open: the button stays out
+    // of its way. The PANEL stays open - Run opens the drawer, and the panel
+    // must keep showing the run until the trader closes it.
     const is_hidden = !isDesktop && run_panel.is_drawer_open;
     // On mobile the panel fills the safe area, so the button would sit on it.
     const shows_button = !is_hidden && (isDesktop || !ai_scanner.is_panel_open);
@@ -85,8 +88,11 @@ const AiScanner = observer(() => {
             {ai_scanner.are_feeds_wanted &&
                 ai_scanner.scan_markets.map(market => <MarketFeed key={market.symbol} symbol={market.symbol} />)}
             {shows_button && <AiScannerButton is_desktop={isDesktop} onLayout={onLayout} />}
-            {!is_hidden && ai_scanner.is_panel_open && (
-                <AiScannerPanel style={panelStyle(layout, isDesktop)} is_desktop={isDesktop} />
+            {ai_scanner.is_panel_open && (
+                <AiScannerPanel
+                    style={panelStyle(layout, isDesktop, run_panel.is_drawer_open)}
+                    is_desktop={isDesktop}
+                />
             )}
         </>
     );

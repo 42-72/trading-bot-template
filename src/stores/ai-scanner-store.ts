@@ -96,7 +96,8 @@ export type TDropNotice = { id: number; text: string };
 
 type TFormErrors = Partial<Record<keyof TAiScannerForm, string>>;
 
-const FORM_STORAGE_KEY = 'ai_scanner_form';
+// The form used to be remembered here; it now always starts from the defaults.
+const OLD_FORM_STORAGE_KEY = 'ai_scanner_form';
 export const SCAN_STOPPED_MESSAGE = 'Scan stopped.';
 export const NO_MARKETS_OFFERED_MESSAGE = 'No markets offer this trade right now.';
 // No scanner feed with a live tick for this long (they tick about once a
@@ -113,26 +114,18 @@ const DROP_NOTICE_MS = 3000;
 
 export const CONDITIONS_NOT_MET_MESSAGE = 'Conditions not met — no entry found.';
 
-const DEFAULT_FORM: TAiScannerForm = {
+/**
+ * What the form shows on every page load, every fresh open of the panel and
+ * every switch of strategy (Over / Under / the Even/Odd tab) - never the
+ * trader's previous values. No upper limits; the only rules are stake >= the
+ * minimum, martingale >= 1, take profit and stop loss > 0.
+ */
+export const DEFAULT_FORM: TAiScannerForm = {
     strategy: 'over',
-    stake: '',
+    stake: '10',
     martingale: '2',
-    take_profit: '',
-    stop_loss: '',
-};
-
-const readStoredForm = (): TAiScannerForm => {
-    try {
-        const stored = JSON.parse(localStorage.getItem(FORM_STORAGE_KEY) ?? '{}');
-        const form = { ...DEFAULT_FORM };
-        (Object.keys(DEFAULT_FORM) as (keyof TAiScannerForm)[]).forEach(key => {
-            if (typeof stored?.[key] === 'string') (form as Record<string, string>)[key] = stored[key];
-        });
-        if (!(form.strategy in OVER_UNDER_SETUPS)) form.strategy = DEFAULT_FORM.strategy;
-        return form;
-    } catch {
-        return { ...DEFAULT_FORM };
-    }
+    take_profit: '20',
+    stop_loss: '50',
 };
 
 const parseAmount = (value: string) => {
@@ -174,7 +167,7 @@ export default class AiScannerStore {
 
     is_panel_open = false;
     active_tab: TAiScannerTab = 'over_under';
-    form: TAiScannerForm = readStoredForm();
+    form: TAiScannerForm = { ...DEFAULT_FORM };
     // Demo-only pipeline check - never remembered, off on every visit.
     use_test_strategy = false;
 
@@ -237,6 +230,11 @@ export default class AiScannerStore {
 
     constructor(root_store: RootStore) {
         this.root_store = root_store;
+        try {
+            localStorage.removeItem(OLD_FORM_STORAGE_KEY); // values the form no longer restores
+        } catch {
+            // Storage unavailable - nothing to clean up.
+        }
         installSilenceLog(); // [AI-SILENCE] temporary diagnostics
 
         makeObservable<AiScannerStore, 'finish'>(this, {
@@ -362,26 +360,47 @@ export default class AiScannerStore {
     }
 
     togglePanel = () => {
-        this.is_panel_open = !this.is_panel_open;
+        this.setPanelOpen(!this.is_panel_open);
     };
 
+    /**
+     * Opening with nothing running starts fresh: no old result or message,
+     * the defaults in the form. Closing only hides the panel - a scan keeps
+     * scanning and a bot keeps running; reopening shows them live.
+     */
     setPanelOpen = (is_open: boolean) => {
+        if (is_open && !this.is_panel_open && !this.is_active) this.startFresh();
         this.is_panel_open = is_open;
     };
+
+    private startFresh() {
+        this.stage = 'idle';
+        this.message = '';
+        this.final_profit = null;
+        this.target = null;
+        this.locked = null;
+        this.resetForm();
+    }
+
+    /** The defaults, for the strategy given (the current one by default). */
+    private resetForm(strategy: TOverUnderStrategyId = this.form.strategy) {
+        this.form = { ...DEFAULT_FORM, strategy };
+    }
 
     setActiveTab = (tab: TAiScannerTab) => {
         // The tab is part of the run - it can't change while one is going.
         if (this.is_active) return;
+        if (tab !== this.active_tab) this.resetForm(); // a strategy switch: back to the defaults
         this.active_tab = tab;
     };
 
     setFormField = <K extends keyof TAiScannerForm>(key: K, value: TAiScannerForm[K]) => {
-        this.form[key] = value;
-        try {
-            localStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(this.form));
-        } catch {
-            // Storage unavailable - the form just won't be remembered.
+        // Over <-> Under is a strategy switch: back to the defaults.
+        if (key === 'strategy' && value !== this.form.strategy) {
+            this.resetForm(value as TOverUnderStrategyId);
+            return;
         }
+        this.form[key] = value;
     };
 
     setUseTestStrategy = (use: boolean) => {
