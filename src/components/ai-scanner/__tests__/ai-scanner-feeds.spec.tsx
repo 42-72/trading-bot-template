@@ -22,7 +22,7 @@ jest.mock('@deriv-com/ui', () => ({ useDevice: () => mockDevice }));
 jest.mock('../ai-scanner-button', () => () => null);
 jest.mock('../ai-scanner-panel', () => {
     const MockPanel = ({ style }: { style: React.CSSProperties }) => (
-        <div data-testid='ai-scanner-panel' data-bottom={style.bottom} />
+        <div data-testid='ai-scanner-panel' data-bottom={style.bottom} data-style={JSON.stringify(style)} />
     );
     return MockPanel;
 });
@@ -247,6 +247,60 @@ describe('AI Scanner feeds after the winner', () => {
         expect(run_panel.onRunButtonClick).not.toHaveBeenCalled();
         expect(loadBotIntoBuilder).not.toHaveBeenCalled();
         warn.mockRestore();
+    });
+
+    const renderScanner = (is_drawer_open: boolean) => {
+        const run_panel = observable({ is_running: false, has_open_contract: false, is_drawer_open });
+        const root = {
+            run_panel,
+            client: observable({ is_logged_in: true, currency: 'USD', is_virtual: true, loginid: 'VRTC1' }),
+            transactions: observable({ statistics: { total_profit: 0 } }),
+            dashboard: { setActiveTab: jest.fn() },
+        } as unknown as RootStore;
+        const store = new AiScannerStore(root);
+        (useStore as jest.Mock).mockReturnValue({ ...root, ai_scanner: store });
+        render(<AiScanner />);
+        act(() => store.setPanelOpen(true));
+        return JSON.parse(screen.getByTestId('ai-scanner-panel').getAttribute('data-style') ?? '{}');
+    };
+
+    it('on a laptop the panel box is the whole window less 16px a side, 420 wide - centred by the stylesheet', () => {
+        Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1366 });
+        Object.defineProperty(window, 'innerHeight', { configurable: true, value: 768 });
+        expect(renderScanner(false)).toEqual({
+            top: 16,
+            bottom: 16,
+            left: 0,
+            right: 0,
+            width: 420,
+            maxHeight: 736,
+        });
+    });
+
+    it('on a phone the panel box runs 12px below the header to 12px above the toggle bar', () => {
+        mockDevice.isDesktop = false;
+        Object.defineProperty(window, 'innerWidth', { configurable: true, value: 375 });
+        Object.defineProperty(window, 'innerHeight', { configurable: true, value: 667 });
+        const placed: HTMLElement[] = [];
+        const place = (className: string, top: number, bottom: number) => {
+            const element = document.createElement('div');
+            element.className = className;
+            element.getBoundingClientRect = () =>
+                ({ top, bottom, left: 0, right: 375, width: 375, height: bottom - top }) as DOMRect;
+            document.body.appendChild(element);
+            placed.push(element);
+        };
+        try {
+            place('deriv-header', 0, 56);
+            place('dc-drawer__toggle', 569, 605);
+            place('controls__section', 605, 667);
+            const style = renderScanner(false);
+            expect(style).toEqual({ top: 68, left: 8, right: 8, bottom: 110, maxHeight: 489 });
+            expect(667 - style.bottom).toBe(569 - 12); // the panel can't reach the toggle bar
+        } finally {
+            mockDevice.isDesktop = true;
+            placed.forEach(element => element.remove());
+        }
     });
 
     it('on a phone, after the drawer closes again the panel ends 12px above its toggle bar', async () => {

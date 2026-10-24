@@ -3,9 +3,13 @@
 // dark both work. 1rem = 10px. Positions come from JS (ai-scanner-layout.ts,
 // measured live), which is why left/top/bottom are inline styles here.
 
-// Over the page content, under modals (--zindex-modal: 6) and the Run
-// controls; the button and panel never overlap those anyway.
+// The button: over the page content, under modals (--zindex-modal: 6) and
+// the Run controls; it never overlaps those anyway.
 $ai-scanner-z: 5;
+
+// The laptop panel opens in the middle of the window, over the Run bar
+// (main.scss: up to 100) and the run panel.
+$ai-scanner-panel-desktop-z: 101;
 
 .ai-scanner-button {
     position: fixed;
@@ -92,10 +96,11 @@ $ai-scanner-z: 5;
     z-index: $ai-scanner-z;
     display: flex;
     flex-direction: column;
-    // JS sets the exact max-height from the safe area; this only guarantees
-    // it never outgrows the small viewport (svh - see layout.scss).
-    max-height: calc(100vh - 12rem);
-    max-height: calc(100svh - 12rem);
+    // JS sets the box (top / bottom / left / right): the panel is as tall as
+    // its content, centred in it, never taller than it - then only the
+    // middle scrolls and the footer row stays in view.
+    height: fit-content;
+    margin: auto;
     border: 0.1rem solid var(--border-normal);
     border-radius: 1.2rem;
     background: var(--general-main-1);
@@ -105,8 +110,8 @@ $ai-scanner-z: 5;
     box-shadow: var(--shadow-menu);
     overflow: hidden;
 
-    &--mobile {
-        max-height: none;
+    &:not(&--mobile) {
+        z-index: $ai-scanner-panel-desktop-z;
     }
 
     &__header {
@@ -334,19 +339,27 @@ $ai-scanner-z: 5;
         background: var(--general-main-1);
     }
 
-    // Scan on top, Load & Run below: one centred column, same width.
+    // One row: Scan / Stop scan left, Load & Run right, equal widths,
+    // centred in the footer.
     &__buttons {
-        display: flex;
-        flex-direction: column;
-        gap: 0.8rem;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.2rem;
         width: 100%;
-        max-width: 32rem;
+        max-width: 40rem;
         margin: 0 auto;
 
         > button {
-            width: 100%;
+            min-width: 0;
             text-align: center;
         }
+    }
+
+    // Touch: at least 44px tall.
+    &--mobile &__primary,
+    &--mobile &__secondary,
+    &--mobile &__status-light {
+        height: 4.4rem;
     }
 
     // "Load & Run": shows what the AI is doing, never pressed.

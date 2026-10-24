@@ -340,6 +340,14 @@ describe('AI Scanner panel - pinned footer', () => {
         expect(order.indexOf('Scan')).toBeLessThan(order.indexOf('Load & Run'));
     });
 
+    it('one row: Scan / Stop scan first (left), Load & Run second (right)', () => {
+        const store = setup();
+        const row = document.querySelector('.ai-scanner-panel__buttons') as HTMLElement;
+        expect(Array.from(row.children).map(button => button.textContent)).toEqual(['Scan', 'Load & Run']);
+        atStage(store, 'scanning');
+        expect(Array.from(row.children).map(button => button.textContent)).toEqual(['Stop scan', 'Load & Run']);
+    });
+
     it('stays pinned while a scan shows its status', () => {
         const store = setup();
         atStage(store, 'scanning');
