@@ -5,11 +5,14 @@ import {
     AI_SCANNER_CURRENCY,
     AI_SCANNER_MIN_STAKE,
     AI_SCANNER_SCAN_LIMIT_SECONDS,
+    AI_SCANNER_TAB_CONTRACT_TYPES,
     OVER_UNDER_SETUPS,
     TOverUnderStrategyId,
 } from '@/constants/ai-engine';
 import { DBOT_TABS } from '@/constants/bot-contents';
+import { observer as globalObserver } from '@/external/bot-skeleton/utils/observer';
 import { readEngineValues, TEngineValues, writeEngineValues } from '@/utils/ai-engine-xml';
+import { filterOfferedMarkets } from '@/utils/ai-scanner-offered';
 import { getOverUnderStrategy, TConditionResult } from '@/utils/ai-strategies';
 import { createAiEngineStrategyId } from '@/utils/library-strategies';
 import { loadBotIntoBuilder } from '@/utils/load-bot-into-builder';
@@ -17,20 +20,23 @@ import RootStore from './root-store';
 
 // The AI Scanner pipeline (components/ai-scanner):
 //
-//   idle -> scanning   every market's last 600 digits, live, all at once. On
+//   idle -> checking   contracts_for for every market: only those offering the
+//                      tab's contract types at 1 tick are scanned
+//        -> scanning   every offered market's last 600 digits, live, all at once. On
 //                      each tick: condition() decides whether that market is
 //                      qualified (any number can be); a qualified market whose
 //                      entry() is true on that tick wins. The engine is loaded
 //                      in the background when the first market qualifies.
 //        -> starting   first entry wins: feeds closed, the engine pointed at
 //                      the winning market and read back, stats cleared, Run
-//        -> running    the bot trades until its own TP / SL
+//        -> running    the bot trades until its own TP / SL (an error before
+//                      its first contract settles: stopped, 'Run failed on')
 //        -> stopped    (or 'stopping' while a cancelled run closes)
 //
 // The form only ever feeds a run through `locked`, the snapshot taken when
 // Scan & Run is pressed - editing the form mid-run changes nothing.
 
-export type TAiScannerStage = 'idle' | 'scanning' | 'starting' | 'running' | 'stopping' | 'stopped';
+export type TAiScannerStage = 'idle' | 'checking' | 'scanning' | 'starting' | 'running' | 'stopping' | 'stopped';
 
 /** Where the background engine load stands during a scan. */
 export type TEngineState = 'none' | 'loading' | 'loaded';
@@ -66,6 +72,7 @@ export type TFeedStatus = { status: string; n: number };
 type TFormErrors = Partial<Record<keyof TAiScannerForm, string>>;
 
 const FORM_STORAGE_KEY = 'ai_scanner_form';
+export const NO_MARKETS_OFFERED_MESSAGE = 'No markets offer this trade right now.';
 export const CONDITIONS_NOT_MET_MESSAGE = `Conditions not met — no market qualified in ${
     AI_SCANNER_SCAN_LIMIT_SECONDS / 60
 } minutes.`;
@@ -150,6 +157,8 @@ export default class AiScannerStore {
     qualified: TQualifiedMarket[] = [];
     engine_state: TEngineState = 'none';
     markets: TAiScannerMarket[] = [];
+    /** This scan's markets: those of `markets` whose contracts_for offers the trade (checking stage). */
+    scan_markets: TAiScannerMarket[] = [];
     feed_status: Record<string, TFeedStatus> = {};
     /** Last thing the pipeline wants the trader to know (why it went back to scanning, why it stopped...). */
     message = '';
@@ -166,6 +175,10 @@ export default class AiScannerStore {
 
     // Not observable: bookkeeping for one pipeline run.
     private run_token = 0;
+    // Set when the engine errors before its first contract settles; the stop
+    // that follows ends the run with it (onBotStopped).
+    private run_failure: string | null = null;
+    private stopRunErrorListeners: (() => void) | null = null;
     private scan_timer: ReturnType<typeof setTimeout> | null = null;
     private engine_strategy_id: string | null = null;
     private engine_load: Promise<boolean> | null = null;
@@ -195,6 +208,7 @@ export default class AiScannerStore {
             qualified: observable.ref,
             engine_state: observable,
             markets: observable.ref,
+            scan_markets: observable.ref,
             feed_status: observable,
             message: observable,
             final_profit: observable,
@@ -227,7 +241,7 @@ export default class AiScannerStore {
         reaction(
             () => this.root_store.run_panel.is_stop_button_visible,
             is_live => {
-                if (is_live && this.stage === 'scanning') {
+                if (is_live && this.is_pre_run) {
                     this.finish('idle', 'Cancelled: another bot was started.');
                 } else if (!is_live && ['running', 'stopping'].includes(this.stage)) {
                     this.onBotStopped();
@@ -254,9 +268,9 @@ export default class AiScannerStore {
         return !['idle', 'stopped'].includes(this.stage);
     }
 
-    /** Scanning, before any entry hit - Cancel ends it without touching a bot. */
+    /** Checking or scanning, before any entry hit - Cancel ends it without touching a bot. */
     get is_pre_run() {
-        return this.stage === 'scanning';
+        return this.stage === 'checking' || this.stage === 'scanning';
     }
 
     /**
@@ -376,7 +390,7 @@ export default class AiScannerStore {
         });
     }
 
-    /** Load & Run: lock the form and start scanning. */
+    /** Scan & Run: lock the form, check which markets offer the trade, then scan those. */
     start = () => {
         if (!this.can_start) return;
         this.run_token += 1;
@@ -391,22 +405,48 @@ export default class AiScannerStore {
         };
         this.target = null;
         this.final_profit = null;
+        this.run_failure = null;
         this.engine_strategy_id = null;
         this.engine_load = null;
         this.engine_state = 'none';
         this.qualified_by_symbol.clear();
         this.qualified = [];
+        this.scan_markets = [];
         this.feed_status = {};
         this.message = '';
         this.scan_results.clear();
         this.scan_progress = null;
         this.scan_progress_published_at = 0;
+        this.stage = 'checking';
+
+        // Saved now, while it is still the trader's: loading the engine
+        // replaces it, and nothing else would have put unsaved edits in Recent.
+        this.root_store.run_panel.dbot.saveRecentWorkspace();
+
+        this.checkOfferedMarkets(this.run_token);
+    };
+
+    /** Fresh contracts_for for every market; scan only those offering this tab's trade. */
+    private async checkOfferedMarkets(token: number) {
+        const offered = await filterOfferedMarkets(this.markets, AI_SCANNER_TAB_CONTRACT_TYPES[this.active_tab]);
+        if (token !== this.run_token || this.stage !== 'checking') return;
+        runInAction(() => {
+            if (offered.length === 0) {
+                this.finish('idle', NO_MARKETS_OFFERED_MESSAGE);
+                return;
+            }
+            this.scan_markets = offered;
+            this.startScanning(token);
+        });
+    }
+
+    private startScanning(token: number) {
         this.stage = 'scanning';
 
         // Each feed seeds its window from ticks_history (count 600) the
         // moment it mounts, and condition() runs on that history straight
-        // away - no warm-up. The limit covers finding a market only.
-        const token = this.run_token;
+        // away - no warm-up. The limit covers finding a market only, and
+        // starts once the markets are known.
         const limit_ms = AI_SCANNER_SCAN_LIMIT_SECONDS * 1000;
         this.scan_deadline = Date.now() + limit_ms;
         this.clearScanTimer();
@@ -422,11 +462,7 @@ export default class AiScannerStore {
             }),
             limit_ms
         );
-
-        // Saved now, while it is still the trader's: loading the engine
-        // replaces it, and nothing else would have put unsaved edits in Recent.
-        this.root_store.run_panel.dbot.saveRecentWorkspace();
-    };
+    }
 
     /** Cancel at any stage. A running bot is stopped through the Stop button's own path. */
     cancel = () => {
@@ -464,7 +500,7 @@ export default class AiScannerStore {
             this.finish('idle', 'Cancelled: the TEST strategy only runs on a demo account.');
             return;
         }
-        const market = this.markets.find(item => item.symbol === symbol);
+        const market = this.scan_markets.find(item => item.symbol === symbol);
         if (!market) return;
 
         const result = this.strategy.condition(digits);
@@ -517,7 +553,7 @@ export default class AiScannerStore {
         });
         const best = closest as { text: string; reason: string } | null;
         this.scan_progress = {
-            checked: this.scan_results.size,
+            checked: this.scan_markets.length,
             last_check_at: now,
             closest: best ? { text: best.text, reason: best.reason } : null,
         };
@@ -533,6 +569,8 @@ export default class AiScannerStore {
     private finish(stage: 'idle' | 'stopped', message: string) {
         this.run_token += 1;
         this.clearScanTimer();
+        this.stopRunErrorListeners?.();
+        this.stopRunErrorListeners = null;
         this.scan_deadline = null;
         this.stage = stage;
         this.message = message;
@@ -674,6 +712,7 @@ export default class AiScannerStore {
         // Take profit and stop loss are measured from zero: the engine's
         // total_profit is session-wide (Total.js) and only clearStat resets it.
         run_panel.clearStat();
+        this.listenForRunErrors(winner);
         await run_panel.onRunButtonClick();
         if (token !== this.run_token) return;
 
@@ -682,12 +721,55 @@ export default class AiScannerStore {
                 this.stage = 'running';
                 this.message = '';
             } else {
-                this.finish('idle', 'The bot did not start - see the Journal.');
+                this.finish('idle', this.run_failure ?? 'The bot did not start - see the Journal.');
             }
         });
     }
 
+    /**
+     * An engine error before its first contract settles (Deriv refusing the
+     * buy, say) ends the run: the bot is stopped through the Stop button's
+     * own path and the panel goes back to its start state with the reason.
+     * Without this, an error the engine counts as recoverable makes it
+     * restart over and over (restart-on-error is on), with the run panel
+     * showing "Buying contract" and the scanner never seeing the bot stop.
+     * Errors after the first contract are the engine's to handle as usual.
+     */
+    private listenForRunErrors(winner: TAiScannerTarget) {
+        this.stopRunErrorListeners?.();
+        const onError = (data: unknown) => {
+            if (this.run_failure || !['starting', 'running'].includes(this.stage)) return;
+            const statistics = this.root_store.transactions.statistics as { number_of_runs?: number };
+            if ((statistics.number_of_runs ?? 0) > 0) return;
+
+            const error = data as { message?: string; error?: { message?: string } } | string | undefined;
+            const message =
+                (typeof error === 'string' ? error : (error?.error?.message ?? error?.message)) || 'Unknown error';
+            this.run_failure = `Run failed on ${winner.text}: ${message}`;
+
+            // After the engine's own handling of this error has run (the emit
+            // is synchronous): the same as the trader pressing Stop now.
+            setTimeout(() => {
+                if (!this.run_failure) return;
+                if (this.root_store.run_panel.is_stop_button_visible) this.root_store.run_panel.onStopBotClick();
+                else this.onBotStopped();
+            }, 0);
+        };
+        globalObserver.register('Error', onError);
+        globalObserver.register('ui.log.error', onError);
+        this.stopRunErrorListeners = () => {
+            globalObserver.unregister('Error', onError);
+            globalObserver.unregister('ui.log.error', onError);
+        };
+    }
+
     private onBotStopped() {
+        if (this.run_failure) {
+            const failure = this.run_failure;
+            this.run_failure = null;
+            runInAction(() => this.finish('idle', failure));
+            return;
+        }
         const { total_profit } = this.root_store.transactions.statistics;
         const locked = this.locked;
         let message = 'The bot stopped. See the Journal for why.';

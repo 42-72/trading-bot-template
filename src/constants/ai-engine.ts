@@ -50,6 +50,14 @@ export const contractWinRate = (setup: TOverUnderSetup, barrier: number) =>
     setup.ai_direction === 1 ? (9 - barrier) * 10 : barrier * 10;
 
 export const AI_SCANNER_TICK_WINDOW = 600;
+
+// The contract types each scanner tab trades. A market is scanned only when
+// its live contracts_for offers all of them at a 1-tick duration
+// (utils/ai-scanner-offered.ts).
+export const AI_SCANNER_TAB_CONTRACT_TYPES = {
+    over_under: ['DIGITOVER', 'DIGITUNDER'],
+    even_odd: ['DIGITEVEN', 'DIGITODD'],
+} as const;
 // How long Load & Run may spend FINDING a qualifying market. Once a market is
 // locked the limit no longer applies - it waits for the entry for as long as
 // the condition holds (AiScannerStore).

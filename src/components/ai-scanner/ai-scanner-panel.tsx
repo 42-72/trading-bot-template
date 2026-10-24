@@ -29,6 +29,7 @@ const STAGES: { key: string; label: () => string }[] = [
 
 // 'Waiting for entry' is part of scanning: at least one market qualified.
 const stageIndex = (stage: TAiScannerStage, has_qualified: boolean) => {
+    if (stage === 'checking') return 0;
     if (stage === 'scanning') return has_qualified ? 1 : 0;
     if (stage === 'starting') return 2;
     if (stage === 'running') return 3;
@@ -205,15 +206,19 @@ const ScanProgress = observer(() => {
 
 const RunStatus = observer(() => {
     const ai_scanner = useAiScanner();
-    const { stage, locked, target, message, feed_status, markets, final_profit, scan_deadline, qualified } = ai_scanner;
+    const { stage, locked, target, message, feed_status, scan_markets, final_profit, scan_deadline, qualified } =
+        ai_scanner;
     if (!locked) return null;
     const setup = OVER_UNDER_SETUPS[locked.strategy];
     const current = stageIndex(stage, qualified.length > 0);
-    const live = markets.filter(market => feed_status[market.symbol]?.status === 'live').length;
-    const failed = markets.filter(market => feed_status[market.symbol]?.status === 'failed').length;
+    const live = scan_markets.filter(market => feed_status[market.symbol]?.status === 'live').length;
+    const failed = scan_markets.filter(market => feed_status[market.symbol]?.status === 'failed').length;
 
     return (
         <div className='ai-scanner-panel__status'>
+            {stage === 'checking' && (
+                <p className='ai-scanner-panel__headline'>{localize('Checking which markets offer this trade…')}</p>
+            )}
             {stage === 'scanning' && scan_deadline !== null && <ScanCountdown deadline={scan_deadline} />}
             {stage === 'scanning' && <ScanProgress />}
             <ol className='ai-scanner-panel__stages'>
@@ -234,7 +239,7 @@ const RunStatus = observer(() => {
                 <p className='ai-scanner-panel__meta'>
                     {localize('{{live}} of {{total}} markets live (last 600 ticks each)', {
                         live,
-                        total: markets.length,
+                        total: scan_markets.length,
                     })}
                     {failed > 0 && ` · ${localize('{{failed}} could not load', { failed })}`}
                 </p>

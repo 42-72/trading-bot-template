@@ -83,7 +83,7 @@ const AiScanner = observer(() => {
     return (
         <>
             {ai_scanner.are_feeds_wanted &&
-                ai_scanner.markets.map(market => <MarketFeed key={market.symbol} symbol={market.symbol} />)}
+                ai_scanner.scan_markets.map(market => <MarketFeed key={market.symbol} symbol={market.symbol} />)}
             {shows_button && <AiScannerButton is_desktop={isDesktop} onLayout={onLayout} />}
             {!is_hidden && ai_scanner.is_panel_open && (
                 <AiScannerPanel style={panelStyle(layout, isDesktop)} is_desktop={isDesktop} />

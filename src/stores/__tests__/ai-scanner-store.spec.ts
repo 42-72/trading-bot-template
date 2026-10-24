@@ -3,7 +3,8 @@ import { observable, runInAction } from 'mobx';
 import path from 'path';
 import { readEngineValues } from '@/utils/ai-engine-xml';
 import { loadBotIntoBuilder } from '@/utils/load-bot-into-builder';
-import AiScannerStore, { CONDITIONS_NOT_MET_MESSAGE } from '../ai-scanner-store';
+import { observer as globalObserver } from '@/external/bot-skeleton/utils/observer';
+import AiScannerStore, { CONDITIONS_NOT_MET_MESSAGE, NO_MARKETS_OFFERED_MESSAGE } from '../ai-scanner-store';
 import RootStore from '../root-store';
 
 // jest stubs *.xml imports - hand the store the real engine.
@@ -14,6 +15,24 @@ jest.mock('../../assets/ai-engine/bull-ai-overunder.xml', () => {
 });
 
 jest.mock('@/utils/load-bot-into-builder', () => ({ loadBotIntoBuilder: jest.fn() }));
+
+// contracts_for on the app's socket: every market offers all digit contracts
+// at 1-10 ticks unless a test says otherwise in `offerings`.
+const ALL_DIGITS = ['DIGITMATCH', 'DIGITDIFF', 'DIGITODD', 'DIGITEVEN', 'DIGITOVER', 'DIGITUNDER'].map(
+    contract_type => ({ contract_type, min_contract_duration: '1t', max_contract_duration: '10t' })
+);
+let offerings: Record<string, unknown[] | 'error'> = {};
+jest.mock('@/external/bot-skeleton/services/api/api-base', () => ({
+    api_base: {
+        api: {
+            send: jest.fn(async ({ contracts_for }: { contracts_for: string }) => {
+                const reply = offerings[contracts_for] ?? ALL_DIGITS;
+                if (reply === 'error') throw { error: { code: 'InternalServerError', message: 'error' } };
+                return { contracts_for: { available: reply } };
+            }),
+        },
+    },
+}));
 
 const ENGINE = fs.readFileSync(path.join(__dirname, '../../assets/ai-engine/bull-ai-overunder.xml'), 'utf8');
 
@@ -87,13 +106,15 @@ const fillForm = (store: AiScannerStore, strategy: 'over' | 'under' = 'over') =>
     store.setFormField('stop_loss', '10');
 };
 
-const startScan = (strategy: 'over' | 'under' = 'over', use_test = false) => {
+// Scan & Run, then let the contracts_for check finish.
+const startScan = async (strategy: 'over' | 'under' = 'over', use_test = false) => {
     const root = makeRoot();
     const store = new AiScannerStore(root);
     store.setMarkets(MARKETS);
     fillForm(store, strategy);
     store.setUseTestStrategy(use_test);
     store.start();
+    await flush();
     return { root, store };
 };
 
@@ -102,6 +123,7 @@ const qualifiedSymbols = (store: AiScannerStore) => store.qualified.map(market =
 describe('AiScannerStore', () => {
     beforeEach(() => {
         localStorage.clear();
+        offerings = {};
         workspace_xml = '';
         delete workspace.current_strategy_id;
         (window as unknown as { Blockly: unknown }).Blockly = {
@@ -116,7 +138,7 @@ describe('AiScannerStore', () => {
     });
 
     describe('the form', () => {
-        it('keeps Scan & Run disabled until all four values are valid', () => {
+        it('keeps Scan & Run disabled until all four values are valid', async () => {
             const store = new AiScannerStore(makeRoot());
             store.setMarkets(MARKETS);
             expect(store.can_start).toBe(false);
@@ -132,7 +154,7 @@ describe('AiScannerStore', () => {
             expect(store.can_start).toBe(false);
         });
 
-        it('refuses to start while a bot is running, or on a non-USD account', () => {
+        it('refuses to start while a bot is running, or on a non-USD account', async () => {
             const root = makeRoot();
             const store = new AiScannerStore(root);
             store.setMarkets(MARKETS);
@@ -146,7 +168,7 @@ describe('AiScannerStore', () => {
             expect(store.start_blocker).toMatch(/USD/);
         });
 
-        it('remembers the form, including the chosen strategy', () => {
+        it('remembers the form, including the chosen strategy', async () => {
             const first = new AiScannerStore(makeRoot());
             fillForm(first, 'under');
             const second = new AiScannerStore(makeRoot());
@@ -154,7 +176,7 @@ describe('AiScannerStore', () => {
             expect(second.use_test_strategy).toBe(false);
         });
 
-        it('never runs the TEST strategy on a real account', () => {
+        it('never runs the TEST strategy on a real account', async () => {
             const root = makeRoot();
             runInAction(() => (root.client.is_virtual = false));
             const store = new AiScannerStore(root);
@@ -162,14 +184,14 @@ describe('AiScannerStore', () => {
             expect(store.use_test_strategy).toBe(false);
         });
 
-        it('ships the engine unmodified', () => {
+        it('ships the engine unmodified', async () => {
             expect(readEngineValues(ENGINE).stake).toBe(20);
         });
     });
 
     describe('parallel markets', () => {
         it('with the default (Under) strategy, scans and never loads or runs anything', async () => {
-            const { root, store } = startScan('under');
+            const { root, store } = await startScan('under');
             for (let i = 0; i < 50; i++) MARKETS.forEach(m => store.onMarketTick(m.symbol, full(i % 10), i % 10));
             await flush();
             expect(store.stage).toBe('scanning');
@@ -179,7 +201,7 @@ describe('AiScannerStore', () => {
         });
 
         it('loads the engine at the first qualify and keeps every market scanning', async () => {
-            const { store } = startScan();
+            const { store } = await startScan();
             store.onMarketTick('1HZ10V', qualifying, 9, true);
             expect(store.stage).toBe('scanning');
             expect(store.are_feeds_wanted).toBe(true);
@@ -196,7 +218,7 @@ describe('AiScannerStore', () => {
         });
 
         it('two qualified at once, the second hits its entry first: the second wins and the engine is on it', async () => {
-            const { root, store } = startScan();
+            const { root, store } = await startScan();
             store.onMarketTick('1HZ10V', qualifying, 9, true);
             store.onMarketTick('JD25', qualifying, 9, true);
             await flush();
@@ -227,7 +249,7 @@ describe('AiScannerStore', () => {
         });
 
         it('one qualified market fades while another stays: the other can still win', async () => {
-            const { root, store } = startScan();
+            const { root, store } = await startScan();
             store.onMarketTick('1HZ10V', qualifying, 9, true);
             store.onMarketTick('JD25', qualifying, 9, true);
             await flush();
@@ -244,7 +266,7 @@ describe('AiScannerStore', () => {
         });
 
         it('two entries on the same tick: only the first counts, only one Run', async () => {
-            const { root, store } = startScan();
+            const { root, store } = await startScan();
             store.onMarketTick('1HZ10V', qualifying, 9, true);
             store.onMarketTick('JD25', qualifying, 9, true);
             await flush();
@@ -258,7 +280,7 @@ describe('AiScannerStore', () => {
         });
 
         it('symbol read back from the workspace is not the winner: no Run, and the panel says why', async () => {
-            const { root, store } = startScan();
+            const { root, store } = await startScan();
             store.onMarketTick('1HZ10V', qualifying, 9, true);
             await flush();
             // The reload for the winner "lands" on the old market, as a refused
@@ -279,7 +301,7 @@ describe('AiScannerStore', () => {
         });
 
         it('an engine edited in Bot Builder during the scan is reloaded with the locked values before Run', async () => {
-            const { root, store } = startScan();
+            const { root, store } = await startScan();
             store.onMarketTick('1HZ10V', qualifying, 9, true);
             await flush();
             workspace_xml = workspace_xml.replace(/(id="bull-ai-n-mart"><field name="NUM">)2</, '$19<');
@@ -291,7 +313,7 @@ describe('AiScannerStore', () => {
         });
 
         it('never enters on a re-seed of the window, only on a live tick', async () => {
-            const { root, store } = startScan();
+            const { root, store } = await startScan();
             store.onMarketTick('JD25', entering, 1, true);
             await flush();
             store.onMarketTick('JD25', entering, 1, true);
@@ -303,7 +325,7 @@ describe('AiScannerStore', () => {
         });
 
         it('presses Run only after every scanner feed has stopped (and forgotten its stream)', async () => {
-            const { root, store } = startScan('over', true);
+            const { root, store } = await startScan('over', true);
             const release = store.registerFeed();
             store.onMarketTick('1HZ10V', full(), 5, true);
             await flush();
@@ -319,7 +341,7 @@ describe('AiScannerStore', () => {
         });
 
         it('cancel while markets are qualified stands down without touching the run panel', async () => {
-            const { root, store } = startScan();
+            const { root, store } = await startScan();
             store.onMarketTick('1HZ10V', qualifying, 9, true);
             await flush();
             store.cancel();
@@ -332,7 +354,7 @@ describe('AiScannerStore', () => {
         });
 
         it('owns the workspace (blocking the Market Tool sync) from the first qualify until the bot stops', async () => {
-            const { root, store } = startScan();
+            const { root, store } = await startScan();
             expect(store.owns_workspace).toBe(false);
             store.onMarketTick('1HZ10V', qualifying, 9, true);
             expect(store.owns_workspace).toBe(true);
@@ -347,7 +369,7 @@ describe('AiScannerStore', () => {
         });
 
         it('the engine stops itself at take profit and the panel says so', async () => {
-            const { root, store } = startScan();
+            const { root, store } = await startScan();
             store.onMarketTick('JD25', entering, 1, true);
             await flush();
             store.onMarketTick('JD25', entering, 1);
@@ -368,8 +390,8 @@ describe('AiScannerStore', () => {
         beforeEach(() => jest.useFakeTimers());
         afterEach(() => jest.useRealTimers());
 
-        it('nothing qualifies: stops at exactly 5:00, feeds closed, Scan & Run usable again', () => {
-            const { root, store } = startScan();
+        it('nothing qualifies: stops at exactly 5:00, feeds closed, Scan & Run usable again', async () => {
+            const { root, store } = await startScan();
             MARKETS.forEach(market => store.onMarketTick(market.symbol, faded, 5, true));
             jest.advanceTimersByTime(5 * MIN - 1);
             expect(store.stage).toBe('scanning');
@@ -381,12 +403,14 @@ describe('AiScannerStore', () => {
             expect(root.run_panel.onRunButtonClick).not.toHaveBeenCalled();
             expect(store.can_start).toBe(true);
             store.start();
+            expect(store.stage).toBe('checking');
+            await flush();
             expect(store.stage).toBe('scanning');
             expect(store.scan_deadline).toBe(Date.now() + 5 * MIN);
         });
 
         it('at 5:00 with one market qualified it keeps going; that market fading at 5:40 stops it', async () => {
-            const { root, store } = startScan();
+            const { root, store } = await startScan();
             jest.advanceTimersByTime(4 * MIN);
             store.onMarketTick('JD25', qualifying, 9, true);
             await flush();
@@ -410,7 +434,7 @@ describe('AiScannerStore', () => {
         });
 
         it('before 5:00, a fade with none qualified just keeps scanning', async () => {
-            const { store } = startScan();
+            const { store } = await startScan();
             store.onMarketTick('JD25', qualifying, 9, true);
             await flush();
             jest.advanceTimersByTime(3 * MIN);
@@ -422,7 +446,7 @@ describe('AiScannerStore', () => {
         });
 
         it('one market past 5:00 can still win', async () => {
-            const { root, store } = startScan();
+            const { root, store } = await startScan();
             store.onMarketTick('JD25', qualifying, 9, true);
             await flush();
             jest.advanceTimersByTime(6 * MIN);
@@ -436,7 +460,7 @@ describe('AiScannerStore', () => {
         it.each(['over', 'under'] as const)(
             'with %s selected: qualifies on the first check of the seeded history, runs on the next live tick',
             async strategy => {
-                const { root, store } = startScan(strategy, true);
+                const { root, store } = await startScan(strategy, true);
                 expect(store.locked?.use_test_strategy).toBe(true);
                 store.onMarketTick('1HZ10V', full(), 5, true); // the very first check
                 expect(qualifiedSymbols(store)).toEqual(['1HZ10V']);
@@ -449,14 +473,14 @@ describe('AiScannerStore', () => {
             }
         );
 
-        it('qualifies even when the seeded window holds fewer than 600 digits', () => {
-            const { store } = startScan('over', true);
+        it('qualifies even when the seeded window holds fewer than 600 digits', async () => {
+            const { store } = await startScan('over', true);
             store.onMarketTick('JD25', new Array(450).fill(3), 3, true);
             expect(qualifiedSymbols(store)).toEqual(['JD25']);
         });
 
-        it('the real Over strategy still needs the full 600', () => {
-            const { store } = startScan('over');
+        it('the real Over strategy still needs the full 600', async () => {
+            const { store } = await startScan('over');
             store.onMarketTick('JD25', new Array(450).fill(9), 9, true);
             expect(store.qualified).toEqual([]);
             expect(store.scan_progress?.closest?.reason).toBe('Not enough ticks yet (450 of 600).');
@@ -466,20 +490,22 @@ describe('AiScannerStore', () => {
     describe('scan progress (real numbers only)', () => {
         afterEach(() => jest.useRealTimers());
 
-        it('counts checked markets, stamps the last check, names the closest with its real reason, once a second', () => {
+        it('counts checked markets, stamps the last check, names the closest with its real reason, once a second', async () => {
             jest.useFakeTimers();
             jest.setSystemTime(new Date(2026, 9, 23, 14, 5, 9));
-            const { store } = startScan('over');
+            const { store } = await startScan('over');
             expect(store.scan_progress).toBeNull();
 
             //            0   1   2   3   4   5   6   7   8   9
             const near = [58, 58, 58, 58, 58, 57, 64, 64, 63, 62]; // 2 of 6-9 at 64+
             store.onMarketTick('1HZ10V', full(5), 5, true);
-            expect(store.scan_progress).toMatchObject({ checked: 1, last_check_at: Date.now() });
+            // N = the markets this scan covers (both offered here).
+            expect(store.scan_progress).toMatchObject({ checked: 2, last_check_at: Date.now() });
+            expect(store.scan_progress?.closest?.text).toBe('Volatility 10 (1s) Index');
 
             // Within the same second: recorded, but the panel isn't refreshed yet.
             store.onMarketTick('JD25', windowOf(near), 9, true);
-            expect(store.scan_progress?.checked).toBe(1);
+            expect(store.scan_progress?.closest?.text).toBe('Volatility 10 (1s) Index');
 
             jest.advanceTimersByTime(1000);
             store.onMarketTick('1HZ10V', full(5), 5);
@@ -493,12 +519,136 @@ describe('AiScannerStore', () => {
             );
         });
 
-        it('lists every qualified market with its own reason, at once when the set changes', () => {
-            const { store } = startScan('over');
+        it('lists every qualified market with its own reason, at once when the set changes', async () => {
+            const { store } = await startScan('over');
             store.onMarketTick('1HZ10V', qualifying, 9, true);
             store.onMarketTick('JD25', qualifying, 9, true);
             expect(store.qualified.map(market => market.text)).toEqual(['Volatility 10 (1s) Index', 'Jump 25 Index']);
             store.qualified.forEach(market => expect(market.reason).toMatch(/4 of 6-9 at 10.6%\+/));
+        });
+    });
+
+    describe('only markets that offer the trade', () => {
+        it('checks contracts_for first: no feeds and no scan until it answers', () => {
+            const store = new AiScannerStore(makeRoot());
+            store.setMarkets(MARKETS);
+            fillForm(store);
+            store.start();
+            expect(store.stage).toBe('checking');
+            expect(store.are_feeds_wanted).toBe(false);
+            store.onMarketTick('JD25', entering, 1, true);
+            expect(store.qualified).toEqual([]);
+        });
+
+        it('all offered -> every market scanned', async () => {
+            const { store } = await startScan();
+            expect(store.stage).toBe('scanning');
+            expect(store.scan_markets.map(market => market.symbol)).toEqual(['1HZ10V', 'JD25']);
+        });
+
+        it('skips a market without DIGITOVER: never scanned, never qualifies, not counted', async () => {
+            offerings = { JD25: ALL_DIGITS.filter(contract => contract.contract_type !== 'DIGITOVER') };
+            const { store } = await startScan();
+            expect(store.scan_markets.map(market => market.symbol)).toEqual(['1HZ10V']);
+            store.onMarketTick('JD25', qualifying, 9, true);
+            expect(store.qualified).toEqual([]);
+            store.onMarketTick('1HZ10V', faded, 5, true);
+            expect(store.scan_progress?.checked).toBe(1); // the real number scanned
+        });
+
+        it('skips a market whose contracts_for errors', async () => {
+            offerings = { '1HZ10V': 'error' };
+            const { store } = await startScan();
+            expect(store.scan_markets.map(market => market.symbol)).toEqual(['JD25']);
+        });
+
+        it('no market offers the trade: says so and does not scan', async () => {
+            offerings = { '1HZ10V': [], JD25: 'error' };
+            const { root, store } = await startScan();
+            expect(store.stage).toBe('idle');
+            expect(store.message).toBe(NO_MARKETS_OFFERED_MESSAGE);
+            expect(store.are_feeds_wanted).toBe(false);
+            expect(store.scan_deadline).toBeNull();
+            expect(loadBotIntoBuilder).not.toHaveBeenCalled();
+            expect(root.run_panel.onRunButtonClick).not.toHaveBeenCalled();
+            expect(store.can_start).toBe(true);
+        });
+
+        it('cancel while checking: the late answer starts nothing', async () => {
+            const store = new AiScannerStore(makeRoot());
+            store.setMarkets(MARKETS);
+            fillForm(store);
+            store.start();
+            store.cancel();
+            await flush();
+            expect(store.stage).toBe('idle');
+            expect(store.scan_markets).toEqual([]);
+        });
+    });
+
+    describe('when the engine fails before its first contract', () => {
+        const runOnJD25 = async () => {
+            const scan = await startScan();
+            scan.store.onMarketTick('JD25', entering, 1, true);
+            await flush();
+            scan.store.onMarketTick('JD25', entering, 1);
+            await flush();
+            expect(scan.store.stage).toBe('running');
+            return scan;
+        };
+        const settle = () => new Promise(resolve => setTimeout(resolve, 5));
+
+        it('Deriv refusing the buy stops the bot and shows "Run failed on <market>: <message>"', async () => {
+            const { root, store } = await runOnJD25();
+            globalObserver.emit('Error', { code: 'X', message: 'Trading is not offered for this duration.' });
+            await settle();
+            expect(root.run_panel.onStopBotClick).toHaveBeenCalledTimes(1);
+            expect(store.stage).toBe('idle');
+            expect(store.message).toBe('Run failed on Jump 25 Index: Trading is not offered for this duration.');
+            // Back to the start state, form kept.
+            expect(store.form).toMatchObject({ strategy: 'over', stake: '0.35', take_profit: '5', stop_loss: '10' });
+            expect(store.can_start).toBe(true);
+        });
+
+        it('also catches an API error wrapped as { error } and a ui.log.error message', async () => {
+            const first = await runOnJD25();
+            globalObserver.emit('Error', { error: { code: 'X', message: 'Wrapped message.' } });
+            await settle();
+            expect(first.store.message).toBe('Run failed on Jump 25 Index: Wrapped message.');
+
+            const second = await runOnJD25();
+            globalObserver.emit('ui.log.error', 'Could not buy.');
+            await settle();
+            expect(second.store.message).toBe('Run failed on Jump 25 Index: Could not buy.');
+        });
+
+        it('a bot that already stopped itself on the error still ends with the reason', async () => {
+            const { root, store } = await runOnJD25();
+            // An unrecoverable error: the engine stops itself, the error arrives with it.
+            globalObserver.emit('Error', { message: 'Trading is not offered for this duration.' });
+            runInAction(() => (root.run_panel.is_running = false));
+            await settle();
+            expect(store.stage).toBe('idle');
+            expect(store.message).toBe('Run failed on Jump 25 Index: Trading is not offered for this duration.');
+        });
+
+        it('errors after the first contract settled are left to the engine', async () => {
+            const { root, store } = await runOnJD25();
+            runInAction(() => Object.assign(root.transactions.statistics, { number_of_runs: 1 }));
+            globalObserver.emit('Error', { message: 'Some later error.' });
+            await settle();
+            expect(root.run_panel.onStopBotClick).not.toHaveBeenCalled();
+            expect(store.stage).toBe('running');
+        });
+
+        it('stops listening once the run is over', async () => {
+            const { root, store } = await runOnJD25();
+            runInAction(() => (root.run_panel.is_running = false));
+            expect(store.stage).toBe('stopped');
+            globalObserver.emit('Error', { message: 'Late error.' });
+            await settle();
+            expect(store.stage).toBe('stopped');
+            expect(store.message).not.toMatch(/Run failed/);
         });
     });
 });
