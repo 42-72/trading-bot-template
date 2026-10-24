@@ -35,6 +35,16 @@ const visibleRect = (element: Element) => {
 };
 
 /**
+ * Whether the run drawer is open, read from the page itself (its toggle bar
+ * carries --open), not from the store: the panel must follow what is on
+ * screen. `fallback` when there is no toggle bar.
+ */
+export const isRunDrawerOpen = (fallback: boolean) => {
+    const toggle = document.querySelector('.dc-drawer__toggle');
+    return toggle ? toggle.classList.contains('dc-drawer__toggle--open') : fallback;
+};
+
+/**
  * `ignore_run_drawer`: leave the run drawer out (the mobile AI panel when the
  * drawer is open - it covers the whole screen and would leave no room).
  */

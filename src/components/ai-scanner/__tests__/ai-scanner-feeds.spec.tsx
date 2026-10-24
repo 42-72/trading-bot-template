@@ -21,7 +21,9 @@ const mockDevice = { isDesktop: true };
 jest.mock('@deriv-com/ui', () => ({ useDevice: () => mockDevice }));
 jest.mock('../ai-scanner-button', () => () => null);
 jest.mock('../ai-scanner-panel', () => {
-    const MockPanel = () => <div data-testid='ai-scanner-panel' />;
+    const MockPanel = ({ style }: { style: React.CSSProperties }) => (
+        <div data-testid='ai-scanner-panel' data-bottom={style.bottom} />
+    );
     return MockPanel;
 });
 
@@ -245,6 +247,56 @@ describe('AI Scanner feeds after the winner', () => {
         expect(run_panel.onRunButtonClick).not.toHaveBeenCalled();
         expect(loadBotIntoBuilder).not.toHaveBeenCalled();
         warn.mockRestore();
+    });
+
+    it('on a phone, after the drawer closes again the panel ends 12px above its toggle bar', async () => {
+        jest.useFakeTimers();
+        mockDevice.isDesktop = false;
+        Object.defineProperty(window, 'innerWidth', { configurable: true, value: 375 });
+        Object.defineProperty(window, 'innerHeight', { configurable: true, value: 812 });
+        // The toggle bar as measured at 375x812: open at the top, closed above the run bar.
+        const toggle = document.createElement('div');
+        let toggle_top = 100;
+        toggle.getBoundingClientRect = () =>
+            ({ top: toggle_top, bottom: toggle_top + 36, left: 0, right: 375, width: 375, height: 36 }) as DOMRect;
+        document.body.appendChild(toggle);
+        const setDrawer = (open: boolean) => {
+            toggle.className = open ? 'dc-drawer__toggle dc-drawer__toggle--open' : 'dc-drawer__toggle';
+            toggle_top = open ? 100 : 714;
+        };
+        try {
+            const run_panel = observable({ is_running: false, has_open_contract: false, is_drawer_open: true });
+            const root = {
+                run_panel,
+                client: observable({ is_logged_in: true, currency: 'USD', is_virtual: true, loginid: 'VRTC1' }),
+                transactions: observable({ statistics: { total_profit: 0 } }),
+                dashboard: { setActiveTab: jest.fn() },
+            } as unknown as RootStore;
+            const store = new AiScannerStore(root);
+            (useStore as jest.Mock).mockReturnValue({ ...root, ai_scanner: store });
+            setDrawer(true);
+            render(<AiScanner />);
+            act(() => store.setPanelOpen(true));
+            // Drawer open: the panel is drawn over it, down to the bottom.
+            expect(screen.getByTestId('ai-scanner-panel')).toHaveAttribute('data-bottom', '8');
+
+            // The trader closes the drawer: the store flips first, the bar slides down after.
+            act(() => {
+                runInAction(() => {
+                    run_panel.is_drawer_open = false;
+                });
+            });
+            setDrawer(false);
+            act(() => {
+                jest.advanceTimersByTime(400);
+            });
+            // 812 - 714 + 12: the panel's bottom (and its footer) end 12px above the bar.
+            expect(screen.getByTestId('ai-scanner-panel')).toHaveAttribute('data-bottom', '110');
+        } finally {
+            mockDevice.isDesktop = true;
+            toggle.remove();
+            jest.useRealTimers();
+        }
     });
 
     it('on a phone or tablet, Run opening the run drawer leaves the AI panel open', async () => {

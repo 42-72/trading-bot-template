@@ -5,7 +5,7 @@ import { useStore } from '@/hooks/useStore';
 import { useSyntheticSymbols } from '@/hooks/useSyntheticSymbols';
 import { useDevice } from '@deriv-com/ui';
 import AiScannerButton from './ai-scanner-button';
-import { getSafeBounds, runBarTopBeside, TBounds, TPoint } from './ai-scanner-layout';
+import { getSafeBounds, isRunDrawerOpen, runBarTopBeside, TBounds, TPoint } from './ai-scanner-layout';
 import AiScannerPanel from './ai-scanner-panel';
 import MarketFeed from './market-feed';
 import { useAiScanner } from './use-ai-scanner';
@@ -32,8 +32,9 @@ const panelStyle = (layout: TLayout | null, is_desktop: boolean, is_drawer_open:
     if (!is_desktop) {
         // Measured fresh: the button that reports `layout` is hidden while
         // the mobile panel is open. With the run drawer open (Run opens it)
-        // the panel sits over it rather than vanishing.
-        const bounds = getSafeBounds({ ignore_run_drawer: is_drawer_open });
+        // the panel sits over it rather than vanishing; closed, the panel
+        // ends above its toggle bar (getSafeBounds keeps 12px clear).
+        const bounds = getSafeBounds({ ignore_run_drawer: isRunDrawerOpen(is_drawer_open) });
         return {
             top: bounds.top + GAP,
             left: bounds.left + GAP,
@@ -92,13 +93,24 @@ const AiScanner = observer(() => {
 
     const onLayout = useCallback((next: TLayout) => setLayout(next), []);
 
-    // Mobile panel: re-measure on resize / rotation.
-    const [, setViewportNonce] = useState(0);
+    // Mobile panel: re-measure on resize / rotation, after the drawer's 0.3s
+    // slide, and every half second while open (the toggle bar can move
+    // without a resize). Re-renders only when the measured box changes.
+    const [, setMobileBox] = useState('');
+    const { is_drawer_open } = run_panel;
+    const is_mobile_panel_open = !isDesktop && ai_scanner.is_panel_open;
     useEffect(() => {
-        const onResize = () => setViewportNonce(nonce => nonce + 1);
-        window.addEventListener('resize', onResize);
-        return () => window.removeEventListener('resize', onResize);
-    }, []);
+        const measure = () => setMobileBox(JSON.stringify(panelStyle(null, false, is_drawer_open)));
+        window.addEventListener('resize', measure);
+        if (!is_mobile_panel_open) return () => window.removeEventListener('resize', measure);
+        const settle = setTimeout(measure, 350);
+        const poll = setInterval(measure, 500);
+        return () => {
+            window.removeEventListener('resize', measure);
+            clearTimeout(settle);
+            clearInterval(poll);
+        };
+    }, [is_mobile_panel_open, is_drawer_open]);
 
     // The mobile run drawer covers the screen when open: the button stays out
     // of its way. The PANEL stays open - Run opens the drawer, and the panel
