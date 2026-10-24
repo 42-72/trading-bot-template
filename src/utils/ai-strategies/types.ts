@@ -31,6 +31,13 @@ export type TConditionResult = {
 };
 
 export type TAiStrategy = {
+    /**
+     * Whether an armed market stays armed for its full 3 minutes after its
+     * condition stops holding (true, the default - Over/Under), or is
+     * disarmed at once on the first live check that no longer meets it for
+     * its armed side (false - Even/Odd).
+     */
+    keepArmedWhenConditionFades?: boolean;
     condition: (digits: number[]) => TConditionResult;
     /** `context.side`: Even/Odd's armed side; Over/Under ignore it. */
     entry: (digits: number[], newDigit: number, context?: { side?: TSide }) => boolean;

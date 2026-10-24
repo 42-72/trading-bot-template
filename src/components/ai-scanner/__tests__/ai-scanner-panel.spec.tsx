@@ -294,3 +294,26 @@ describe('AI Scanner panel - Even/Odd tab', () => {
         expect(screen.getByTestId('ai-scanner-armed-1HZ25V')).toHaveTextContent('Volatility 25 (1s) — EVEN');
     });
 });
+
+describe('AI Scanner panel - dropped markets', () => {
+    beforeEach(() => localStorage.clear());
+
+    it('shows "<market> dropped — conditions changed" while the notice lasts', () => {
+        const store = setup();
+        fireEvent.click(screen.getByRole('tab', { name: 'Even/Odd' }));
+        atStage(store, 'scanning');
+        act(() => {
+            runInAction(() => {
+                store.scan_progress = { checked: 12, last_check_at: Date.now(), closest: null };
+                store.drop_notices = [{ id: 1, text: 'Jump 25 Index dropped — conditions changed' }];
+            });
+        });
+        expect(screen.getByRole('status')).toHaveTextContent('Jump 25 Index dropped — conditions changed');
+        act(() => {
+            runInAction(() => {
+                store.drop_notices = [];
+            });
+        });
+        expect(screen.queryByText(/dropped — conditions changed/)).not.toBeInTheDocument();
+    });
+});

@@ -219,7 +219,7 @@ const clockTime = (ms: number) => {
  * with its own clock and live reason, or - with none armed - the nearest one.
  */
 const ScanProgress = observer(() => {
-    const { scan_progress, armed } = useAiScanner();
+    const { scan_progress, armed, drop_notices } = useAiScanner();
     if (!scan_progress) return <p className='ai-scanner-panel__meta'>{localize('Waiting for the first check…')}</p>;
     return (
         <div className='ai-scanner-panel__progress'>
@@ -237,6 +237,11 @@ const ScanProgress = observer(() => {
                     ))}
                 </div>
             )}
+            {drop_notices.map(notice => (
+                <p key={notice.id} className='ai-scanner-panel__dropped' role='status'>
+                    {notice.text}
+                </p>
+            ))}
             {armed.length === 0 && scan_progress.closest && (
                 <p className='ai-scanner-panel__closest'>
                     {localize('Closest')}: {scan_progress.closest.text} — {scan_progress.closest.reason}

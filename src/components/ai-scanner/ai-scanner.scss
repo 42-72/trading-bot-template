@@ -409,6 +409,13 @@ $ai-scanner-z: 5;
         color: var(--text-general);
     }
 
+    &__dropped {
+        margin: 0;
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: var(--brand-warning, #f59e0b);
+    }
+
     &__tag {
         align-self: flex-start;
         padding: 0.2rem 0.8rem;

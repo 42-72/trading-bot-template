@@ -90,6 +90,9 @@ export type TArmedMarket = {
 
 export type TFeedStatus = { status: string; n: number };
 
+/** "<market> dropped — conditions changed", shown for DROP_NOTICE_MS. */
+export type TDropNotice = { id: number; text: string };
+
 type TFormErrors = Partial<Record<keyof TAiScannerForm, string>>;
 
 const FORM_STORAGE_KEY = 'ai_scanner_form';
@@ -102,6 +105,7 @@ export const NO_MARKETS_OFFERED_MESSAGE = 'No markets offer this trade right now
 export const ALL_SILENT_MS = 2000;
 const RESUBSCRIBE_COOLDOWN_MS = 5000;
 const SILENCE_CHECK_MS = 500;
+const DROP_NOTICE_MS = 3000;
 
 export const CONDITIONS_NOT_MET_MESSAGE = 'Conditions not met — no entry found.';
 
@@ -176,6 +180,8 @@ export default class AiScannerStore {
     target: TAiScannerTarget | null = null;
     /** Armed markets, in the order they armed - each waiting for its own entry. */
     armed: TArmedMarket[] = [];
+    /** Markets just dropped because their condition changed (strategies that don't keep them armed). */
+    drop_notices: TDropNotice[] = [];
     markets: TAiScannerMarket[] = [];
     /** This scan's markets: those of `markets` whose contracts_for offers the trade (checking stage). */
     scan_markets: TAiScannerMarket[] = [];
@@ -214,6 +220,8 @@ export default class AiScannerStore {
     // most once a second) for the live reason text.
     private armed_by_symbol = new Map<string, TArmedMarket>();
     private arm_timers = new Map<string, ReturnType<typeof setTimeout>>();
+    private drop_notice_timers = new Set<ReturnType<typeof setTimeout>>();
+    private drop_notice_id = 0;
     // Tick feeds currently mounted (market-feed.tsx). Run waits for this to
     // reach 0 - see pressRun.
     private mounted_feeds = 0;
@@ -235,6 +243,7 @@ export default class AiScannerStore {
             locked: observable,
             target: observable,
             armed: observable.ref,
+            drop_notices: observable.ref,
             markets: observable.ref,
             scan_markets: observable.ref,
             feed_status: observable,
@@ -538,25 +547,48 @@ export default class AiScannerStore {
         const result = this.strategy.condition(digits);
         let armed = this.armed_by_symbol.get(symbol);
         let changed = false;
+        let dropped = false;
         // Even/Odd arms with the side it qualified on (TEST: Even).
         const side = this.locked.tab === 'even_odd' ? (result.side ?? 'even') : undefined;
+        if (armed) {
+            // Met for the ARMED side: on Even/Odd, qualifying for the other
+            // side is a changed condition too.
+            const still_met = result.qualified && (armed.side === undefined || result.side === armed.side);
+            if (!still_met && this.strategy.keepArmedWhenConditionFades === false && !is_seed) {
+                // Dropped at once (Even/Odd). Only on a live tick: a
+                // re-subscribe's seed never disarms - the next live tick
+                // re-checks within about a second.
+                this.dropArmed(armed);
+                armed = undefined;
+                changed = true;
+                dropped = true;
+            } else {
+                // Otherwise it stays armed whatever the condition does now
+                // (Over/Under); the panel shows it.
+                if (armed.still_met !== still_met) changed = true;
+                armed.reason = result.reason;
+                armed.still_met = still_met;
+            }
+        }
+        // Not armed (or just dropped - back to normal scanning): arms when
+        // it qualifies, with a fresh 3 minutes and whatever side it has now.
         if (!armed && result.qualified) {
             armed = this.arm(market, result.reason, side);
             changed = true;
-        } else if (armed) {
-            // Stays armed whatever the condition does now; the panel shows it.
-            // On Even/Odd, qualifying for the other side is a changed
-            // condition too - the armed side is kept until it disarms.
-            const still_met = result.qualified && (armed.side === undefined || result.side === armed.side);
-            if (armed.still_met !== still_met) changed = true;
-            armed.reason = result.reason;
-            armed.still_met = still_met;
         }
         this.recordCheck(market, result, changed);
+        // The scan rule is unchanged: past 5:00 with nothing armed, it ends.
+        if (dropped) {
+            this.endScanIfNothingArmed();
+            if (this.stage !== 'scanning') return;
+        }
 
         // An armed market waits for its own entry on every live tick. A
-        // re-seed (stream re-subscribed) is history, never an entry.
-        if (armed && !is_seed && this.strategy.entry(digits, new_digit, { side: armed.side })) {
+        // re-seed (stream re-subscribed) is history, never an entry. A
+        // strategy that drops faded markets only enters while the condition
+        // still holds for the armed side on this very tick.
+        const can_enter = armed && (this.strategy.keepArmedWhenConditionFades !== false || armed.still_met);
+        if (armed && can_enter && !is_seed && this.strategy.entry(digits, new_digit, { side: armed.side })) {
             this.pressRun({ ...market, reason: armed.reason, side: armed.side }, this.run_token);
         }
     };
@@ -595,6 +627,25 @@ export default class AiScannerStore {
         this.endScanIfNothingArmed();
     }
 
+    /** Condition changed on a strategy that doesn't keep faded markets armed: drop it now. */
+    private dropArmed(armed: TArmedMarket) {
+        const timer = this.arm_timers.get(armed.symbol);
+        if (timer) clearTimeout(timer);
+        this.arm_timers.delete(armed.symbol);
+        this.armed_by_symbol.delete(armed.symbol);
+
+        const notice: TDropNotice = { id: ++this.drop_notice_id, text: `${armed.text} dropped — conditions changed` };
+        this.drop_notices = [...this.drop_notices, notice];
+        const notice_timer = setTimeout(
+            action(() => {
+                this.drop_notice_timers.delete(notice_timer);
+                this.drop_notices = this.drop_notices.filter(item => item.id !== notice.id);
+            }),
+            DROP_NOTICE_MS
+        );
+        this.drop_notice_timers.add(notice_timer);
+    }
+
     /** The scan ends only once 5:00 have passed since Scan AND nothing is armed. */
     private endScanIfNothingArmed() {
         if (
@@ -616,6 +667,9 @@ export default class AiScannerStore {
         this.arm_timers.clear();
         this.armed_by_symbol.clear();
         this.armed = [];
+        this.drop_notice_timers.forEach(timer => clearTimeout(timer));
+        this.drop_notice_timers.clear();
+        this.drop_notices = [];
     }
 
     private recordCheck(market: TAiScannerMarket, result: TConditionResult, force_publish: boolean) {

@@ -16,6 +16,10 @@ const TOP_PLACES = 3;
 // Entry: odd digits (for EVEN) that must follow the red bar inside the run.
 const AFTER_RED_BAR = 2;
 
+// An armed market is dropped the moment its condition no longer holds for
+// its armed side (fails, or flips to the other side) - see TAiStrategy.
+export const keepArmedWhenConditionFades = false;
+
 const parityOf = (digit: number): TSide => (digit % 2 === 0 ? 'even' : 'odd');
 const opposite = (side: TSide): TSide => (side === 'even' ? 'odd' : 'even');
 const percent = (count: number) => `${((count / WINDOW) * 100).toFixed(1)}%`;

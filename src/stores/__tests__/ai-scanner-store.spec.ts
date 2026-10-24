@@ -779,18 +779,92 @@ describe('AiScannerStore', () => {
             expect(root.run_panel.onRunButtonClick).toHaveBeenCalledTimes(1);
         });
 
-        it('keeps the armed side when the market qualifies for the other side instead', async () => {
-            const { root, store } = await startScan('over', false, 'even_odd');
-            store.onMarketTick('JD25', even_armed, 4, true);
-            store.onMarketTick('JD25', odd_armed, 5); // now ODD qualifies
-            expect(armedOf(store, 'JD25')).toMatchObject({ side: 'even', still_met: false });
-            store.onMarketTick('JD25', odd_entering, 5); // an ODD entry - not this market's side
-            await flush();
-            expect(root.run_panel.onRunButtonClick).not.toHaveBeenCalled();
-            store.onMarketTick('JD25', even_entering, 4); // its EVEN entry
-            await flush();
-            expect(store.target?.side).toBe('even');
-            expect(readEngineValues(workspace_xml).ai_direction).toBe(1);
+        describe('dropped when the condition changes (keepArmedWhenConditionFades: false)', () => {
+            beforeEach(() => jest.useFakeTimers());
+            afterEach(() => jest.useRealTimers());
+
+            // Neither side qualifies (uniform 5s), but its last ticks are EVEN's entry pattern.
+            const faded_entering = [...full(5).slice(4), 3, 5, 7, 4];
+
+            it('condition fails on the next tick: disarmed at once, no entry possible, a 3s notice', async () => {
+                const { root, store } = await startScan('over', false, 'even_odd');
+                store.onMarketTick('JD25', even_armed, 4, true);
+                expect(armedSymbols(store)).toEqual(['JD25']);
+                store.onMarketTick('JD25', faded_entering, 4); // live: condition gone, entry pattern
+                await flush();
+                expect(store.armed).toEqual([]);
+                expect(root.run_panel.onRunButtonClick).not.toHaveBeenCalled();
+                expect(store.drop_notices.map(notice => notice.text)).toEqual([
+                    'Jump 25 Index dropped — conditions changed',
+                ]);
+                jest.advanceTimersByTime(2999);
+                expect(store.drop_notices).toHaveLength(1);
+                jest.advanceTimersByTime(1);
+                expect(store.drop_notices).toEqual([]);
+                expect(store.stage).toBe('scanning');
+            });
+
+            it('flips to the opposite side: dropped, then armed on the new side with a fresh 3:00', async () => {
+                const { root, store } = await startScan('over', false, 'even_odd');
+                store.onMarketTick('JD25', even_armed, 4, true);
+                jest.advanceTimersByTime(60000);
+                store.onMarketTick('JD25', odd_armed, 5); // now ODD qualifies
+                expect(store.drop_notices).toHaveLength(1);
+                expect(armedOf(store, 'JD25')).toMatchObject({
+                    side: 'odd',
+                    still_met: true,
+                    armed_at: Date.now(),
+                    expires_at: Date.now() + 180000,
+                });
+                store.onMarketTick('JD25', odd_entering, 5); // its new side's entry
+                await flush();
+                expect(store.target?.side).toBe('odd');
+                expect(readEngineValues(workspace_xml).ai_direction).toBe(0);
+                expect(root.run_panel.onRunButtonClick).toHaveBeenCalledTimes(1);
+            });
+
+            it('an entry on the tick the condition fails never wins', async () => {
+                const { root, store } = await startScan('over', false, 'even_odd');
+                store.onMarketTick('JD25', even_armed, 4, true);
+                store.onMarketTick('JD25', faded_entering, 4);
+                store.onMarketTick('JD25', faded_entering, 4);
+                await flush();
+                expect(root.run_panel.onRunButtonClick).not.toHaveBeenCalled();
+            });
+
+            it('condition holding: still disarmed at 3:00', async () => {
+                const { store } = await startScan('over', false, 'even_odd');
+                store.onMarketTick('JD25', even_armed, 4, true);
+                for (let second = 1; second < 180; second++) {
+                    jest.advanceTimersByTime(1000);
+                    store.onMarketTick('JD25', even_armed, 4);
+                }
+                expect(armedSymbols(store)).toEqual(['JD25']);
+                jest.advanceTimersByTime(1000); // 3:00
+                expect(store.armed).toEqual([]);
+                expect(store.drop_notices).toEqual([]); // a timeout, not a drop
+            });
+
+            it('a re-subscribe seed with a changed condition never drops it - the next live tick decides', async () => {
+                const { store } = await startScan('over', false, 'even_odd');
+                store.onMarketTick('JD25', even_armed, 4, true);
+                store.onMarketTick('JD25', full(5), 5, true); // re-seed: condition gone
+                expect(armedSymbols(store)).toEqual(['JD25']);
+                store.onMarketTick('JD25', full(5), 5); // live
+                expect(store.armed).toEqual([]);
+            });
+
+            it('dropped past 5:00 with nothing else armed: the scan ends as usual', async () => {
+                const { store } = await startScan('over', false, 'even_odd');
+                jest.advanceTimersByTime(4 * 60000);
+                store.onMarketTick('JD25', even_armed, 4, true);
+                jest.advanceTimersByTime(90000); // 5:30
+                expect(store.stage).toBe('scanning');
+                store.onMarketTick('JD25', full(5), 5);
+                await flush();
+                expect(store.stage).toBe('idle');
+                expect(store.message).toBe(CONDITIONS_NOT_MET_MESSAGE);
+            });
         });
 
         it('a direction that reads back wrong blocks Run', async () => {

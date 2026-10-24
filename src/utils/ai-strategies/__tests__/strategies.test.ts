@@ -1,4 +1,4 @@
-import { getOverUnderStrategy, OVER_UNDER_STRATEGIES, TEST_STRATEGY } from '../index';
+import { EVEN_ODD_STRATEGY, getOverUnderStrategy, OVER_UNDER_STRATEGIES, TEST_STRATEGY } from '../index';
 
 const windows = [
     [],
@@ -49,5 +49,14 @@ describe('Over/Under strategy slots', () => {
         expect(getOverUnderStrategy('under', true)).toBe(TEST_STRATEGY);
         expect(TEST_STRATEGY.condition([]).qualified).toBe(true);
         expect(TEST_STRATEGY.entry([], 5)).toBe(true);
+    });
+});
+
+describe('keepArmedWhenConditionFades - a per-strategy setting', () => {
+    it('Over and Under keep a faded market armed (the default); Even/Odd drops it', () => {
+        expect(OVER_UNDER_STRATEGIES.over.keepArmedWhenConditionFades ?? true).toBe(true);
+        expect(OVER_UNDER_STRATEGIES.under.keepArmedWhenConditionFades ?? true).toBe(true);
+        expect(TEST_STRATEGY.keepArmedWhenConditionFades ?? true).toBe(true);
+        expect(EVEN_ODD_STRATEGY.keepArmedWhenConditionFades).toBe(false);
     });
 });
