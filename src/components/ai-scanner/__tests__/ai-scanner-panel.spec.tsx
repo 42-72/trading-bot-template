@@ -12,6 +12,11 @@ jest.mock('@/external/bot-skeleton/services/api/api-base', () => ({
     api_base: { api: { send: jest.fn(() => new Promise(() => undefined)) } },
 }));
 jest.mock('@/hooks/useStore', () => ({ useStore: jest.fn() }));
+// The shared translations mock returns texts with {{placeholders}} unfilled.
+jest.mock('@deriv-com/translations', () => ({
+    localize: (text: string, values?: Record<string, unknown>) =>
+        text.replace(/{{(\w+)}}/g, (match, key) => (values && key in values ? String(values[key]) : match)),
+}));
 
 const MARKETS = [{ symbol: 'JD25', text: 'Jump 25 Index', submarket: 'jump_index' }];
 
@@ -132,5 +137,106 @@ describe('AI Scanner panel buttons', () => {
         expect(document.body.textContent).not.toMatch(/Scan & Run/);
         atStage(store, 'scanning');
         expect(document.body.textContent).not.toMatch(/Scan & Run/);
+    });
+});
+
+describe('AI Scanner panel - armed markets', () => {
+    beforeEach(() => {
+        localStorage.clear();
+        jest.useFakeTimers();
+    });
+    afterEach(() => jest.useRealTimers());
+
+    const scanning = (store: AiScannerStore, armed: AiScannerStore['armed']) => {
+        atStage(store, 'scanning');
+        act(() => {
+            runInAction(() => {
+                store.scan_deadline = Date.now() + 5 * 60000;
+                store.scan_progress = {
+                    checked: 12,
+                    last_check_at: new Date(2026, 9, 24, 9, 3, 7).getTime(),
+                    closest: { text: 'Jump 50 Index', reason: 'closest reason' },
+                };
+                store.armed = armed;
+            });
+        });
+    };
+
+    it('nothing armed: the scan countdown, the markets line and Closest', () => {
+        const store = setup();
+        scanning(store, []);
+        expect(screen.getByText('Scanning… 5:00 left')).toBeInTheDocument();
+        expect(screen.getByText('12 markets · last check 09:03:07')).toBeInTheDocument();
+        expect(screen.getByText(/Closest: Jump 50 Index — closest reason/)).toBeInTheDocument();
+    });
+
+    it('each armed market: name, its own countdown, live reason and the tag - the markets line stays', () => {
+        const store = setup();
+        const now = Date.now();
+        scanning(store, [
+            {
+                symbol: 'JD25',
+                text: 'Jump 25 Index',
+                armed_at: now - 46000,
+                expires_at: now + 134000, // 2:14
+                reason: 'live reason A',
+                still_met: true,
+            },
+            {
+                symbol: '1HZ10V',
+                text: 'Volatility 10 (1s) Index',
+                armed_at: now,
+                expires_at: now + 180000,
+                reason: 'live reason B',
+                still_met: false,
+            },
+        ]);
+        expect(screen.queryByText(/Scanning… .* left/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Closest:/)).not.toBeInTheDocument();
+        expect(screen.getByText('12 markets · last check 09:03:07')).toBeInTheDocument();
+
+        const first = screen.getByTestId('ai-scanner-armed-JD25');
+        expect(first).toHaveTextContent('Jump 25 Index');
+        expect(first).toHaveTextContent('2:14 left');
+        expect(first).toHaveTextContent('live reason A');
+        const met = screen.getByText('Conditions still met');
+        expect(met.className).toMatch(/__tag--met/);
+
+        const second = screen.getByTestId('ai-scanner-armed-1HZ10V');
+        expect(second).toHaveTextContent('3:00 left');
+        expect(second).toHaveTextContent('live reason B');
+        const changed = screen.getByText('Conditions changed since it qualified');
+        expect(changed.className).toMatch(/__tag--changed/);
+
+        // Each clock counts down on its own.
+        act(() => {
+            jest.advanceTimersByTime(4000);
+        });
+        expect(first).toHaveTextContent('2:10 left');
+        expect(second).toHaveTextContent('2:56 left');
+    });
+
+    it('the tag switches as the live condition changes', () => {
+        const store = setup();
+        const now = Date.now();
+        const armed = (still_met: boolean) => [
+            {
+                symbol: 'JD25',
+                text: 'Jump 25 Index',
+                armed_at: now,
+                expires_at: now + 180000,
+                reason: 'r',
+                still_met,
+            },
+        ];
+        scanning(store, armed(true));
+        expect(screen.getByText('Conditions still met')).toBeInTheDocument();
+        act(() => {
+            runInAction(() => {
+                store.armed = armed(false);
+            });
+        });
+        expect(screen.getByText('Conditions changed since it qualified')).toBeInTheDocument();
+        expect(screen.queryByText('Conditions still met')).not.toBeInTheDocument();
     });
 });

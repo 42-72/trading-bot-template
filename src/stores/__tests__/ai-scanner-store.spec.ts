@@ -122,7 +122,10 @@ const startScan = async (strategy: 'over' | 'under' = 'over', use_test = false) 
     return { root, store };
 };
 
-const qualifiedSymbols = (store: AiScannerStore) => store.qualified.map(market => market.symbol);
+const armedSymbols = (store: AiScannerStore) => store.armed.map(market => market.symbol);
+const armedOf = (store: AiScannerStore, symbol: string) => store.armed.find(market => market.symbol === symbol);
+// No longer meets Over's condition, but its last ticks (7, 9, then 1) are an entry.
+const fadedEntering = [...full(5).slice(3), 7, 9, 1];
 
 describe('AiScannerStore', () => {
     beforeEach(() => {
@@ -199,7 +202,7 @@ describe('AiScannerStore', () => {
             for (let i = 0; i < 50; i++) MARKETS.forEach(m => store.onMarketTick(m.symbol, full(i % 10), i % 10));
             await flush();
             expect(store.stage).toBe('scanning');
-            expect(store.qualified).toEqual([]);
+            expect(store.armed).toEqual([]);
             expect(loadBotIntoBuilder).not.toHaveBeenCalled();
             expect(root.run_panel.onRunButtonClick).not.toHaveBeenCalled();
         });
@@ -212,7 +215,7 @@ describe('AiScannerStore', () => {
             await flush();
             expect(store.stage).toBe('scanning');
             expect(store.are_feeds_wanted).toBe(true);
-            expect(qualifiedSymbols(store)).toEqual(['1HZ10V', 'JD25']);
+            expect(armedSymbols(store)).toEqual(['1HZ10V', 'JD25']);
             expect(store.owns_workspace).toBe(false);
             expect(loadBotIntoBuilder).not.toHaveBeenCalled();
             expect(workspace_xml).toBe('');
@@ -253,7 +256,7 @@ describe('AiScannerStore', () => {
             expect(store.stage).toBe('running');
         });
 
-        it('two qualified at once, the second hits its entry first: the second wins and the engine is on it', async () => {
+        it('two armed at once, the second hits its entry first: the second wins and the engine is on it', async () => {
             const { root, store } = await startScan();
             store.onMarketTick('1HZ10V', qualifying, 9, true);
             store.onMarketTick('JD25', qualifying, 9, true);
@@ -285,13 +288,14 @@ describe('AiScannerStore', () => {
             expect(store.stage).toBe('running');
         });
 
-        it('one qualified market fades while another stays: the other can still win', async () => {
+        it('a market that qualified and then faded stays armed - the other can still win', async () => {
             const { root, store } = await startScan();
             store.onMarketTick('1HZ10V', qualifying, 9, true);
             store.onMarketTick('JD25', qualifying, 9, true);
             await flush();
             store.onMarketTick('1HZ10V', faded, 5);
-            expect(qualifiedSymbols(store)).toEqual(['JD25']);
+            expect(armedSymbols(store)).toEqual(['1HZ10V', 'JD25']);
+            expect(armedOf(store, '1HZ10V')?.still_met).toBe(false);
             expect(store.stage).toBe('scanning');
             expect(store.message).toBe('');
 
@@ -388,7 +392,7 @@ describe('AiScannerStore', () => {
             expect(store.message).toBe(SCAN_STOPPED_MESSAGE);
             expect(store.are_feeds_wanted).toBe(false);
             expect(store.scan_deadline).toBeNull();
-            expect(store.qualified).toEqual([]);
+            expect(store.armed).toEqual([]);
             expect(store.form).toMatchObject({ strategy: 'over', stake: '0.35' });
             expect(store.can_start).toBe(true);
             expect(loadBotIntoBuilder).not.toHaveBeenCalled();
@@ -456,20 +460,65 @@ describe('AiScannerStore', () => {
         });
     });
 
-    describe('5-minute rule', () => {
+    describe('armed markets', () => {
         const MIN = 60 * 1000;
+        const SEC = 1000;
 
         beforeEach(() => jest.useFakeTimers());
         afterEach(() => jest.useRealTimers());
 
-        it('nothing qualifies: stops at exactly 5:00, feeds closed, Scan & Run usable again', async () => {
+        it('qualifies, then fades: stays armed and can still win on its entry', async () => {
+            const { root, store } = await startScan();
+            store.onMarketTick('JD25', qualifying, 9, true);
+            expect(armedSymbols(store)).toEqual(['JD25']);
+            jest.advanceTimersByTime(30 * SEC);
+            store.onMarketTick('JD25', faded, 5);
+            expect(armedSymbols(store)).toEqual(['JD25']);
+            store.onMarketTick('JD25', fadedEntering, 1); // condition not met now - still its entry
+            await flush();
+            expect(store.target?.symbol).toBe('JD25');
+            expect(root.run_panel.onRunButtonClick).toHaveBeenCalledTimes(1);
+        });
+
+        it('reaching 3:00 without an entry disarms it; it re-arms later with a fresh 3:00', async () => {
+            const { store } = await startScan();
+            store.onMarketTick('JD25', qualifying, 9, true);
+            const first = armedOf(store, 'JD25');
+            expect(first?.expires_at).toBe(Date.now() + 3 * MIN);
+
+            jest.advanceTimersByTime(3 * MIN - 1);
+            expect(armedSymbols(store)).toEqual(['JD25']);
+            jest.advanceTimersByTime(1);
+            expect(store.armed).toEqual([]);
+            expect(store.stage).toBe('scanning'); // before 5:00: the scan goes on
+
+            jest.advanceTimersByTime(30 * SEC); // 3:30
+            store.onMarketTick('JD25', qualifying, 9);
+            expect(armedOf(store, 'JD25')?.expires_at).toBe(Date.now() + 3 * MIN);
+            expect(armedOf(store, 'JD25')?.armed_at).toBe(Date.now());
+        });
+
+        it('several armed at once, each on its own clock', async () => {
+            const { store } = await startScan();
+            store.onMarketTick('1HZ10V', qualifying, 9, true);
+            jest.advanceTimersByTime(1 * MIN);
+            store.onMarketTick('JD25', qualifying, 9);
+            expect(armedSymbols(store)).toEqual(['1HZ10V', 'JD25']);
+            jest.advanceTimersByTime(2 * MIN); // 3:00
+            expect(armedSymbols(store)).toEqual(['JD25']);
+            jest.advanceTimersByTime(1 * MIN); // 4:00
+            expect(store.armed).toEqual([]);
+        });
+
+        it('5:00 with nothing armed: "Conditions not met - no entry found.", feeds closed, Scan usable', async () => {
             const { root, store } = await startScan();
             MARKETS.forEach(market => store.onMarketTick(market.symbol, faded, 5, true));
             jest.advanceTimersByTime(5 * MIN - 1);
             expect(store.stage).toBe('scanning');
             jest.advanceTimersByTime(1);
             expect(store.stage).toBe('idle');
-            expect(store.message).toBe('Conditions not met — no market qualified in 5 minutes.');
+            expect(store.message).toBe('Conditions not met — no entry found.');
+            expect(store.message).toBe(CONDITIONS_NOT_MET_MESSAGE);
             expect(store.are_feeds_wanted).toBe(false);
             expect(loadBotIntoBuilder).not.toHaveBeenCalled();
             expect(root.run_panel.onRunButtonClick).not.toHaveBeenCalled();
@@ -481,50 +530,79 @@ describe('AiScannerStore', () => {
             expect(store.scan_deadline).toBe(Date.now() + 5 * MIN);
         });
 
-        it('at 5:00 with one market qualified it keeps going; that market fading at 5:40 stops it', async () => {
+        it('armed at 4:50: still waiting at 7:00, disarmed at 7:50 - and the scan stops if nothing else is armed', async () => {
             const { root, store } = await startScan();
-            jest.advanceTimersByTime(4 * MIN);
-            store.onMarketTick('JD25', qualifying, 9, true);
-            await flush();
-            jest.advanceTimersByTime(1 * MIN); // 5:00
-            expect(store.stage).toBe('scanning');
-            expect(qualifiedSymbols(store)).toEqual(['JD25']);
-
-            jest.advanceTimersByTime(30 * 1000); // 5:30, still holding
-            store.onMarketTick('JD25', qualifying, 9);
-            store.onMarketTick('1HZ10V', faded, 5); // another market, never qualified
+            jest.advanceTimersByTime(4 * MIN + 50 * SEC);
+            store.onMarketTick('JD25', qualifying, 9, true); // 4:50
+            jest.advanceTimersByTime(10 * SEC); // 5:00 - armed, so no stop
             expect(store.stage).toBe('scanning');
 
-            jest.advanceTimersByTime(10 * 1000); // 5:40
-            store.onMarketTick('JD25', faded, 5);
+            jest.advanceTimersByTime(2 * MIN); // 7:00
+            store.onMarketTick('JD25', faded, 5); // fading changes nothing
+            expect(store.stage).toBe('scanning');
+            expect(armedSymbols(store)).toEqual(['JD25']);
+
+            jest.advanceTimersByTime(50 * SEC - 1);
+            expect(store.stage).toBe('scanning');
+            jest.advanceTimersByTime(1); // 7:50
             expect(store.stage).toBe('idle');
             expect(store.message).toBe(CONDITIONS_NOT_MET_MESSAGE);
             expect(store.are_feeds_wanted).toBe(false);
             expect(root.run_panel.onRunButtonClick).not.toHaveBeenCalled();
-            // Nothing was ever loaded for it.
             expect(loadBotIntoBuilder).not.toHaveBeenCalled();
         });
 
-        it('before 5:00, a fade with none qualified just keeps scanning', async () => {
+        it('past 5:00, a disarm leaves the scan running while another market is still armed', async () => {
             const { store } = await startScan();
-            store.onMarketTick('JD25', qualifying, 9, true);
-            await flush();
-            jest.advanceTimersByTime(3 * MIN);
-            store.onMarketTick('JD25', faded, 5);
+            jest.advanceTimersByTime(4 * MIN);
+            store.onMarketTick('1HZ10V', qualifying, 9, true); // 4:00 -> 7:00
+            jest.advanceTimersByTime(2 * MIN);
+            store.onMarketTick('JD25', qualifying, 9); // 6:00 -> 9:00
+            jest.advanceTimersByTime(1 * MIN); // 7:00
+            expect(armedSymbols(store)).toEqual(['JD25']);
             expect(store.stage).toBe('scanning');
-            expect(store.qualified).toEqual([]);
-            store.onMarketTick('1HZ10V', qualifying, 9);
-            expect(qualifiedSymbols(store)).toEqual(['1HZ10V']);
+            jest.advanceTimersByTime(2 * MIN); // 9:00
+            expect(store.stage).toBe('idle');
         });
 
-        it('one market past 5:00 can still win', async () => {
+        it('armed past 5:00 can still win', async () => {
             const { root, store } = await startScan();
+            jest.advanceTimersByTime(4 * MIN);
             store.onMarketTick('JD25', qualifying, 9, true);
-            await flush();
-            jest.advanceTimersByTime(6 * MIN);
+            jest.advanceTimersByTime(2 * MIN); // 6:00
             store.onMarketTick('JD25', entering, 1);
             await flush();
             expect(root.run_panel.onRunButtonClick).toHaveBeenCalledTimes(1);
+        });
+
+        it('Stop scan while armed: nothing loaded, all feeds closed, timers cleared', async () => {
+            const { root, store } = await startScan();
+            store.onMarketTick('JD25', qualifying, 9, true);
+            store.onMarketTick('1HZ10V', qualifying, 9, true);
+            store.cancel();
+            expect(store.stage).toBe('idle');
+            expect(store.message).toBe(SCAN_STOPPED_MESSAGE);
+            expect(store.armed).toEqual([]);
+            expect(store.are_feeds_wanted).toBe(false);
+            expect(jest.getTimerCount()).toBe(0);
+            jest.advanceTimersByTime(10 * MIN);
+            expect(store.stage).toBe('idle');
+            expect(store.message).toBe(SCAN_STOPPED_MESSAGE);
+            expect(loadBotIntoBuilder).not.toHaveBeenCalled();
+            expect(root.run_panel.onRunButtonClick).not.toHaveBeenCalled();
+        });
+
+        it('the tag follows the live condition, at once; the reason text is the latest check', async () => {
+            const { store } = await startScan();
+            store.onMarketTick('JD25', qualifying, 9, true);
+            expect(armedOf(store, 'JD25')?.still_met).toBe(true);
+            store.onMarketTick('JD25', faded, 5); // same second: the flip is still shown at once
+            expect(armedOf(store, 'JD25')?.still_met).toBe(false);
+            expect(armedOf(store, 'JD25')?.reason).toMatch(/not met/);
+            jest.advanceTimersByTime(SEC);
+            store.onMarketTick('JD25', qualifying, 9);
+            expect(armedOf(store, 'JD25')?.still_met).toBe(true);
+            expect(armedOf(store, 'JD25')?.reason).toMatch(/4 of 6-9 at 10.6%\+ \| .* all under 10%$/);
         });
     });
 
@@ -535,8 +613,8 @@ describe('AiScannerStore', () => {
                 const { root, store } = await startScan(strategy, true);
                 expect(store.locked?.use_test_strategy).toBe(true);
                 store.onMarketTick('1HZ10V', full(), 5, true); // the very first check
-                expect(qualifiedSymbols(store)).toEqual(['1HZ10V']);
-                expect(store.qualified[0].reason).toMatch(/^TEST strategy/);
+                expect(armedSymbols(store)).toEqual(['1HZ10V']);
+                expect(store.armed[0].reason).toMatch(/^TEST strategy/);
                 expect(loadBotIntoBuilder).not.toHaveBeenCalled();
                 await flush();
                 store.onMarketTick('1HZ10V', full(), 4); // first live tick
@@ -548,13 +626,13 @@ describe('AiScannerStore', () => {
         it('qualifies even when the seeded window holds fewer than 600 digits', async () => {
             const { store } = await startScan('over', true);
             store.onMarketTick('JD25', new Array(450).fill(3), 3, true);
-            expect(qualifiedSymbols(store)).toEqual(['JD25']);
+            expect(armedSymbols(store)).toEqual(['JD25']);
         });
 
         it('the real Over strategy still needs the full 600', async () => {
             const { store } = await startScan('over');
             store.onMarketTick('JD25', new Array(450).fill(9), 9, true);
-            expect(store.qualified).toEqual([]);
+            expect(store.armed).toEqual([]);
             expect(store.scan_progress?.closest?.reason).toBe('Not enough ticks yet (450 of 600).');
         });
     });
@@ -595,8 +673,8 @@ describe('AiScannerStore', () => {
             const { store } = await startScan('over');
             store.onMarketTick('1HZ10V', qualifying, 9, true);
             store.onMarketTick('JD25', qualifying, 9, true);
-            expect(store.qualified.map(market => market.text)).toEqual(['Volatility 10 (1s) Index', 'Jump 25 Index']);
-            store.qualified.forEach(market => expect(market.reason).toMatch(/4 of 6-9 at 10.6%\+/));
+            expect(store.armed.map(market => market.text)).toEqual(['Volatility 10 (1s) Index', 'Jump 25 Index']);
+            store.armed.forEach(market => expect(market.reason).toMatch(/4 of 6-9 at 10.6%\+/));
         });
     });
 
@@ -609,7 +687,7 @@ describe('AiScannerStore', () => {
             expect(store.stage).toBe('checking');
             expect(store.are_feeds_wanted).toBe(false);
             store.onMarketTick('JD25', entering, 1, true);
-            expect(store.qualified).toEqual([]);
+            expect(store.armed).toEqual([]);
         });
 
         it('all offered -> every market scanned', async () => {
@@ -623,7 +701,7 @@ describe('AiScannerStore', () => {
             const { store } = await startScan();
             expect(store.scan_markets.map(market => market.symbol)).toEqual(['1HZ10V']);
             store.onMarketTick('JD25', qualifying, 9, true);
-            expect(store.qualified).toEqual([]);
+            expect(store.armed).toEqual([]);
             store.onMarketTick('1HZ10V', faded, 5, true);
             expect(store.scan_progress?.checked).toBe(1); // the real number scanned
         });

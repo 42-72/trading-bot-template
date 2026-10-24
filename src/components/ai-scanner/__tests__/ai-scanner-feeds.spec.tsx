@@ -171,7 +171,7 @@ describe('AI Scanner feeds after the winner', () => {
             return true;
         });
         const { store } = await startScanning();
-        expect(store.qualified).toHaveLength(3); // all qualified on their seed
+        expect(store.armed).toHaveLength(3); // all qualified on their seed
         expect(loadBotIntoBuilder).not.toHaveBeenCalled();
         expect(socket.requests.some(request => 'forget_all' in request)).toBe(false);
 

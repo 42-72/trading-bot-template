@@ -2,6 +2,7 @@ import { action, computed, makeObservable, observable, reaction, runInAction } f
 import {
     AI_ENGINE_BOT_NAME,
     AI_ENGINE_OVER_UNDER_XML,
+    AI_SCANNER_ARM_SECONDS,
     AI_SCANNER_CURRENCY,
     AI_SCANNER_MIN_STAKE,
     AI_SCANNER_SCAN_LIMIT_SECONDS,
@@ -22,12 +23,15 @@ import RootStore from './root-store';
 //
 //   idle -> checking   contracts_for for every market: only those offering the
 //                      tab's contract types at 1 tick are scanned
-//        -> scanning   every offered market's last 600 digits, live, all at once. On
-//                      each tick: condition() decides whether that market is
-//                      qualified (any number can be); a qualified market whose
-//                      entry() is true on that tick wins. Nothing is loaded
-//                      while scanning: loading the engine makes the bot engine
-//                      send forget_all 'ticks', silencing every feed.
+//        -> scanning   every offered market's last 600 digits, live, all at once.
+//                      A market meeting condition() becomes ARMED for 3 minutes
+//                      (any number can be, each with its own clock) and stays
+//                      armed even if the condition stops holding; the first
+//                      armed market whose entry() is true on a live tick wins.
+//                      An armed market reaching 3:00 is disarmed and can arm
+//                      again later. Nothing is loaded while scanning: loading
+//                      the engine makes the bot engine send forget_all 'ticks',
+//                      silencing every feed.
 //        -> starting   first entry wins: feeds closed, THEN the engine loaded
 //                      with the winner's values and read back, stats cleared, Run
 //        -> running    the bot trades until its own TP / SL (an error before
@@ -63,7 +67,17 @@ export type TAiScannerMarket = { symbol: string; text: string; submarket: string
 
 export type TAiScannerTarget = TAiScannerMarket & { reason: string };
 
-export type TQualifiedMarket = { symbol: string; text: string; reason: string };
+export type TArmedMarket = {
+    symbol: string;
+    text: string;
+    armed_at: number;
+    /** When it is disarmed without an entry (ms since epoch). */
+    expires_at: number;
+    /** The strategy's reason text from the latest check - live, not the one it armed with. */
+    reason: string;
+    /** Whether the condition still held on the latest check. */
+    still_met: boolean;
+};
 
 export type TFeedStatus = { status: string; n: number };
 
@@ -72,9 +86,7 @@ type TFormErrors = Partial<Record<keyof TAiScannerForm, string>>;
 const FORM_STORAGE_KEY = 'ai_scanner_form';
 export const SCAN_STOPPED_MESSAGE = 'Scan stopped.';
 export const NO_MARKETS_OFFERED_MESSAGE = 'No markets offer this trade right now.';
-export const CONDITIONS_NOT_MET_MESSAGE = `Conditions not met — no market qualified in ${
-    AI_SCANNER_SCAN_LIMIT_SECONDS / 60
-} minutes.`;
+export const CONDITIONS_NOT_MET_MESSAGE = 'Conditions not met — no entry found.';
 
 const DEFAULT_FORM: TAiScannerForm = {
     strategy: 'over',
@@ -145,8 +157,8 @@ export default class AiScannerStore {
     locked: TAiScannerLocked | null = null;
     /** The winning market, from the moment its entry hits. */
     target: TAiScannerTarget | null = null;
-    /** Markets whose condition holds right now, in the order they qualified. */
-    qualified: TQualifiedMarket[] = [];
+    /** Armed markets, in the order they armed - each waiting for its own entry. */
+    armed: TArmedMarket[] = [];
     markets: TAiScannerMarket[] = [];
     /** This scan's markets: those of `markets` whose contracts_for offers the trade (checking stage). */
     scan_markets: TAiScannerMarket[] = [];
@@ -171,10 +183,12 @@ export default class AiScannerStore {
     private run_failure: string | null = null;
     private stopRunErrorListeners: (() => void) | null = null;
     private scan_timer: ReturnType<typeof setTimeout> | null = null;
-    // Qualified markets by symbol, kept current on every tick; `qualified`
-    // is published from it when the set changes, and with scan_progress for
-    // reason-text updates (at most once a second).
-    private qualified_by_symbol = new Map<string, TQualifiedMarket>();
+    // Armed markets by symbol, kept current on every tick, and each one's
+    // 3-minute timer. `armed` is published from it at once when a market arms,
+    // disarms or its condition flips, and otherwise with scan_progress (at
+    // most once a second) for the live reason text.
+    private armed_by_symbol = new Map<string, TArmedMarket>();
+    private arm_timers = new Map<string, ReturnType<typeof setTimeout>>();
     // Tick feeds currently mounted (market-feed.tsx). Run waits for this to
     // reach 0 - see pressRun.
     private mounted_feeds = 0;
@@ -194,7 +208,7 @@ export default class AiScannerStore {
             stage: observable,
             locked: observable,
             target: observable,
-            qualified: observable.ref,
+            armed: observable.ref,
             markets: observable.ref,
             scan_markets: observable.ref,
             feed_status: observable,
@@ -383,8 +397,7 @@ export default class AiScannerStore {
         this.target = null;
         this.final_profit = null;
         this.run_failure = null;
-        this.qualified_by_symbol.clear();
-        this.qualified = [];
+        this.clearArmed();
         this.scan_markets = [];
         this.feed_status = {};
         this.message = '';
@@ -427,12 +440,10 @@ export default class AiScannerStore {
         this.scan_timer = setTimeout(
             action(() => {
                 this.scan_timer = null;
-                // While any market is qualified the scan keeps going past the
-                // limit; it stops the first moment after it that none is
-                // (onMarketTick).
-                if (token === this.run_token && this.stage === 'scanning' && this.qualified_by_symbol.size === 0) {
-                    this.finish('idle', CONDITIONS_NOT_MET_MESSAGE);
-                }
+                // While any market is armed the scan keeps going past the
+                // limit; it ends the first moment after it that none is
+                // (disarm).
+                if (token === this.run_token) this.endScanIfNothingArmed();
             }),
             limit_ms
         );
@@ -483,28 +494,81 @@ export default class AiScannerStore {
         if (!market) return;
 
         const result = this.strategy.condition(digits);
-        const was_qualified = this.qualified_by_symbol.has(symbol);
-        if (result.qualified) {
-            this.qualified_by_symbol.set(symbol, { symbol, text: market.text, reason: result.reason });
-        } else {
-            this.qualified_by_symbol.delete(symbol);
+        let armed = this.armed_by_symbol.get(symbol);
+        let changed = false;
+        if (!armed && result.qualified) {
+            armed = this.arm(market, result.reason);
+            changed = true;
+        } else if (armed) {
+            // Stays armed whatever the condition does now; the panel shows it.
+            if (armed.still_met !== result.qualified) changed = true;
+            armed.reason = result.reason;
+            armed.still_met = result.qualified;
         }
-        this.recordCheck(market, result, was_qualified !== result.qualified);
+        this.recordCheck(market, result, changed);
 
-        if (result.qualified) {
-            // A re-seed (stream re-subscribed) only re-checks the condition:
-            // its last digit is history, not a new tick to enter on.
-            if (!is_seed && this.strategy.entry(digits, new_digit)) {
-                this.pressRun({ ...market, reason: result.reason }, this.run_token);
-            }
-            return;
-        }
-
-        // Past the limit, the scan ends the first moment no market is qualified.
-        if (this.qualified_by_symbol.size === 0 && this.scan_deadline !== null && Date.now() >= this.scan_deadline) {
-            this.finish('idle', CONDITIONS_NOT_MET_MESSAGE);
+        // An armed market waits for its own entry on every live tick. A
+        // re-seed (stream re-subscribed) is history, never an entry.
+        if (armed && !is_seed && this.strategy.entry(digits, new_digit)) {
+            this.pressRun({ ...market, reason: armed.reason }, this.run_token);
         }
     };
+
+    /** Arm `market` for AI_SCANNER_ARM_SECONDS, on its own clock. */
+    private arm(market: TAiScannerMarket, reason: string): TArmedMarket {
+        const now = Date.now();
+        const arm_ms = AI_SCANNER_ARM_SECONDS * 1000;
+        const armed: TArmedMarket = {
+            symbol: market.symbol,
+            text: market.text,
+            armed_at: now,
+            expires_at: now + arm_ms,
+            reason,
+            still_met: true,
+        };
+        this.armed_by_symbol.set(market.symbol, armed);
+        const token = this.run_token;
+        this.arm_timers.set(
+            market.symbol,
+            setTimeout(
+                action(() => this.disarm(market.symbol, token)),
+                arm_ms
+            )
+        );
+        return armed;
+    }
+
+    /** 3:00 without an entry. It can arm again later, with a fresh 3 minutes. */
+    private disarm(symbol: string, token: number) {
+        this.arm_timers.delete(symbol);
+        if (token !== this.run_token || this.stage !== 'scanning') return;
+        this.armed_by_symbol.delete(symbol);
+        this.publishArmed();
+        this.endScanIfNothingArmed();
+    }
+
+    /** The scan ends only once 5:00 have passed since Scan AND nothing is armed. */
+    private endScanIfNothingArmed() {
+        if (
+            this.stage === 'scanning' &&
+            this.armed_by_symbol.size === 0 &&
+            this.scan_deadline !== null &&
+            Date.now() >= this.scan_deadline
+        ) {
+            this.finish('idle', CONDITIONS_NOT_MET_MESSAGE);
+        }
+    }
+
+    private publishArmed() {
+        this.armed = Array.from(this.armed_by_symbol.values()).map(armed => ({ ...armed }));
+    }
+
+    private clearArmed() {
+        this.arm_timers.forEach(timer => clearTimeout(timer));
+        this.arm_timers.clear();
+        this.armed_by_symbol.clear();
+        this.armed = [];
+    }
 
     private recordCheck(market: TAiScannerMarket, result: TConditionResult, force_publish: boolean) {
         const now = Date.now();
@@ -516,7 +580,7 @@ export default class AiScannerStore {
         });
         if (!force_publish && now - this.scan_progress_published_at < 1000) return;
         this.scan_progress_published_at = now;
-        this.qualified = Array.from(this.qualified_by_symbol.values());
+        this.publishArmed();
 
         // Nearest to qualifying by the strategy's own shortfall; a strategy
         // that reports none just shows the market checked most recently.
@@ -551,8 +615,7 @@ export default class AiScannerStore {
         this.scan_deadline = null;
         this.stage = stage;
         this.message = message;
-        this.qualified_by_symbol.clear();
-        this.qualified = [];
+        this.clearArmed();
         if (stage === 'idle') this.target = null;
     }
 
@@ -616,8 +679,7 @@ export default class AiScannerStore {
 
         this.clearScanTimer();
         this.target = winner;
-        this.qualified_by_symbol.clear();
-        this.qualified = [];
+        this.clearArmed();
         // 'starting' closes every feed; onMarketTick ignores everything from
         // here, so no other entry can count - not even one on this tick.
         this.stage = 'starting';

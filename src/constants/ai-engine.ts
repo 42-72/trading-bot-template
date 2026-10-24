@@ -62,6 +62,9 @@ export const AI_SCANNER_TAB_CONTRACT_TYPES = {
 // locked the limit no longer applies - it waits for the entry for as long as
 // the condition holds (AiScannerStore).
 export const AI_SCANNER_SCAN_LIMIT_SECONDS = 300;
+// How long a market stays ARMED once it meets the strategy's condition: it
+// waits this long for its own entry, even if the condition stops holding.
+export const AI_SCANNER_ARM_SECONDS = 180;
 
 // v1 supports USD accounts only. Deriv publishes no structured minimum stake
 // per currency on this API (contracts_for carries none; it is only quoted in a
