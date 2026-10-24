@@ -53,6 +53,7 @@ const atStage = (store: AiScannerStore, stage: TAiScannerStage) =>
     act(() => {
         runInAction(() => {
             store.locked = {
+                tab: store.active_tab,
                 strategy: 'over',
                 stake: 0.35,
                 martingale: 2,
@@ -238,5 +239,58 @@ describe('AI Scanner panel - armed markets', () => {
         });
         expect(screen.getByText('Conditions changed since it qualified')).toBeInTheDocument();
         expect(screen.queryByText('Conditions still met')).not.toBeInTheDocument();
+    });
+});
+
+describe('AI Scanner panel - Even/Odd tab', () => {
+    beforeEach(() => localStorage.clear());
+
+    it('is enabled - no "coming soon" - and shows its one card instead of the Over/Under picker', () => {
+        const store = setup();
+        expect(document.body.textContent).not.toMatch(/coming soon/);
+        const tab = screen.getByRole('tab', { name: 'Even/Odd' });
+        expect(tab).toBeEnabled();
+        fireEvent.click(tab);
+        expect(store.active_tab).toBe('even_odd');
+        expect(tab).toHaveAttribute('aria-selected', 'true');
+        expect(screen.getByText('Even/Odd — the AI picks the side')).toBeInTheDocument();
+        expect(screen.getByText('Even or Odd: 50% each · payout about 95%')).toBeInTheDocument();
+        expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+        expect(top()).toBeEnabled();
+
+        fireEvent.click(screen.getByRole('tab', { name: 'Over/Under' }));
+        expect(screen.getAllByRole('radio')).toHaveLength(2);
+    });
+
+    it('the other tab cannot be picked while a scan runs', () => {
+        const store = setup();
+        fireEvent.click(screen.getByRole('tab', { name: 'Even/Odd' }));
+        atStage(store, 'scanning');
+        expect(screen.getByRole('tab', { name: 'Over/Under' })).toBeDisabled();
+        expect(store.active_tab).toBe('even_odd');
+    });
+
+    it('shows the side next to each armed market', () => {
+        const store = setup();
+        fireEvent.click(screen.getByRole('tab', { name: 'Even/Odd' }));
+        atStage(store, 'scanning');
+        const now = Date.now();
+        act(() => {
+            runInAction(() => {
+                store.scan_progress = { checked: 12, last_check_at: now, closest: null };
+                store.armed = [
+                    {
+                        symbol: '1HZ25V',
+                        text: 'Volatility 25 (1s)',
+                        armed_at: now,
+                        expires_at: now + 180000,
+                        reason: 'r',
+                        still_met: true,
+                        side: 'even',
+                    },
+                ];
+            });
+        });
+        expect(screen.getByTestId('ai-scanner-armed-1HZ25V')).toHaveTextContent('Volatility 25 (1s) — EVEN');
     });
 });

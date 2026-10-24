@@ -1,3 +1,4 @@
+import evenOddEngineXml from '../assets/ai-engine/bull-ai-evenodd.xml';
 import overUnderEngineXml from '../assets/ai-engine/bull-ai-overunder.xml';
 
 // The AI Scanner's engine bots (src/assets/ai-engine/). Deliberately NOT in
@@ -5,10 +6,11 @@ import overUnderEngineXml from '../assets/ai-engine/bull-ai-overunder.xml';
 // on startup (isAiEngineStrategyId, library-strategies.ts). The scanner writes
 // the trader's locked values into a copy of the XML (ai-engine-xml.ts) and
 // loads that - the bundled text itself is never edited.
-// The Even/Odd engine (bull-ai-evenodd.xml) is bundled once its strategy is
-// added; until then nothing imports it.
 export const AI_ENGINE_OVER_UNDER_XML: string = overUnderEngineXml;
 export const AI_ENGINE_BOT_NAME = 'AI Scanner - Over/Under';
+// Even/Odd: AI DIRECTION 1 buys DIGITEVEN, 0 buys DIGITODD; no barriers.
+export const AI_ENGINE_EVEN_ODD_XML: string = evenOddEngineXml;
+export const AI_ENGINE_EVEN_ODD_BOT_NAME = 'AI Scanner - Even/Odd';
 
 // Variable names exactly as declared in the engine's <variables>. Values are
 // written into the one variables_set for each name inside trade_definition's

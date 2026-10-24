@@ -74,3 +74,40 @@ describe('writeEngineValues', () => {
         expect(() => writeEngineValues(engine, { ...values, stake: NaN })).toThrow(AiEngineXmlError);
     });
 });
+
+describe('the Even/Odd engine', () => {
+    const even_odd = fs.readFileSync(path.join(__dirname, '../../assets/ai-engine/bull-ai-evenodd.xml'), 'utf8');
+    const { first_barrier, recovery_barrier, ...without_barriers } = values; // eslint-disable-line @typescript-eslint/no-unused-vars
+
+    it('ships with direction 1 (Even) and has no barriers', () => {
+        const shipped = readEngineValues(even_odd);
+        expect(shipped).toMatchObject({ ai_direction: 1, martingale: 2, stake: 20, stake_2: 20 });
+        expect(shipped.first_barrier).toBeUndefined();
+        expect(shipped.recovery_barrier).toBeUndefined();
+    });
+
+    it('takes direction, market and the locked values - no barriers', () => {
+        expect(readEngineValues(writeEngineValues(even_odd, { ...without_barriers, ai_direction: 0 }))).toEqual({
+            ai_direction: 0,
+            stake: 0.35,
+            stake_2: 0.35,
+            martingale: 2.5,
+            take_profit: 3,
+            stop_loss: 9,
+            market: 'synthetic_index',
+            submarket: 'jump_index',
+            symbol: 'JD25',
+        });
+    });
+
+    it('refuses barriers it has no variables for', () => {
+        expect(() => writeEngineValues(even_odd, values)).toThrow(AiEngineXmlError);
+    });
+
+    it('the Over/Under engine still gets its barriers written', () => {
+        expect(readEngineValues(writeEngineValues(engine, values))).toMatchObject({
+            first_barrier: 7,
+            recovery_barrier: 6,
+        });
+    });
+});

@@ -18,6 +18,12 @@ jest.mock('../../assets/ai-engine/bull-ai-overunder.xml', () => {
     return readFileSync(join(__dirname, '../../assets/ai-engine/bull-ai-overunder.xml'), 'utf8');
 });
 
+jest.mock('../../assets/ai-engine/bull-ai-evenodd.xml', () => {
+    const { readFileSync } = jest.requireActual('fs');
+    const { join } = jest.requireActual('path');
+    return readFileSync(join(__dirname, '../../assets/ai-engine/bull-ai-evenodd.xml'), 'utf8');
+});
+
 jest.mock('@/utils/load-bot-into-builder', () => ({ loadBotIntoBuilder: jest.fn() }));
 
 // contracts_for on the app's socket: every market offers all digit contracts
@@ -111,10 +117,15 @@ const fillForm = (store: AiScannerStore, strategy: 'over' | 'under' = 'over') =>
 };
 
 // Scan & Run, then let the contracts_for check finish.
-const startScan = async (strategy: 'over' | 'under' = 'over', use_test = false) => {
+const startScan = async (
+    strategy: 'over' | 'under' = 'over',
+    use_test = false,
+    tab: 'over_under' | 'even_odd' = 'over_under'
+) => {
     const root = makeRoot();
     const store = new AiScannerStore(root);
     store.setMarkets(MARKETS);
+    store.setActiveTab(tab);
     fillForm(store, strategy);
     store.setUseTestStrategy(use_test);
     store.start();
@@ -649,6 +660,115 @@ describe('AiScannerStore', () => {
             expect(root.run_panel.onRunButtonClick).not.toHaveBeenCalled();
             expect(store.stage).toBe('idle');
             expect(store.message).toBe('Run not pressed: the engine bot does not hold the locked values.');
+        });
+    });
+
+    describe('Even/Odd tab', () => {
+        // Even/Odd windows: body odd digits first, even digits last, then the tail.
+        const eoWindow = (counts: number[], tail: number[] = [], odd_last = false) => {
+            const remaining = counts.slice();
+            tail.forEach(digit => {
+                remaining[digit] -= 1;
+            });
+            const of = (parity: number) =>
+                remaining.flatMap((count, digit) => (digit % 2 === parity ? new Array(count).fill(digit) : []));
+            return [...(odd_last ? [...of(0), ...of(1)] : [...of(1), ...of(0)]), ...tail];
+        };
+        const mirrorCounts = (counts: number[]) => counts.map((_, digit) => counts[9 - digit]);
+        //                0   1   2   3   4   5   6   7   8   9
+        const EVEN_SIDE = [64, 59, 68, 43, 71, 59, 64, 50, 64, 58]; // EVEN qualifies, least 3
+        const ODD_SIDE = mirrorCounts(EVEN_SIDE); // ODD qualifies, least 6
+        const even_armed = eoWindow(EVEN_SIDE);
+        const even_entering = eoWindow(EVEN_SIDE, [3, 5, 4]); // red bar 3, one more odd, then even
+        const odd_armed = eoWindow(ODD_SIDE, [], true);
+        const odd_entering = eoWindow(ODD_SIDE, [6, 4, 5], true); // red bar 6, one more even, then odd
+
+        it('arms with the side, and the winner writes AI DIRECTION 1 for EVEN into the Even/Odd engine', async () => {
+            const { root, store } = await startScan('over', false, 'even_odd');
+            store.onMarketTick('JD25', even_armed, 4, true);
+            expect(armedOf(store, 'JD25')).toMatchObject({ side: 'even', still_met: true });
+            store.onMarketTick('JD25', even_entering, 4);
+            await flush();
+            expect(store.target).toMatchObject({ symbol: 'JD25', side: 'even' });
+            const values = readEngineValues(workspace_xml);
+            expect(values).toMatchObject({
+                ai_direction: 1,
+                symbol: 'JD25',
+                submarket: 'jump_index',
+                stake: 0.35,
+                stake_2: 0.35,
+                martingale: 2,
+                take_profit: 5,
+                stop_loss: 10,
+            });
+            // The Even/Odd engine (no barrier variables), not the Over/Under one.
+            expect(values.first_barrier).toBeUndefined();
+            expect(workspace_xml).toContain('DIGITEVEN');
+            expect(root.run_panel.onRunButtonClick).toHaveBeenCalledTimes(1);
+            expect(store.stage).toBe('running');
+        });
+
+        it('an ODD winner writes AI DIRECTION 0 and the read-back passes', async () => {
+            const { root, store } = await startScan('over', false, 'even_odd');
+            store.onMarketTick('1HZ10V', odd_armed, 5, true);
+            expect(armedOf(store, '1HZ10V')?.side).toBe('odd');
+            store.onMarketTick('1HZ10V', odd_entering, 5);
+            await flush();
+            expect(store.target?.side).toBe('odd');
+            expect(readEngineValues(workspace_xml)).toMatchObject({ ai_direction: 0, symbol: '1HZ10V' });
+            expect(root.run_panel.onRunButtonClick).toHaveBeenCalledTimes(1);
+        });
+
+        it('keeps the armed side when the market qualifies for the other side instead', async () => {
+            const { root, store } = await startScan('over', false, 'even_odd');
+            store.onMarketTick('JD25', even_armed, 4, true);
+            store.onMarketTick('JD25', odd_armed, 5); // now ODD qualifies
+            expect(armedOf(store, 'JD25')).toMatchObject({ side: 'even', still_met: false });
+            store.onMarketTick('JD25', odd_entering, 5); // an ODD entry - not this market's side
+            await flush();
+            expect(root.run_panel.onRunButtonClick).not.toHaveBeenCalled();
+            store.onMarketTick('JD25', even_entering, 4); // its EVEN entry
+            await flush();
+            expect(store.target?.side).toBe('even');
+            expect(readEngineValues(workspace_xml).ai_direction).toBe(1);
+        });
+
+        it('a direction that reads back wrong blocks Run', async () => {
+            const { root, store } = await startScan('over', false, 'even_odd');
+            (loadBotIntoBuilder as jest.Mock).mockImplementationOnce(async ({ block_string, strategy_id }) => {
+                workspace_xml = block_string.replace(/(id="bull-ai-n-dir"><field name="NUM">)1</, '$10<');
+                workspace.current_strategy_id = strategy_id;
+                return true;
+            });
+            store.onMarketTick('JD25', even_armed, 4, true);
+            store.onMarketTick('JD25', even_entering, 4);
+            await flush();
+            expect(readEngineValues(workspace_xml).ai_direction).toBe(0);
+            expect(root.run_panel.onRunButtonClick).not.toHaveBeenCalled();
+            expect(store.message).toBe('Run not pressed: the engine bot does not hold the locked values.');
+        });
+
+        it('the Even/Odd tab needs DIGITEVEN and DIGITODD at 1 tick', async () => {
+            offerings = { JD25: ALL_DIGITS.filter(contract => contract.contract_type !== 'DIGITODD') };
+            const { store } = await startScan('over', false, 'even_odd');
+            expect(store.scan_markets.map(market => market.symbol)).toEqual(['1HZ10V']);
+        });
+
+        it('the tab is fixed for the run: switching mid-scan is ignored', async () => {
+            const { store } = await startScan('over', false, 'even_odd');
+            store.setActiveTab('over_under');
+            expect(store.active_tab).toBe('even_odd');
+            expect(store.locked?.tab).toBe('even_odd');
+        });
+
+        it('TEST on the Even/Odd tab arms as EVEN and runs on the next live tick', async () => {
+            const { root, store } = await startScan('over', true, 'even_odd');
+            store.onMarketTick('JD25', full(), 5, true);
+            expect(armedOf(store, 'JD25')?.side).toBe('even');
+            store.onMarketTick('JD25', full(), 5);
+            await flush();
+            expect(readEngineValues(workspace_xml).ai_direction).toBe(1);
+            expect(root.run_panel.onRunButtonClick).toHaveBeenCalledTimes(1);
         });
     });
 

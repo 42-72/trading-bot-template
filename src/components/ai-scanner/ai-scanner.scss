@@ -167,11 +167,6 @@ $ai-scanner-z: 5;
         }
     }
 
-    &__soon {
-        font-size: 1rem;
-        font-weight: 400;
-    }
-
     &__body {
         flex: 1 1 auto;
         min-height: 0;
@@ -191,6 +186,11 @@ $ai-scanner-z: 5;
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 0.8rem;
+
+        // Even/Odd: one card, the full width.
+        &--single {
+            grid-template-columns: 1fr;
+        }
     }
 
     &__strategy {

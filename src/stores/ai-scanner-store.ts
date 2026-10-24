@@ -1,6 +1,8 @@
 import { action, computed, makeObservable, observable, reaction, runInAction } from 'mobx';
 import {
     AI_ENGINE_BOT_NAME,
+    AI_ENGINE_EVEN_ODD_BOT_NAME,
+    AI_ENGINE_EVEN_ODD_XML,
     AI_ENGINE_OVER_UNDER_XML,
     AI_SCANNER_ARM_SECONDS,
     AI_SCANNER_CURRENCY,
@@ -14,7 +16,7 @@ import { DBOT_TABS } from '@/constants/bot-contents';
 import { observer as globalObserver } from '@/external/bot-skeleton/utils/observer';
 import { readEngineValues, TEngineValues, writeEngineValues } from '@/utils/ai-engine-xml';
 import { filterOfferedMarkets } from '@/utils/ai-scanner-offered';
-import { getOverUnderStrategy, TConditionResult } from '@/utils/ai-strategies';
+import { getScannerStrategy, TConditionResult, TSide } from '@/utils/ai-strategies';
 import { createAiEngineStrategyId } from '@/utils/library-strategies';
 import { loadBotIntoBuilder } from '@/utils/load-bot-into-builder';
 import RootStore from './root-store';
@@ -54,6 +56,9 @@ export type TAiScannerForm = {
 };
 
 export type TAiScannerLocked = {
+    /** The tab the scan runs: its strategy, contract types and engine. */
+    tab: TAiScannerTab;
+    /** Over/Under tab: which of the two. */
     strategy: TOverUnderStrategyId;
     stake: number;
     martingale: number;
@@ -65,7 +70,8 @@ export type TAiScannerLocked = {
 
 export type TAiScannerMarket = { symbol: string; text: string; submarket: string };
 
-export type TAiScannerTarget = TAiScannerMarket & { reason: string };
+/** The winning market. `side`: Even/Odd only - the side it armed with. */
+export type TAiScannerTarget = TAiScannerMarket & { reason: string; side?: TSide };
 
 export type TArmedMarket = {
     symbol: string;
@@ -75,8 +81,10 @@ export type TArmedMarket = {
     expires_at: number;
     /** The strategy's reason text from the latest check - live, not the one it armed with. */
     reason: string;
-    /** Whether the condition still held on the latest check. */
+    /** Whether the condition still held on the latest check (on Even/Odd: for the armed side). */
     still_met: boolean;
+    /** Even/Odd only: the side it armed with, kept until it disarms. */
+    side?: TSide;
 };
 
 export type TFeedStatus = { status: string; n: number };
@@ -330,8 +338,8 @@ export default class AiScannerStore {
     };
 
     setActiveTab = (tab: TAiScannerTab) => {
-        // Even/Odd is shown but disabled until its strategy is added.
-        if (tab === 'even_odd') return;
+        // The tab is part of the run - it can't change while one is going.
+        if (this.is_active) return;
         this.active_tab = tab;
     };
 
@@ -386,6 +394,7 @@ export default class AiScannerStore {
         if (!this.can_start) return;
         this.run_token += 1;
         this.locked = {
+            tab: this.active_tab,
             strategy: this.form.strategy,
             stake: parseAmount(this.form.stake),
             martingale: parseAmount(this.form.martingale),
@@ -415,7 +424,8 @@ export default class AiScannerStore {
 
     /** Fresh contracts_for for every market; scan only those offering this tab's trade. */
     private async checkOfferedMarkets(token: number) {
-        const offered = await filterOfferedMarkets(this.markets, AI_SCANNER_TAB_CONTRACT_TYPES[this.active_tab]);
+        const tab = (this.locked as TAiScannerLocked).tab;
+        const offered = await filterOfferedMarkets(this.markets, AI_SCANNER_TAB_CONTRACT_TYPES[tab]);
         if (token !== this.run_token || this.stage !== 'checking') return;
         runInAction(() => {
             if (offered.length === 0) {
@@ -476,7 +486,7 @@ export default class AiScannerStore {
 
     private get strategy() {
         const locked = this.locked as TAiScannerLocked;
-        return getOverUnderStrategy(locked.strategy, locked.use_test_strategy && this.can_use_test_strategy);
+        return getScannerStrategy(locked.tab, locked.strategy, locked.use_test_strategy && this.can_use_test_strategy);
     }
 
     /** Called by each market's tick feed (components/ai-scanner/market-feed.tsx) on every new tick. */
@@ -496,26 +506,31 @@ export default class AiScannerStore {
         const result = this.strategy.condition(digits);
         let armed = this.armed_by_symbol.get(symbol);
         let changed = false;
+        // Even/Odd arms with the side it qualified on (TEST: Even).
+        const side = this.locked.tab === 'even_odd' ? (result.side ?? 'even') : undefined;
         if (!armed && result.qualified) {
-            armed = this.arm(market, result.reason);
+            armed = this.arm(market, result.reason, side);
             changed = true;
         } else if (armed) {
             // Stays armed whatever the condition does now; the panel shows it.
-            if (armed.still_met !== result.qualified) changed = true;
+            // On Even/Odd, qualifying for the other side is a changed
+            // condition too - the armed side is kept until it disarms.
+            const still_met = result.qualified && (armed.side === undefined || result.side === armed.side);
+            if (armed.still_met !== still_met) changed = true;
             armed.reason = result.reason;
-            armed.still_met = result.qualified;
+            armed.still_met = still_met;
         }
         this.recordCheck(market, result, changed);
 
         // An armed market waits for its own entry on every live tick. A
         // re-seed (stream re-subscribed) is history, never an entry.
-        if (armed && !is_seed && this.strategy.entry(digits, new_digit)) {
-            this.pressRun({ ...market, reason: armed.reason }, this.run_token);
+        if (armed && !is_seed && this.strategy.entry(digits, new_digit, { side: armed.side })) {
+            this.pressRun({ ...market, reason: armed.reason, side: armed.side }, this.run_token);
         }
     };
 
     /** Arm `market` for AI_SCANNER_ARM_SECONDS, on its own clock. */
-    private arm(market: TAiScannerMarket, reason: string): TArmedMarket {
+    private arm(market: TAiScannerMarket, reason: string, side?: TSide): TArmedMarket {
         const now = Date.now();
         const arm_ms = AI_SCANNER_ARM_SECONDS * 1000;
         const armed: TArmedMarket = {
@@ -525,6 +540,7 @@ export default class AiScannerStore {
             expires_at: now + arm_ms,
             reason,
             still_met: true,
+            ...(side ? { side } : {}),
         };
         this.armed_by_symbol.set(market.symbol, armed);
         const token = this.run_token;
@@ -619,8 +635,21 @@ export default class AiScannerStore {
         if (stage === 'idle') this.target = null;
     }
 
-    private engineValuesFor(target: TAiScannerMarket): TEngineValues {
+    private engineValuesFor(target: TAiScannerTarget): TEngineValues {
         const locked = this.locked as TAiScannerLocked;
+        if (locked.tab === 'even_odd') {
+            // Even -> AI DIRECTION 1 (DIGITEVEN), Odd -> 0 (DIGITODD). No barriers.
+            return {
+                market: 'synthetic_index',
+                submarket: target.submarket,
+                symbol: target.symbol,
+                ai_direction: target.side === 'odd' ? 0 : 1,
+                stake: locked.stake,
+                martingale: locked.martingale,
+                take_profit: locked.take_profit,
+                stop_loss: locked.stop_loss,
+            };
+        }
         const setup = OVER_UNDER_SETUPS[locked.strategy];
         return {
             market: 'synthetic_index',
@@ -641,17 +670,21 @@ export default class AiScannerStore {
      * it into Bot Builder (the Tbots load path). False when it couldn't - the
      * scan has then already been stopped with the reason.
      */
-    private async writeAndLoadEngine(market: TAiScannerMarket, token: number): Promise<boolean> {
+    private async writeAndLoadEngine(market: TAiScannerTarget, token: number): Promise<boolean> {
+        const is_even_odd = (this.locked as TAiScannerLocked).tab === 'even_odd';
         let xml: string;
         try {
-            xml = writeEngineValues(AI_ENGINE_OVER_UNDER_XML, this.engineValuesFor(market));
+            xml = writeEngineValues(
+                is_even_odd ? AI_ENGINE_EVEN_ODD_XML : AI_ENGINE_OVER_UNDER_XML,
+                this.engineValuesFor(market)
+            );
         } catch (error) {
             runInAction(() => this.finish('idle', `Could not prepare the engine bot: ${(error as Error).message}`));
             return false;
         }
         const ok = await loadBotIntoBuilder({
             block_string: xml,
-            file_name: AI_ENGINE_BOT_NAME,
+            file_name: is_even_odd ? AI_ENGINE_EVEN_ODD_BOT_NAME : AI_ENGINE_BOT_NAME,
             strategy_id: createAiEngineStrategyId(),
         });
         if (token !== this.run_token) return false;

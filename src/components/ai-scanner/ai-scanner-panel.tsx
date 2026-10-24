@@ -9,7 +9,7 @@ import {
     TOverUnderSetup,
     TOverUnderStrategyId,
 } from '@/constants/ai-engine';
-import type { TAiScannerForm, TAiScannerStage, TArmedMarket } from '@/stores/ai-scanner-store';
+import type { TAiScannerForm, TAiScannerStage, TAiScannerTab, TArmedMarket } from '@/stores/ai-scanner-store';
 import { localize } from '@deriv-com/translations';
 import { useAiScanner } from './use-ai-scanner';
 
@@ -69,6 +69,20 @@ const StrategyPicker = observer(() => {
     );
 });
 
+// Contract facts only, as for Over/Under: each side wins half the time.
+const EVEN_ODD_TITLE = () => localize('Even/Odd — the AI picks the side');
+const EVEN_ODD_FACTS = () => localize('Even or Odd: 50% each · payout about 95%');
+
+/** The Even/Odd tab's one card - there is nothing to choose; the AI picks the side per market. */
+const EvenOddCard = () => (
+    <div className='ai-scanner-panel__strategies ai-scanner-panel__strategies--single'>
+        <div className='ai-scanner-panel__strategy ai-scanner-panel__strategy--selected'>
+            <span className='ai-scanner-panel__strategy-name'>{EVEN_ODD_TITLE()}</span>
+            <span className='ai-scanner-panel__strategy-detail'>{EVEN_ODD_FACTS()}</span>
+        </div>
+    </div>
+);
+
 const FIELDS: { key: Exclude<keyof TAiScannerForm, 'strategy'>; label: () => string; hint: () => string }[] = [
     {
         key: 'stake',
@@ -111,7 +125,10 @@ const ArmedMarket = ({ armed }: { armed: TArmedMarket }) => {
     return (
         <div className='ai-scanner-panel__armed' data-testid={`ai-scanner-armed-${armed.symbol}`}>
             <p className='ai-scanner-panel__armed-head'>
-                <span className='ai-scanner-panel__armed-name'>{armed.text}</span>
+                <span className='ai-scanner-panel__armed-name'>
+                    {armed.text}
+                    {armed.side && ` — ${armed.side.toUpperCase()}`}
+                </span>
                 <span className='ai-scanner-panel__armed-clock'>
                     {localize('{{remaining}} left', { remaining: formatRemaining(armed.expires_at - now) })}
                 </span>
@@ -131,7 +148,8 @@ const ArmedMarket = ({ armed }: { armed: TArmedMarket }) => {
 
 const OverUnderForm = observer(() => {
     const ai_scanner = useAiScanner();
-    const { form, form_errors, start_blocker, can_start, can_use_test_strategy, use_test_strategy } = ai_scanner;
+    const { form, form_errors, start_blocker, can_start, can_use_test_strategy, use_test_strategy, active_tab } =
+        ai_scanner;
 
     return (
         // Enter in a field starts the scan, like the Scan button.
@@ -142,7 +160,7 @@ const OverUnderForm = observer(() => {
                 if (can_start) ai_scanner.start();
             }}
         >
-            <StrategyPicker />
+            {active_tab === 'even_odd' ? <EvenOddCard /> : <StrategyPicker />}
             <div className='ai-scanner-panel__fields'>
                 {FIELDS.map(({ key, label, hint }) => {
                     const error = form[key].trim() !== '' ? form_errors[key] : undefined;
@@ -232,6 +250,7 @@ const RunStatus = observer(() => {
     const ai_scanner = useAiScanner();
     const { stage, locked, target, message, feed_status, scan_markets, scan_deadline, armed } = ai_scanner;
     if (!locked) return null;
+    const is_even_odd = locked.tab === 'even_odd';
     const setup = OVER_UNDER_SETUPS[locked.strategy];
     const current = stageIndex(stage, armed.length > 0);
     const live = scan_markets.filter(market => feed_status[market.symbol]?.status === 'live').length;
@@ -270,7 +289,19 @@ const RunStatus = observer(() => {
                 </p>
             )}
 
-            {target && (
+            {target && is_even_odd && (
+                <dl className='ai-scanner-panel__facts'>
+                    <dt>{localize('Market')}</dt>
+                    <dd>{target.text}</dd>
+                    <dt>{localize('Side')}</dt>
+                    <dd>{(target.side ?? 'even').toUpperCase()}</dd>
+                    <dt>{localize('Win rate')}</dt>
+                    <dd>{EVEN_ODD_FACTS()}</dd>
+                    <dt>{localize('Reason')}</dt>
+                    <dd>{target.reason}</dd>
+                </dl>
+            )}
+            {target && !is_even_odd && (
                 <dl className='ai-scanner-panel__facts'>
                     <dt>{localize('Market')}</dt>
                     <dd>{target.text}</dd>
@@ -291,7 +322,7 @@ const RunStatus = observer(() => {
             <dl className='ai-scanner-panel__facts ai-scanner-panel__facts--locked'>
                 <dt>{localize('Locked for this run')}</dt>
                 <dd>
-                    {setup.label}
+                    {is_even_odd ? localize('Even/Odd') : setup.label}
                     {locked.use_test_strategy && ` · ${localize('TEST strategy')}`}
                 </dd>
                 <dt>{localize('Stake')}</dt>
@@ -378,6 +409,11 @@ export const ScannerButtons = observer(() => {
     );
 });
 
+const TABS: { id: TAiScannerTab; label: () => string }[] = [
+    { id: 'over_under', label: () => localize('Over/Under') },
+    { id: 'even_odd', label: () => localize('Even/Odd') },
+];
+
 type TAiScannerPanel = { style: React.CSSProperties; is_desktop: boolean };
 
 const AiScannerPanel = observer(({ style, is_desktop }: TAiScannerPanel) => {
@@ -408,21 +444,22 @@ const AiScannerPanel = observer(({ style, is_desktop }: TAiScannerPanel) => {
             </header>
 
             <div className='ai-scanner-panel__tabs' role='tablist'>
-                <button
-                    type='button'
-                    role='tab'
-                    aria-selected={active_tab === 'over_under'}
-                    className={clsx('ai-scanner-panel__tab', {
-                        'ai-scanner-panel__tab--active': active_tab === 'over_under',
-                    })}
-                    onClick={() => ai_scanner.setActiveTab('over_under')}
-                >
-                    {localize('Over/Under')}
-                </button>
-                <button type='button' role='tab' aria-selected={false} className='ai-scanner-panel__tab' disabled>
-                    {localize('Even/Odd')}
-                    <span className='ai-scanner-panel__soon'>{localize('coming soon')}</span>
-                </button>
+                {TABS.map(tab => (
+                    <button
+                        key={tab.id}
+                        type='button'
+                        role='tab'
+                        aria-selected={active_tab === tab.id}
+                        className={clsx('ai-scanner-panel__tab', {
+                            'ai-scanner-panel__tab--active': active_tab === tab.id,
+                        })}
+                        // The tab is part of a run: fixed while one is going.
+                        disabled={ai_scanner.is_active && active_tab !== tab.id}
+                        onClick={() => ai_scanner.setActiveTab(tab.id)}
+                    >
+                        {tab.label()}
+                    </button>
+                ))}
             </div>
 
             <div className='ai-scanner-panel__body'>

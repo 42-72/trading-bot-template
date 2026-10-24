@@ -14,8 +14,9 @@ export type TEngineValues = {
     submarket: string;
     symbol: string;
     ai_direction: 0 | 1;
-    first_barrier: number;
-    recovery_barrier: number;
+    /** Over/Under engine only - the Even/Odd engine has no barriers. */
+    first_barrier?: number;
+    recovery_barrier?: number;
     stake: number;
     martingale: number;
     take_profit: number;
@@ -87,7 +88,16 @@ const getMarketBlock = (doc: Document) => {
     return blocks[0];
 };
 
-const NUMBER_TARGETS: [keyof typeof ENGINE_VARIABLES, (values: TEngineValues) => number][] = [
+// Present in the Over/Under engine only: written when given, read back when
+// the engine has them. Every other target must exist in every engine.
+const OPTIONAL_TARGETS: (keyof typeof ENGINE_VARIABLES)[] = ['first_barrier', 'recovery_barrier'];
+
+const hasVariable = (doc: Document, name: string) => {
+    const [variables] = childElements(doc.documentElement, 'variables');
+    return (variables ? childElements(variables, 'variable') : []).some(variable => variable.textContent === name);
+};
+
+const NUMBER_TARGETS: [keyof typeof ENGINE_VARIABLES, (values: TEngineValues) => number | undefined][] = [
     ['ai_direction', values => values.ai_direction],
     ['first_barrier', values => values.first_barrier],
     ['recovery_barrier', values => values.recovery_barrier],
@@ -103,6 +113,9 @@ export const writeEngineValues = (xml: string, values: TEngineValues): string =>
 
     NUMBER_TARGETS.forEach(([key, pick]) => {
         const value = pick(values);
+        // A barrier not given (Even/Odd) is skipped; given, it must exist in
+        // the engine (getInitialisationNumField throws otherwise).
+        if (value === undefined && OPTIONAL_TARGETS.includes(key)) return;
         if (!Number.isFinite(value)) throw new AiEngineXmlError(`"${ENGINE_VARIABLES[key]}" is not a number`);
         getInitialisationNumField(doc, ENGINE_VARIABLES[key]).textContent = String(value);
     });
@@ -119,11 +132,13 @@ export const writeEngineValues = (xml: string, values: TEngineValues): string =>
 export const readEngineValues = (xml: string) => {
     const doc = parse(xml);
     const numbers = Object.fromEntries(
-        (Object.keys(ENGINE_VARIABLES) as (keyof typeof ENGINE_VARIABLES)[]).map(key => [
-            key,
-            Number(getInitialisationNumField(doc, ENGINE_VARIABLES[key]).textContent),
-        ])
-    ) as Record<keyof typeof ENGINE_VARIABLES, number>;
+        (Object.keys(ENGINE_VARIABLES) as (keyof typeof ENGINE_VARIABLES)[])
+            .filter(key => !OPTIONAL_TARGETS.includes(key) || hasVariable(doc, ENGINE_VARIABLES[key]))
+            .map(key => [key, Number(getInitialisationNumField(doc, ENGINE_VARIABLES[key]).textContent)])
+    ) as Record<Exclude<keyof typeof ENGINE_VARIABLES, 'first_barrier' | 'recovery_barrier'>, number> & {
+        first_barrier?: number;
+        recovery_barrier?: number;
+    };
     const market_block = getMarketBlock(doc);
     const field = (name: string) => onlyChild(market_block, 'field', name, name).textContent ?? '';
     return {

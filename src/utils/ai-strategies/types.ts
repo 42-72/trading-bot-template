@@ -12,9 +12,16 @@
 // Neither may claim to change the odds - the contract's win rate is fixed
 // (contractWinRate, constants/ai-engine.ts) and is what the panel shows.
 
+/** Even/Odd: the side a market qualifies on (and is armed with). */
+export type TSide = 'even' | 'odd';
+
 export type TConditionResult = {
     qualified: boolean;
     reason: string;
+    /** Even/Odd only: the side this market qualified on (or, when not, the side it is shown for). */
+    side?: TSide;
+    /** Even/Odd only: the single least appearing digit; absent when several tie. */
+    leastDigit?: number;
     /**
      * Optional: how many ticks short of qualifying, from the real counts (0 =
      * qualified). Only used to pick which market the panel shows as closest -
@@ -25,5 +32,6 @@ export type TConditionResult = {
 
 export type TAiStrategy = {
     condition: (digits: number[]) => TConditionResult;
-    entry: (digits: number[], newDigit: number) => boolean;
+    /** `context.side`: Even/Odd's armed side; Over/Under ignore it. */
+    entry: (digits: number[], newDigit: number, context?: { side?: TSide }) => boolean;
 };
