@@ -606,6 +606,52 @@ describe('AiScannerStore', () => {
         });
     });
 
+    describe('Under wins a scan', () => {
+        // Under qualifies: three of 0-3 at 64+, each of 7-9 at 59 or fewer -
+        // and its last ticks (1, 0, then 7) are Under's entry.
+        //                         0   1   2   3   4   5   6   7   8   9
+        const UNDER_QUALIFYING = [64, 64, 64, 64, 56, 57, 57, 58, 58, 58];
+        const under_entering = windowOf(UNDER_QUALIFYING, [1, 0, 7]);
+
+        it('writes AI DIRECTION 0, FIRST BARRIER 7, RECOVERY BARRIER 6 into the engine, reads them back, Runs', async () => {
+            const { root, store } = await startScan('under');
+            store.onMarketTick('JD25', under_entering, 7, true); // armed on the seed
+            expect(armedSymbols(store)).toEqual(['JD25']);
+            store.onMarketTick('JD25', under_entering, 7); // live tick: Under's entry
+            await flush();
+            expect(store.target?.symbol).toBe('JD25');
+            expect(readEngineValues(workspace_xml)).toMatchObject({
+                ai_direction: 0,
+                first_barrier: 7,
+                recovery_barrier: 6,
+                symbol: 'JD25',
+                stake: 0.35,
+                stake_2: 0.35,
+                martingale: 2,
+                take_profit: 5,
+                stop_loss: 10,
+            });
+            expect(root.run_panel.onRunButtonClick).toHaveBeenCalledTimes(1);
+            expect(store.stage).toBe('running');
+        });
+
+        it('a barrier that reads back wrong (FIRST BARRIER 2) blocks Run', async () => {
+            const { root, store } = await startScan('under');
+            (loadBotIntoBuilder as jest.Mock).mockImplementationOnce(async ({ block_string, strategy_id }) => {
+                workspace_xml = block_string.replace(/(id="bull-ai-n-first"><field name="NUM">)7</, '$12<');
+                workspace.current_strategy_id = strategy_id;
+                return true;
+            });
+            store.onMarketTick('JD25', under_entering, 7, true);
+            store.onMarketTick('JD25', under_entering, 7);
+            await flush();
+            expect(readEngineValues(workspace_xml).first_barrier).toBe(2);
+            expect(root.run_panel.onRunButtonClick).not.toHaveBeenCalled();
+            expect(store.stage).toBe('idle');
+            expect(store.message).toBe('Run not pressed: the engine bot does not hold the locked values.');
+        });
+    });
+
     describe('TEST strategy, every time', () => {
         it.each(['over', 'under'] as const)(
             'with %s selected: qualifies on the first check of the seeded history, runs on the next live tick',
