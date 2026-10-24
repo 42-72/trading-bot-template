@@ -5,21 +5,28 @@ import { useStore } from '@/hooks/useStore';
 import { useSyntheticSymbols } from '@/hooks/useSyntheticSymbols';
 import { useDevice } from '@deriv-com/ui';
 import AiScannerButton from './ai-scanner-button';
-import { getSafeBounds, TBounds, TPoint } from './ai-scanner-layout';
+import { getSafeBounds, runBarTopBeside, TBounds, TPoint } from './ai-scanner-layout';
 import AiScannerPanel from './ai-scanner-panel';
 import MarketFeed from './market-feed';
 import { useAiScanner } from './use-ai-scanner';
 import './ai-scanner.scss';
 
-const PANEL_WIDTH = 360;
+// Desktop panel: 420 wide (was 360) and up to 70% of the window tall (was
+// as tall as its content, ~600, squeezed into the room above the button) -
+// never more than the window less 32px.
+const PANEL_WIDTH = 420;
+const PANEL_MAX_HEIGHT = 700;
+const PANEL_HEIGHT_SHARE = 0.7;
+const WINDOW_MARGIN = 32;
 const GAP = 8;
 
 type TLayout = { position: TPoint; size: number; bounds: TBounds };
 
 /**
- * Desktop: next to the button, opening toward the side with more room, kept
- * inside the safe area (never over the Run bar or the run panel column).
- * Mobile: the whole safe area - below the header, above the run bar.
+ * Desktop: beside the button (left of it when there's room - the default spot
+ * is bottom-right), bottom-aligned with it; above / below it otherwise.
+ * Always inside the safe area (never over the Run controls or the run panel
+ * column). Mobile: the whole safe area - below the header, above the run bar.
  */
 const panelStyle = (layout: TLayout | null, is_desktop: boolean, is_drawer_open: boolean): React.CSSProperties => {
     if (!is_desktop) {
@@ -36,13 +43,30 @@ const panelStyle = (layout: TLayout | null, is_desktop: boolean, is_drawer_open:
     }
     if (!layout) return { visibility: 'hidden' };
     const { position, size, bounds } = layout;
-    const width = Math.min(PANEL_WIDTH, bounds.right - bounds.left - 2 * GAP);
+    const max_height = Math.min(
+        PANEL_MAX_HEIGHT,
+        Math.round(window.innerHeight * PANEL_HEIGHT_SHARE),
+        window.innerHeight - WINDOW_MARGIN
+    );
+    const width = Math.min(PANEL_WIDTH, bounds.right - bounds.left - 2 * GAP, window.innerWidth - WINDOW_MARGIN);
+
+    const room_left = position.x - bounds.left - 2 * GAP;
+    const room_right = bounds.right - (position.x + size) - 2 * GAP;
+    if (room_left >= width || room_right >= width) {
+        const left = room_left >= width ? position.x - GAP - width : position.x + size + GAP;
+        const top_limit = (runBarTopBeside(left, left + width) ?? bounds.top) + GAP;
+        const bottom_limit = bounds.bottom - GAP;
+        const height = Math.min(max_height, bottom_limit - top_limit);
+        const top = Math.min(Math.max(position.y + size - height, top_limit), bottom_limit - height);
+        return { left, width, top, height };
+    }
+
     const left = Math.min(Math.max(position.x, bounds.left + GAP), bounds.right - GAP - width);
     const room_above = position.y - bounds.top - 2 * GAP;
     const room_below = bounds.bottom - (position.y + size) - 2 * GAP;
     return room_above >= room_below
-        ? { left, width, bottom: window.innerHeight - position.y + GAP, maxHeight: room_above }
-        : { left, width, top: position.y + size + GAP, maxHeight: room_below };
+        ? { left, width, bottom: window.innerHeight - position.y + GAP, maxHeight: Math.min(room_above, max_height) }
+        : { left, width, top: position.y + size + GAP, maxHeight: Math.min(room_below, max_height) };
 };
 
 /**

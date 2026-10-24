@@ -7,6 +7,7 @@ import {
     clampToBounds,
     defaultPosition,
     getSafeBounds,
+    isWideScreen,
     readStoredPosition,
     storePosition,
     TBounds,
@@ -23,7 +24,7 @@ type TAiScannerButton = {
 };
 
 /**
- * The round, draggable "AI" button. Its remembered spot (per desktop/mobile)
+ * The round, draggable "AI" button. Its remembered spot (per desktop-laptop / phone width)
  * is only ever displayed clamped into the live safe area (ai-scanner-layout.ts),
  * so it can't sit on the Run bar, the run panel or its toggle, or the mobile
  * run bar - including after a tab switch or the run panel sliding open.
@@ -33,11 +34,13 @@ const AiScannerButton = observer(({ is_desktop, onLayout }: TAiScannerButton) =>
     const ai_scanner = useAiScanner();
     const button_ref = useRef<HTMLButtonElement>(null);
     const drag_ref = useRef<{ pointer_id: number; start: TPoint; origin: TPoint; moved: boolean } | null>(null);
-    const [stored, setStored] = useState<TPoint | null>(() => readStoredPosition(is_desktop));
+    // Desktop / laptop (>= 768px) and phone positions are remembered apart.
+    const [is_wide, setIsWide] = useState(isWideScreen);
+    const [stored, setStored] = useState<TPoint | null>(() => readStoredPosition(isWideScreen()));
     const [drag_position, setDragPosition] = useState<TPoint | null>(null);
     const [bounds, setBounds] = useState<TBounds>(() => getSafeBounds());
 
-    useEffect(() => setStored(readStoredPosition(is_desktop)), [is_desktop]);
+    useEffect(() => setStored(readStoredPosition(is_wide)), [is_wide]);
 
     // Re-measure on resize, tab switch, drawer toggle (after its 0.3s slide)
     // and Run state, plus a slow poll for anything else that moves the run
@@ -45,7 +48,10 @@ const AiScannerButton = observer(({ is_desktop, onLayout }: TAiScannerButton) =>
     const { active_tab } = dashboard;
     const { is_drawer_open, is_running } = run_panel;
     useEffect(() => {
-        const measure = () => setBounds(getSafeBounds());
+        const measure = () => {
+            setBounds(getSafeBounds());
+            setIsWide(isWideScreen());
+        };
         measure();
         const settle = setTimeout(measure, 350);
         const poll = setInterval(measure, 1000);
@@ -58,7 +64,7 @@ const AiScannerButton = observer(({ is_desktop, onLayout }: TAiScannerButton) =>
     }, [active_tab, is_drawer_open, is_running, is_desktop]);
 
     const size = button_ref.current?.offsetWidth || 56;
-    const position = clampToBounds(drag_position ?? stored ?? defaultPosition(size, bounds, is_desktop), size, bounds);
+    const position = clampToBounds(drag_position ?? stored ?? defaultPosition(size, bounds), size, bounds);
 
     useLayoutEffect(() => {
         onLayout({ position, size, bounds });
@@ -94,7 +100,7 @@ const AiScannerButton = observer(({ is_desktop, onLayout }: TAiScannerButton) =>
         if (!drag || drag.pointer_id !== event.pointerId) return;
         drag_ref.current = null;
         if (drag.moved && drag_position) {
-            storePosition(is_desktop, drag_position);
+            storePosition(is_wide, drag_position);
             setStored(drag_position);
             setDragPosition(null);
         } else {

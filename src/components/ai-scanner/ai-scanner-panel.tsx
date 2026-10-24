@@ -214,6 +214,69 @@ const clockTime = (ms: number) => {
     return [date.getHours(), date.getMinutes(), date.getSeconds()].map(part => String(part).padStart(2, '0')).join(':');
 };
 
+/** Short market names for the dots: "V10 (1s)", "J25". */
+export const shortMarketName = (symbol: string, text: string) => {
+    const volatility = /^1HZ(\d+)V$/.exec(symbol);
+    if (volatility) return `V${volatility[1]} (1s)`;
+    const jump = /^JD(\d+)$/.exec(symbol);
+    if (jump) return `J${jump[1]}`;
+    return text;
+};
+
+type TDotState = 'scanning' | 'armed' | 'changed' | 'entry';
+
+const DOT_LABEL: Record<TDotState, () => string> = {
+    scanning: () => localize('scanning'),
+    armed: () => localize('armed'),
+    changed: () => localize('armed - conditions changed'),
+    entry: () => localize('entry hit'),
+};
+
+/**
+ * One dot per market this scan covers (those that passed contracts_for), in
+ * its real state: grey scanning, green armed (with the side on Even/Odd),
+ * amber armed but conditions changed (Over/Under), bright and pulsing for the
+ * entry hit. The name shows on hover, and on tap (phones have no hover).
+ */
+export const MarketDots = observer(() => {
+    const { scan_markets, armed, target, stage } = useAiScanner();
+    const [shown, setShown] = useState<string | null>(null);
+    if (scan_markets.length === 0) return null;
+    const entry_symbol = ['starting', 'running', 'stopping'].includes(stage) ? target?.symbol : undefined;
+
+    const dots = scan_markets.map(market => {
+        const armed_market = armed.find(item => item.symbol === market.symbol);
+        let state: TDotState = 'scanning';
+        if (market.symbol === entry_symbol) state = 'entry';
+        else if (armed_market) state = armed_market.still_met || armed_market.side ? 'armed' : 'changed';
+        const side = market.symbol === entry_symbol ? target?.side : armed_market?.side;
+        const name = shortMarketName(market.symbol, market.text);
+        const label = `${name} — ${DOT_LABEL[state]()}${side ? ` ${side.toUpperCase()}` : ''}`;
+        return { symbol: market.symbol, state, label };
+    });
+    const shown_dot = dots.find(dot => dot.symbol === shown);
+
+    return (
+        <div className='ai-scanner-panel__dots-wrap'>
+            <ul className='ai-scanner-panel__dots' aria-label={localize('Markets')}>
+                {dots.map(dot => (
+                    <li key={dot.symbol}>
+                        <button
+                            type='button'
+                            className={`ai-scanner-panel__dot ai-scanner-panel__dot--${dot.state}`}
+                            title={dot.label}
+                            aria-label={dot.label}
+                            data-testid={`ai-scanner-dot-${dot.symbol}`}
+                            onClick={() => setShown(current => (current === dot.symbol ? null : dot.symbol))}
+                        />
+                    </li>
+                ))}
+            </ul>
+            {shown_dot && <p className='ai-scanner-panel__dot-label'>{shown_dot.label}</p>}
+        </div>
+    );
+});
+
 /**
  * Real numbers only: markets checked and when (always); every armed market
  * with its own clock and live reason, or - with none armed - the nearest one.
@@ -229,6 +292,7 @@ const ScanProgress = observer(() => {
                     time: clockTime(scan_progress.last_check_at),
                 })}
             </p>
+            <MarketDots />
             {armed.length > 0 && (
                 <div className='ai-scanner-panel__qualified'>
                     <p className='ai-scanner-panel__qualified-title'>{localize('Armed - waiting for entry')}</p>
@@ -253,7 +317,7 @@ const ScanProgress = observer(() => {
 
 const RunStatus = observer(() => {
     const ai_scanner = useAiScanner();
-    const { stage, locked, target, message, feed_status, scan_markets, scan_deadline, armed } = ai_scanner;
+    const { stage, locked, target, feed_status, scan_markets, scan_deadline, armed } = ai_scanner;
     if (!locked) return null;
     const is_even_odd = locked.tab === 'even_odd';
     const setup = OVER_UNDER_SETUPS[locked.strategy];
@@ -270,6 +334,7 @@ const RunStatus = observer(() => {
                 <ScanCountdown deadline={scan_deadline} />
             )}
             {stage === 'scanning' && <ScanProgress />}
+            {['starting', 'running', 'stopping'].includes(stage) && <MarketDots />}
             <ol className='ai-scanner-panel__stages'>
                 {STAGES.map((item, index) => (
                     <li
@@ -339,8 +404,6 @@ const RunStatus = observer(() => {
                 <dt>{localize('Stop loss')}</dt>
                 <dd>{money(locked.stop_loss)}</dd>
             </dl>
-
-            {message && <p className='ai-scanner-panel__message'>{message}</p>}
         </div>
     );
 });
@@ -467,15 +530,16 @@ const AiScannerPanel = observer(({ style, is_desktop }: TAiScannerPanel) => {
                 ))}
             </div>
 
-            <div className='ai-scanner-panel__body'>
-                {/* Why the last scan or run ended (no market qualified, Run
-                    failed, Scan stopped, take profit...) - above the form,
-                    which keeps its values for the next Scan. */}
-                {!shows_status && message && <p className='ai-scanner-panel__message'>{message}</p>}
+            {/* Only the middle scrolls. */}
+            <div className='ai-scanner-panel__body'>{shows_status ? <RunStatus /> : <OverUnderForm />}</div>
+
+            {/* Pinned: the last result / message line, then the two buttons -
+                always visible, however long the middle is. */}
+            <footer className='ai-scanner-panel__footer'>
+                {message && <p className='ai-scanner-panel__message'>{message}</p>}
                 {!shows_status && <LastResult />}
-                {shows_status ? <RunStatus /> : <OverUnderForm />}
                 <ScannerButtons />
-            </div>
+            </footer>
         </section>
     );
 });

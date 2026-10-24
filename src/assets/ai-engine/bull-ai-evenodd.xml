@@ -301,11 +301,10 @@
                           </block>
                         </statement>
                         <next>
-                          <block type="text_print" id="sniper-sl-print-01">
-                            <value name="TEXT">
-                              <shadow type="text" id="sniper-sl-printshadow-01">
-                                <field name="TEXT">abc</field>
-                              </shadow>
+                          <block type="notify" id="sniper-sl-print-01">
+                            <field name="NOTIFICATION_TYPE">error</field>
+                            <field name="NOTIFICATION_SOUND">silent</field>
+                            <value name="MESSAGE">
                               <block type="variables_get" id="sniper-sl-getvar-01">
                                 <field name="VAR" id="bull-text4-variable-01">text4</field>
                               </block>
@@ -356,11 +355,10 @@
                           </block>
                         </statement>
                         <next>
-                          <block type="text_print" id="+[I6b/m9)_|osO?-4|B,">
-                            <value name="TEXT">
-                              <shadow type="text" id="%ELO#Q4=hCdn/tvb(NMc">
-                                <field name="TEXT">abc</field>
-                              </shadow>
+                          <block type="notify" id="+[I6b/m9)_|osO?-4|B,">
+                            <field name="NOTIFICATION_TYPE">success</field>
+                            <field name="NOTIFICATION_SOUND">silent</field>
+                            <value name="MESSAGE">
                               <block type="variables_get" id="d~WPt0l-0;HtP=vA6vcJ">
                                 <field name="VAR" id="I1@|b?MD[FII#AFCc~]z">text3</field>
                               </block>

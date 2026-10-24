@@ -91,6 +91,29 @@ describe('the TP / SL messages', () => {
         }
     );
 
+    it.each([
+        ['Over/Under', () => engine],
+        ['Even/Odd', () => even_odd_engine],
+    ])('%s engine: TP / SL show as notifications (green / red), never a blocking alert', (_, xml) => {
+        expect(xml()).not.toContain('text_print');
+        const notifyType = (id: string) => {
+            const at = xml().indexOf(`<block type="notify" id="${id}">`);
+            expect(at).toBeGreaterThan(-1);
+            return /<field name="NOTIFICATION_TYPE">(\w+)<\/field>/.exec(xml().slice(at))?.[1];
+        };
+        expect(notifyType('+[I6b/m9)_|osO?-4|B,')).toBe('success'); // TP
+        expect(notifyType('sniper-sl-print-01')).toBe('error'); // SL
+        // Still writes and reads back.
+        const { first_barrier, recovery_barrier, ...without_barriers } = values; // eslint-disable-line @typescript-eslint/no-unused-vars
+        const to_write = xml() === engine ? values : without_barriers;
+        expect(readEngineValues(writeEngineValues(xml(), to_write))).toMatchObject({
+            stake: values.stake,
+            take_profit: values.take_profit,
+            stop_loss: values.stop_loss,
+            symbol: values.symbol,
+        });
+    });
+
     it('the TP and SL messages are still followed by the total profit, unchanged', () => {
         [engine, even_odd_engine].forEach(xml => {
             ['AI hit TP$$ ', 'AI hit SL '].forEach(text => {

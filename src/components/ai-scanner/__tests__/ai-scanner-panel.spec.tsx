@@ -4,7 +4,7 @@ import AiScannerStore, { SCAN_STOPPED_MESSAGE, TAiScannerStage } from '@/stores/
 import RootStore from '@/stores/root-store';
 import { loadBotIntoBuilder } from '@/utils/load-bot-into-builder';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import AiScannerPanel from '../ai-scanner-panel';
+import AiScannerPanel, { shortMarketName } from '../ai-scanner-panel';
 
 jest.mock('../../../assets/ai-engine/bull-ai-overunder.xml', () => '');
 jest.mock('@/utils/load-bot-into-builder', () => ({ loadBotIntoBuilder: jest.fn() }));
@@ -315,5 +315,110 @@ describe('AI Scanner panel - dropped markets', () => {
             });
         });
         expect(screen.queryByText(/dropped — conditions changed/)).not.toBeInTheDocument();
+    });
+});
+
+describe('AI Scanner panel - pinned footer', () => {
+    beforeEach(() => localStorage.clear());
+
+    it('the two buttons and the message line sit in the footer, outside the scrolling middle', () => {
+        const store = setup();
+        act(() => {
+            runInAction(() => {
+                store.message = 'Scan stopped.';
+            });
+        });
+        const footer = document.querySelector('.ai-scanner-panel__footer') as HTMLElement;
+        const body = document.querySelector('.ai-scanner-panel__body') as HTMLElement;
+        expect(footer).toContainElement(top());
+        expect(footer).toContainElement(light());
+        expect(footer).toContainElement(screen.getByText('Scan stopped.'));
+        expect(body).not.toContainElement(top());
+        // Message first, then Scan, then Load & Run.
+        const order = Array.from(footer.querySelectorAll('p, button')).map(element => element.textContent);
+        expect(order.indexOf('Scan stopped.')).toBeLessThan(order.indexOf('Scan'));
+        expect(order.indexOf('Scan')).toBeLessThan(order.indexOf('Load & Run'));
+    });
+
+    it('stays pinned while a scan shows its status', () => {
+        const store = setup();
+        atStage(store, 'scanning');
+        const footer = document.querySelector('.ai-scanner-panel__footer') as HTMLElement;
+        expect(footer).toContainElement(top());
+        expect(footer).toContainElement(light());
+    });
+});
+
+describe('AI Scanner panel - all-markets dots', () => {
+    beforeEach(() => localStorage.clear());
+
+    const MANY = [
+        { symbol: 'JD25', text: 'Jump 25 Index', submarket: 'jump_index' },
+        { symbol: '1HZ10V', text: 'Volatility 10 (1s) Index', submarket: 'random_index' },
+        { symbol: 'JD50', text: 'Jump 50 Index', submarket: 'jump_index' },
+    ];
+    const armedMarket = (symbol: string, still_met: boolean, side?: 'even' | 'odd') => ({
+        symbol,
+        text: symbol,
+        armed_at: Date.now(),
+        expires_at: Date.now() + 180000,
+        reason: 'r',
+        still_met,
+        side,
+    });
+    const dot = (symbol: string) => screen.getByTestId(`ai-scanner-dot-${symbol}`);
+    const scanningWith = (store: AiScannerStore, armed: AiScannerStore['armed']) => {
+        atStage(store, 'scanning');
+        act(() => {
+            runInAction(() => {
+                store.scan_markets = MANY;
+                store.scan_progress = { checked: 3, last_check_at: Date.now(), closest: null };
+                store.armed = armed;
+            });
+        });
+    };
+
+    it('short names', () => {
+        expect(shortMarketName('1HZ10V', 'Volatility 10 (1s) Index')).toBe('V10 (1s)');
+        expect(shortMarketName('JD25', 'Jump 25 Index')).toBe('J25');
+        expect(shortMarketName('R_50', 'Volatility 50 Index')).toBe('Volatility 50 Index');
+    });
+
+    it('one dot per scanned market in its real state: grey scanning, green armed, amber changed', () => {
+        const store = setup();
+        scanningWith(store, [armedMarket('JD25', true), armedMarket('1HZ10V', false)]);
+        expect(document.querySelectorAll('.ai-scanner-panel__dot')).toHaveLength(3);
+        expect(dot('JD25').className).toMatch(/__dot--armed/);
+        expect(dot('1HZ10V').className).toMatch(/__dot--changed/);
+        expect(dot('JD50').className).toMatch(/__dot--scanning/);
+        expect(dot('JD25')).toHaveAttribute('title', 'J25 — armed');
+        expect(dot('1HZ10V')).toHaveAttribute('title', 'V10 (1s) — armed - conditions changed');
+        expect(dot('JD50')).toHaveAttribute('title', 'J50 — scanning');
+
+        // A tap shows the name (phones have no hover); a second tap hides it.
+        fireEvent.click(dot('JD50'));
+        expect(screen.getByText('J50 — scanning')).toBeInTheDocument();
+        fireEvent.click(dot('JD50'));
+        expect(screen.queryByText('J50 — scanning')).not.toBeInTheDocument();
+    });
+
+    it('Even/Odd: armed dots carry their side', () => {
+        const store = setup();
+        scanningWith(store, [armedMarket('JD50', true, 'odd')]);
+        expect(dot('JD50')).toHaveAttribute('title', 'J50 — armed ODD');
+    });
+
+    it('the entry hit: its dot pulses, the others stay grey once the run starts', () => {
+        const store = setup();
+        atStage(store, 'running');
+        act(() => {
+            runInAction(() => {
+                store.scan_markets = MANY;
+                store.target = { ...MANY[0], reason: 'r' };
+            });
+        });
+        expect(dot('JD25').className).toMatch(/__dot--entry/);
+        expect(dot('JD25')).toHaveAttribute('title', 'J25 — entry hit');
+        expect(dot('JD50').className).toMatch(/__dot--scanning/);
     });
 });

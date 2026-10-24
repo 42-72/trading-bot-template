@@ -65,6 +65,24 @@ export const getSafeBounds = ({ ignore_run_drawer = false } = {}): TBounds => {
     return bounds;
 };
 
+/**
+ * The Run bar is a full-width band, but its controls (Run button, status)
+ * only fill its right end. A box spanning `left`..`right` that stays clear of
+ * them may also use the empty rest of the band, up to the nav row: returns
+ * that higher top, or null when there's no Run bar or the box would reach a
+ * control.
+ */
+export const runBarTopBeside = (left: number, right: number): number | null => {
+    const bar = document.querySelector('.run-strategy-bar');
+    const bar_rect = bar && visibleRect(bar);
+    if (!bar || !bar_rect) return null;
+    const controls = Array.from(bar.children)
+        .map(visibleRect)
+        .filter((rect): rect is DOMRect => !!rect);
+    const reaches_control = controls.some(rect => left < rect.right + EDGE_GAP && right > rect.left - EDGE_GAP);
+    return reaches_control ? null : bar_rect.top;
+};
+
 /** Keep a size x size box fully inside `bounds` (with a small gap). */
 export const clampToBounds = (point: TPoint, size: number, bounds: TBounds): TPoint => {
     const min_x = bounds.left + EDGE_GAP;
@@ -77,26 +95,45 @@ export const clampToBounds = (point: TPoint, size: number, bounds: TBounds): TPo
     };
 };
 
-/** Desktop: bottom-left, clear of the Blockly zoom/trash controls on the right. Mobile: bottom-right, above the run bar. */
-export const defaultPosition = (size: number, bounds: TBounds, is_desktop: boolean): TPoint => ({
-    x: is_desktop ? bounds.left + 2 * EDGE_GAP : bounds.right - 2 * EDGE_GAP - size,
+/** Window widths from this up count as desktop / laptop for the button and the panel size. */
+export const WIDE_MIN_WIDTH = 768;
+export const isWideScreen = () => window.innerWidth >= WIDE_MIN_WIDTH;
+
+/**
+ * Bottom-right of the content area on every screen: on a desktop / laptop
+ * (>= 768px) left of the run panel column and above the footer, on a phone
+ * above the run bar - `bounds` already leaves those out.
+ */
+export const defaultPosition = (size: number, bounds: TBounds): TPoint => ({
+    x: bounds.right - 2 * EDGE_GAP - size,
     y: bounds.bottom - 2 * EDGE_GAP - size,
 });
 
-const positionKey = (is_desktop: boolean) => `ai_scanner_button_position_${is_desktop ? 'desktop' : 'mobile'}`;
+// v2 for desktop / laptop: everyone gets the new bottom-right default once
+// (the old desktop key, bottom-left default, is removed). Phones keep theirs.
+const WIDE_POSITION_KEY = 'ai_scanner_button_position_wide_v2';
+const PHONE_POSITION_KEY = 'ai_scanner_button_position_mobile';
+const OLD_DESKTOP_POSITION_KEY = 'ai_scanner_button_position_desktop';
+try {
+    localStorage.removeItem(OLD_DESKTOP_POSITION_KEY);
+} catch {
+    // Storage unavailable - nothing stored to clear.
+}
 
-export const readStoredPosition = (is_desktop: boolean): TPoint | null => {
+const positionKey = (is_wide: boolean) => (is_wide ? WIDE_POSITION_KEY : PHONE_POSITION_KEY);
+
+export const readStoredPosition = (is_wide: boolean): TPoint | null => {
     try {
-        const parsed = JSON.parse(localStorage.getItem(positionKey(is_desktop)) ?? 'null');
+        const parsed = JSON.parse(localStorage.getItem(positionKey(is_wide)) ?? 'null');
         return parsed && Number.isFinite(parsed.x) && Number.isFinite(parsed.y) ? parsed : null;
     } catch {
         return null;
     }
 };
 
-export const storePosition = (is_desktop: boolean, point: TPoint) => {
+export const storePosition = (is_wide: boolean, point: TPoint) => {
     try {
-        localStorage.setItem(positionKey(is_desktop), JSON.stringify(point));
+        localStorage.setItem(positionKey(is_wide), JSON.stringify(point));
     } catch {
         // Storage unavailable - the button just returns to its default spot.
     }

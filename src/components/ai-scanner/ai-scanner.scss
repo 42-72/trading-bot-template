@@ -46,15 +46,24 @@ $ai-scanner-z: 5;
         transition: none;
     }
 
-    // Scanning, waiting or trading: a soft pulse so it's visible from any tab.
-    &--active::after {
+    // Always a soft ring pulsing in the brand colours (every 2s), so the
+    // button is easy to find; faster (every 1s) while a scan or an AI run is
+    // going - visible from any tab, panel open or closed.
+    &::after {
         content: '';
         position: absolute;
         inset: -0.4rem;
-        border: 0.2rem solid var(--brand-success, #10b981);
+        border: 0.2rem solid var(--brand-primary, #3b82f6);
         border-radius: 50%;
-        animation: ai-scanner-pulse 1.6s ease-out infinite;
+        box-shadow: 0 0 1.2rem var(--brand-tertiary, #8b5cf6);
+        animation: ai-scanner-pulse 2s ease-out infinite;
         pointer-events: none;
+    }
+
+    &--active::after {
+        border-color: var(--brand-success, #10b981);
+        box-shadow: 0 0 1.2rem var(--brand-success, #10b981);
+        animation-duration: 1s;
     }
 }
 
@@ -70,9 +79,11 @@ $ai-scanner-z: 5;
     }
 }
 
+// Reduced motion: no pulse - a still, glowing ring instead.
 @media (prefers-reduced-motion: reduce) {
-    .ai-scanner-button--active::after {
+    .ai-scanner-button::after {
         animation: none;
+        opacity: 0.9;
     }
 }
 
@@ -311,11 +322,31 @@ $ai-scanner-z: 5;
         color: var(--brand-danger, #ef4444);
     }
 
+    // Pinned under the scrolling middle: the last result / message line,
+    // then the two buttons - always in view.
+    &__footer {
+        display: flex;
+        flex-direction: column;
+        gap: 0.8rem;
+        flex-shrink: 0;
+        padding: 1.2rem 1.6rem 1.6rem;
+        border-top: 0.1rem solid var(--border-normal);
+        background: var(--general-main-1);
+    }
+
+    // Scan on top, Load & Run below: one centred column, same width.
     &__buttons {
         display: flex;
         flex-direction: column;
         gap: 0.8rem;
-        margin-top: 1.2rem;
+        width: 100%;
+        max-width: 32rem;
+        margin: 0 auto;
+
+        > button {
+            width: 100%;
+            text-align: center;
+        }
     }
 
     // "Load & Run": shows what the AI is doing, never pressed.
@@ -463,6 +494,62 @@ $ai-scanner-z: 5;
         gap: 0.4rem;
     }
 
+    &__dots-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+
+    &__dots {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+
+        li {
+            display: flex;
+        }
+    }
+
+    // One per market: grey scanning, green armed, amber armed but conditions
+    // changed, bright and pulsing for the entry hit.
+    &__dot {
+        width: 1rem;
+        height: 1rem;
+        padding: 0;
+        border: none;
+        border-radius: 50%;
+        background: var(--text-disabled, #9ca3af);
+        cursor: pointer;
+
+        &--armed {
+            background: var(--brand-success, #10b981);
+        }
+
+        &--changed {
+            background: var(--brand-warning, #f59e0b);
+        }
+
+        &--entry {
+            background: var(--brand-primary, #3b82f6);
+            box-shadow: 0 0 0.6rem var(--brand-primary, #3b82f6);
+            animation: ai-scanner-dot 1s ease-in-out infinite;
+        }
+
+        &:focus-visible {
+            outline: 0.2rem solid var(--brand-primary, #3b82f6);
+            outline-offset: 0.1rem;
+        }
+    }
+
+    &__dot-label {
+        margin: 0;
+        font-size: 1.1rem;
+        color: var(--text-general);
+    }
+
     &__closest {
         margin: 0;
         font-size: 1.2rem;
@@ -552,5 +639,17 @@ $ai-scanner-z: 5;
         &--loss {
             color: var(--text-loss-danger);
         }
+    }
+}
+
+@keyframes ai-scanner-dot {
+    50% {
+        transform: scale(1.4);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ai-scanner-panel__dot--entry {
+        animation: none;
     }
 }
