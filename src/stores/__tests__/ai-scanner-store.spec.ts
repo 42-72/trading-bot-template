@@ -40,9 +40,18 @@ jest.mock('@/external/bot-skeleton/services/api/api-base', () => ({
                 if (reply === 'error') throw { error: { code: 'InternalServerError', message: 'error' } };
                 return { contracts_for: { available: reply } };
             }),
+            // Messages of any kind on the app's socket (the silence watch listens).
+            onMessage: () => ({
+                subscribe: (listener: () => void) => {
+                    mockSocketListeners.add(listener);
+                    return { unsubscribe: () => mockSocketListeners.delete(listener) };
+                },
+            }),
         },
     },
 }));
+const mockSocketListeners = new Set<() => void>();
+const socketMessage = () => mockSocketListeners.forEach(listener => listener());
 
 const ENGINE = fs.readFileSync(path.join(__dirname, '../../assets/ai-engine/bull-ai-overunder.xml'), 'utf8');
 
@@ -475,18 +484,79 @@ describe('AiScannerStore', () => {
         beforeEach(() => jest.useFakeTimers());
         afterEach(() => jest.useRealTimers());
 
-        it('2s with no live tick anywhere: every feed re-subscribed at once - armed markets stay armed, no entry', async () => {
-            const { root, store } = await startScan();
-            const retries = [jest.fn(), jest.fn()];
-            const releases = retries.map(retry => store.registerFeed(retry));
-            store.onMarketTick('JD25', qualifying, 9, true); // armed on its seed
-            const armed = armedOf(store, 'JD25');
-            store.onMarketTick('JD25', qualifying, 9); // live ticks, no entry
-            store.onMarketTick('1HZ10V', faded, 5);
+        // Live ticks for every market, then silence at T.
+        const liveTicks = (store: AiScannerStore) =>
+            MARKETS.forEach(market => store.onMarketTick(market.symbol, faded, 5));
 
+        it('all feeds stop at T: every feed re-subscribed at once between T+2.0s and T+2.3s', async () => {
+            const { store } = await startScan();
+            const retries = [jest.fn(), jest.fn()];
+            retries.forEach(retry => store.registerFeed(retry));
+            jest.advanceTimersByTime(1234); // any moment in the scan
+            liveTicks(store); // T
             jest.advanceTimersByTime(1999);
             retries.forEach(retry => expect(retry).not.toHaveBeenCalled());
-            jest.advanceTimersByTime(501); // the next check, >= 2s after the last live tick
+            jest.advanceTimersByTime(1); // T+2.0s
+            retries.forEach(retry => expect(retry).toHaveBeenCalledTimes(1));
+            jest.advanceTimersByTime(299); // still T+2.3s: once only
+            retries.forEach(retry => expect(retry).toHaveBeenCalledTimes(1));
+        });
+
+        it('every live tick moves the deadline; a market that never ticks does not switch the watch off', async () => {
+            const { store } = await startScan();
+            const retry = jest.fn();
+            store.registerFeed(retry);
+            for (let i = 0; i < 10; i++) {
+                store.onMarketTick('JD25', faded, 5); // only JD25 ever ticks live
+                jest.advanceTimersByTime(1500);
+            }
+            expect(retry).not.toHaveBeenCalled();
+            jest.advanceTimersByTime(500); // 2s after JD25's last tick
+            expect(retry).toHaveBeenCalledTimes(1);
+        });
+
+        it('a second silence 3s after the first re-subscribe waits for the 5s throttle', async () => {
+            const { store } = await startScan();
+            const retry = jest.fn();
+            store.registerFeed(retry);
+            liveTicks(store); // T
+            jest.advanceTimersByTime(2000); // R = T+2s: first re-subscribe
+            expect(retry).toHaveBeenCalledTimes(1);
+            jest.advanceTimersByTime(100);
+            liveTicks(store); // ticks come straight back at R+0.1s...
+            jest.advanceTimersByTime(900);
+            liveTicks(store); // ...and stop again at R+1s
+            jest.advanceTimersByTime(2000); // R+3s: silent 2s again - but inside the throttle
+            expect(retry).toHaveBeenCalledTimes(1);
+            jest.advanceTimersByTime(1999); // R+4.999s
+            expect(retry).toHaveBeenCalledTimes(1);
+            jest.advanceTimersByTime(1); // R+5s
+            expect(retry).toHaveBeenCalledTimes(2);
+        });
+
+        it('a socket message re-checks at once - even when timers are being held back', async () => {
+            const { store } = await startScan();
+            const retry = jest.fn();
+            store.registerFeed(retry);
+            liveTicks(store);
+            // The clock moves on but no timer runs (a throttled background tab)...
+            jest.setSystemTime(Date.now() + 2100);
+            expect(retry).not.toHaveBeenCalled();
+            socketMessage(); // ...a balance / time / any message arrives
+            expect(retry).toHaveBeenCalledTimes(1);
+            socketMessage(); // throttled: not again
+            expect(retry).toHaveBeenCalledTimes(1);
+        });
+
+        it('a re-subscribe never counts as an entry and never disarms an armed market', async () => {
+            const { root, store } = await startScan();
+            const retries = [jest.fn(), jest.fn()];
+            retries.forEach(retry => store.registerFeed(retry));
+            store.onMarketTick('JD25', qualifying, 9, true); // armed on its seed
+            const armed = armedOf(store, 'JD25');
+            store.onMarketTick('JD25', qualifying, 9);
+            store.onMarketTick('1HZ10V', faded, 5);
+            jest.advanceTimersByTime(2000);
             retries.forEach(retry => expect(retry).toHaveBeenCalledTimes(1));
 
             // The re-subscribes' seeds: an entry pattern on a seed never enters.
@@ -498,13 +568,6 @@ describe('AiScannerStore', () => {
                 armed_at: armed?.armed_at,
                 expires_at: armed?.expires_at,
             });
-
-            // Still silent: not again within 5s.
-            jest.advanceTimersByTime(4000);
-            retries.forEach(retry => expect(retry).toHaveBeenCalledTimes(1));
-            jest.advanceTimersByTime(1000);
-            retries.forEach(retry => expect(retry).toHaveBeenCalledTimes(2));
-            releases.forEach(release => release());
         });
 
         it('one silent market alone is left to its own watchdog', async () => {
@@ -521,13 +584,17 @@ describe('AiScannerStore', () => {
         });
 
         it('stops watching when the scan ends', async () => {
+            const listeners_before = mockSocketListeners.size;
             const { store } = await startScan();
+            expect(mockSocketListeners.size).toBe(listeners_before + 1); // its silence watch
             const retry = jest.fn();
             store.registerFeed(retry);
             MARKETS.forEach(market => store.onMarketTick(market.symbol, faded, 5));
             store.cancel();
             jest.advanceTimersByTime(30000);
+            socketMessage();
             expect(retry).not.toHaveBeenCalled();
+            expect(mockSocketListeners.size).toBe(listeners_before);
         });
     });
 

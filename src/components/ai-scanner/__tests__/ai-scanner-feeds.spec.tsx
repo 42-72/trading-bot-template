@@ -157,7 +157,7 @@ describe('AI Scanner feeds after the winner', () => {
         await flush(); // contracts_for -> scanning -> feeds mount and seed
         expect(store.stage).toBe('scanning');
         expect(socket.requests.filter(request => 'ticks_history' in request)).toHaveLength(3);
-        expect(socket.listeners.size).toBe(3);
+        expect(socket.listeners.size).toBe(4); // 3 feeds + the store's silence watch
         return { store, run_panel };
     };
     const advance = async (ms: number) => {
@@ -232,7 +232,9 @@ describe('AI Scanner feeds after the winner', () => {
         await flush();
         expect(socket.requests.filter(request => 'ticks_history' in request)).toHaveLength(3);
 
-        await advance(2500); // 2s after the last tick (checked every 0.5s)
+        await advance(1999);
+        expect(socket.requests.filter(request => 'ticks_history' in request)).toHaveLength(3);
+        await advance(1); // exactly 2s after the last live tick
         expect(socket.requests.filter(request => 'ticks_history' in request)).toHaveLength(6);
         expect(warn.mock.calls.filter(([message]) => String(message).includes('No tick for'))).toEqual([]);
         expect(store.stage).toBe('scanning');

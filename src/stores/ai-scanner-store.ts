@@ -13,6 +13,7 @@ import {
     TOverUnderStrategyId,
 } from '@/constants/ai-engine';
 import { DBOT_TABS } from '@/constants/bot-contents';
+import { api_base } from '@/external/bot-skeleton/services/api/api-base';
 import { observer as globalObserver } from '@/external/bot-skeleton/utils/observer';
 import { readEngineValues, TEngineValues, writeEngineValues } from '@/utils/ai-engine-xml';
 import { filterOfferedMarkets } from '@/utils/ai-scanner-offered';
@@ -98,13 +99,16 @@ type TFormErrors = Partial<Record<keyof TAiScannerForm, string>>;
 const FORM_STORAGE_KEY = 'ai_scanner_form';
 export const SCAN_STOPPED_MESSAGE = 'Scan stopped.';
 export const NO_MARKETS_OFFERED_MESSAGE = 'No markets offer this trade right now.';
-// Every scanner feed this long without a live tick (they tick about once a
-// second) means the streams stopped together: re-subscribe them all at once
-// instead of waiting for each feed's own 3s watchdog. At most once per
-// RESUBSCRIBE_COOLDOWN_MS; checked every SILENCE_CHECK_MS while scanning.
+// No scanner feed with a live tick for this long (they tick about once a
+// second) means the streams stopped together - Deriv silently stops them now
+// and then, and re-subscribing brings them straight back: re-subscribe every
+// feed at once instead of waiting for each one's 3s watchdog. A one-shot timer
+// is set for exactly this long after the newest live tick (no polling), and
+// every socket message re-checks too: browsers hold back timers in a
+// background tab but keep delivering WebSocket messages. At most once per
+// RESUBSCRIBE_COOLDOWN_MS, measured from the last all-at-once re-subscribe.
 export const ALL_SILENT_MS = 2000;
-const RESUBSCRIBE_COOLDOWN_MS = 5000;
-const SILENCE_CHECK_MS = 500;
+export const RESUBSCRIBE_COOLDOWN_MS = 5000;
 const DROP_NOTICE_MS = 3000;
 
 export const CONDITIONS_NOT_MET_MESSAGE = 'Conditions not met — no entry found.';
@@ -207,13 +211,14 @@ export default class AiScannerStore {
     private stopRunErrorListeners: (() => void) | null = null;
     private scan_timer: ReturnType<typeof setTimeout> | null = null;
     // The all-feeds-silent watch (see ALL_SILENT_MS): each feed's re-subscribe,
-    // when each market last had a LIVE tick (seeds don't count), and when all
-    // were last re-subscribed together.
-    private silence_timer: ReturnType<typeof setInterval> | null = null;
+    // when any market last had a LIVE tick (seeds don't count), when all were
+    // last re-subscribed together, the one-shot check and the socket listener.
+    private silence_timer: ReturnType<typeof setTimeout> | null = null;
+    private silence_message_subscription: { unsubscribe: () => void } | null = null;
     private feed_retries = new Set<() => void>();
-    private last_live_tick_at = new Map<string, number>();
+    private newest_live_tick_at: number | null = null;
     private silent_since: number | null = null;
-    private resubscribed_all_at = 0;
+    private resubscribed_all_at: number | null = null;
     // Armed markets by symbol, kept current on every tick, and each one's
     // 3-minute timer. `armed` is published from it at once when a market arms,
     // disarms or its condition flips, and otherwise with scan_progress (at
@@ -469,9 +474,9 @@ export default class AiScannerStore {
 
     private startScanning(token: number) {
         this.stage = 'scanning';
-        this.last_live_tick_at.clear();
+        this.newest_live_tick_at = null;
         this.silent_since = null;
-        this.resubscribed_all_at = 0;
+        this.resubscribed_all_at = null;
 
         // Each feed seeds its window from ticks_history (count 600) the
         // moment it mounts, and condition() runs on that history straight
@@ -480,7 +485,7 @@ export default class AiScannerStore {
         const limit_ms = AI_SCANNER_SCAN_LIMIT_SECONDS * 1000;
         this.scan_deadline = Date.now() + limit_ms;
         this.clearScanTimer();
-        this.silence_timer = setInterval(() => this.checkSilence(token), SILENCE_CHECK_MS);
+        this.watchSocketForSilence(token);
         this.scan_timer = setTimeout(
             action(() => {
                 this.scan_timer = null;
@@ -537,11 +542,12 @@ export default class AiScannerStore {
         const market = this.scan_markets.find(item => item.symbol === symbol);
         if (!market) return;
         if (!is_seed) {
-            this.last_live_tick_at.set(symbol, Date.now());
+            this.newest_live_tick_at = Date.now();
             if (this.silent_since !== null) {
                 silenceLog(`live ticks back after ${Date.now() - this.silent_since}ms (first: ${symbol})`);
                 this.silent_since = null;
             }
+            this.scheduleSilenceCheck(this.run_token);
         }
 
         const result = this.strategy.condition(digits);
@@ -707,9 +713,42 @@ export default class AiScannerStore {
             this.scan_timer = null;
         }
         if (this.silence_timer) {
-            clearInterval(this.silence_timer);
+            clearTimeout(this.silence_timer);
             this.silence_timer = null;
         }
+        this.silence_message_subscription?.unsubscribe();
+        this.silence_message_subscription = null;
+    }
+
+    /** Every message on the app's socket re-checks for silence (timers may be held back; messages aren't). */
+    private watchSocketForSilence(token: number) {
+        const api = api_base.api as unknown as {
+            onMessage?: () => { subscribe: (listener: () => void) => { unsubscribe: () => void } };
+        } | null;
+        if (typeof api?.onMessage !== 'function') return;
+        this.silence_message_subscription = api.onMessage().subscribe(() => this.checkSilence(token));
+    }
+
+    /**
+     * One timer, due when the silence would reach ALL_SILENT_MS - or, inside
+     * the throttle, when RESUBSCRIBE_COOLDOWN_MS since the last all-at-once
+     * re-subscribe has passed. Re-set on every live tick.
+     */
+    private scheduleSilenceCheck(token: number) {
+        if (this.silence_timer) clearTimeout(this.silence_timer);
+        this.silence_timer = null;
+        if (this.newest_live_tick_at === null) return;
+        const due = Math.max(
+            this.newest_live_tick_at + ALL_SILENT_MS,
+            this.resubscribed_all_at === null ? 0 : this.resubscribed_all_at + RESUBSCRIBE_COOLDOWN_MS
+        );
+        this.silence_timer = setTimeout(
+            () => {
+                this.silence_timer = null;
+                this.checkSilence(token);
+            },
+            Math.max(0, due - Date.now())
+        );
     }
 
     /**
@@ -721,9 +760,11 @@ export default class AiScannerStore {
      */
     private checkSilence(token: number) {
         if (token !== this.run_token || this.stage !== 'scanning') return;
-        if (this.last_live_tick_at.size < this.scan_markets.length || this.scan_markets.length === 0) return;
+        // Measured from the newest live tick of ANY market - a feed that never
+        // loads must not switch the watch off.
+        if (this.newest_live_tick_at === null || this.scan_markets.length === 0) return;
         const now = Date.now();
-        const newest = Math.max(...this.last_live_tick_at.values());
+        const newest = this.newest_live_tick_at;
         const silent_for = now - newest;
         if (silent_for < ALL_SILENT_MS) return;
 
@@ -739,10 +780,16 @@ export default class AiScannerStore {
             );
             probeSocket('all feeds silent');
         }
-        if (now - this.resubscribed_all_at < RESUBSCRIBE_COOLDOWN_MS) return;
+        if (this.resubscribed_all_at !== null && now - this.resubscribed_all_at < RESUBSCRIBE_COOLDOWN_MS) {
+            // Inside the throttle: the timer comes back when it ends.
+            if (!this.silence_timer) this.scheduleSilenceCheck(token);
+            return;
+        }
         this.resubscribed_all_at = now;
-        silenceLog(`re-subscribing all ${this.feed_retries.size} feeds at once`);
+        silenceLog(`re-subscribing all ${this.feed_retries.size} feeds at once (silent for ${silent_for}ms)`);
         this.feed_retries.forEach(resubscribe => resubscribe());
+        // Still silent 5s from now? Again then.
+        this.scheduleSilenceCheck(token);
     }
 
     private finish(stage: 'idle' | 'stopped', message: string) {
