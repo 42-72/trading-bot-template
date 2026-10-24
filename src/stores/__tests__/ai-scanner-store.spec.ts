@@ -1,9 +1,9 @@
 import fs from 'fs';
 import { observable, runInAction } from 'mobx';
 import path from 'path';
+import { observer as globalObserver } from '@/external/bot-skeleton/utils/observer';
 import { readEngineValues } from '@/utils/ai-engine-xml';
 import { loadBotIntoBuilder } from '@/utils/load-bot-into-builder';
-import { observer as globalObserver } from '@/external/bot-skeleton/utils/observer';
 import AiScannerStore, { CONDITIONS_NOT_MET_MESSAGE, NO_MARKETS_OFFERED_MESSAGE } from '../ai-scanner-store';
 import RootStore from '../root-store';
 
@@ -649,6 +649,71 @@ describe('AiScannerStore', () => {
             await settle();
             expect(store.stage).toBe('stopped');
             expect(store.message).not.toMatch(/Run failed/);
+        });
+    });
+
+    describe('stopping the bot never throws', () => {
+        // The run panel drops every 'Error' listener (observer.unregisterAll)
+        // when a bot stops - the scanner's included - before the scanner sees
+        // the stop. The observer's own unregister then threw ("reading
+        // 'filter'"), mobx swallowed it as an uncaught reaction error, and the
+        // panel never left 'running'.
+        let mobx_errors: jest.SpyInstance;
+        beforeEach(() => {
+            mobx_errors = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+        });
+        afterEach(() => {
+            expect(mobx_errors.mock.calls.filter(([message]) => String(message).includes('[mobx]'))).toEqual([]);
+            mobx_errors.mockRestore();
+        });
+
+        const run = async () => {
+            const scan = await startScan();
+            scan.store.onMarketTick('JD25', entering, 1, true);
+            await flush();
+            scan.store.onMarketTick('JD25', entering, 1);
+            await flush();
+            expect(scan.store.stage).toBe('running');
+            return scan;
+        };
+        const botStops = (root: Awaited<ReturnType<typeof run>>['root']) => {
+            globalObserver.unregisterAll('Error'); // what run_panel.unregisterBotListeners does
+            runInAction(() => (root.run_panel.is_running = false));
+        };
+
+        it('a normal stop (take profit / stop loss)', async () => {
+            const { root, store } = await run();
+            expect(() => botStops(root)).not.toThrow();
+            expect(store.stage).toBe('stopped');
+        });
+
+        it('a stop after a failed buy', async () => {
+            const { root, store } = await run();
+            globalObserver.emit('Error', { message: 'Trading is not offered for this duration.' });
+            botStops(root);
+            await new Promise(resolve => setTimeout(resolve, 5));
+            expect(store.stage).toBe('idle');
+            expect(store.message).toBe('Run failed on Jump 25 Index: Trading is not offered for this duration.');
+        });
+
+        it('two stops in a row, and two runs one after the other', async () => {
+            const first = await run();
+            botStops(first.root);
+            expect(() => first.store.cancel()).not.toThrow();
+            expect(() => first.store.dismiss()).not.toThrow();
+            expect(first.store.stage).toBe('idle');
+
+            const second = await run();
+            botStops(second.root);
+            runInAction(() => (second.root.run_panel.is_running = false));
+            expect(second.store.stage).toBe('stopped');
+        });
+
+        it('cancel while running, then the bot stopping on its own as well', async () => {
+            const { root, store } = await run();
+            expect(() => store.cancel()).not.toThrow(); // Stop's own path
+            expect(() => botStops(root)).not.toThrow();
+            expect(store.stage).toBe('stopped');
         });
     });
 });

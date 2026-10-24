@@ -569,8 +569,9 @@ export default class AiScannerStore {
     private finish(stage: 'idle' | 'stopped', message: string) {
         this.run_token += 1;
         this.clearScanTimer();
-        this.stopRunErrorListeners?.();
+        const stopRunErrorListeners = this.stopRunErrorListeners;
         this.stopRunErrorListeners = null;
+        stopRunErrorListeners?.();
         this.scan_deadline = null;
         this.stage = stage;
         this.message = message;
@@ -755,11 +756,23 @@ export default class AiScannerStore {
                 else this.onBotStopped();
             }, 0);
         };
-        globalObserver.register('Error', onError);
-        globalObserver.register('ui.log.error', onError);
+        const events = ['Error', 'ui.log.error'];
+        events.forEach(event => globalObserver.register(event, onError));
+        // Safe in every case: the run panel drops ALL 'Error' listeners
+        // (observer.unregisterAll) when a bot stops, and the observer's own
+        // unregister throws on an event with no listener list left - so only
+        // unregister what is still registered, never throw, and only once.
+        let is_registered = true;
         this.stopRunErrorListeners = () => {
-            globalObserver.unregister('Error', onError);
-            globalObserver.unregister('ui.log.error', onError);
+            if (!is_registered) return;
+            is_registered = false;
+            events.forEach(event => {
+                try {
+                    if (globalObserver.isRegistered(event)) globalObserver.unregister(event, onError);
+                } catch {
+                    // Nothing left to remove.
+                }
+            });
         };
     }
 
