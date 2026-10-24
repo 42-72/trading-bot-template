@@ -28,7 +28,7 @@ describe('Over condition', () => {
         const result = condition(windowOf([58, 58, 58, 60, 60, 60, 64, 64, 64, 54]));
         expect(result.qualified).toBe(true);
         expect(result.reason).toBe(
-            '6: 10.7% · 7: 10.7% · 8: 10.7% · 9: 9.0% — 3 of 6-9 at 10.6%+ | 0: 9.7% · 1: 9.7% · 2: 9.7% — all under 9.8%'
+            '6: 10.7% · 7: 10.7% · 8: 10.7% · 9: 9.0% — 3 of 6-9 at 10.6%+ | 0: 9.7% · 1: 9.7% · 2: 9.7% — all under 10%'
         );
     });
 
@@ -39,12 +39,22 @@ describe('Over condition', () => {
         expect(result.reason).toMatch(/needs 3 of 6-9/);
     });
 
-    it('passes Rule 2 with digit 0 at 58 and fails it at 59', () => {
+    it('passes Rule 2 with digit 0 at 59 and fails it at 60 (exactly 10.0%)', () => {
         expect(condition(windowOf(PASSING)).qualified).toBe(true);
-        const result = condition(windowOf([59, 58, 58, 56, 57, 56, 64, 64, 64, 64]));
+        const at_59 = condition(windowOf([59, 58, 58, 56, 57, 56, 64, 64, 64, 64]));
+        expect(at_59.qualified).toBe(true);
+        expect(at_59.reason).toMatch(/0: 9.8% · 1: 9.7% · 2: 9.7% — all under 10%$/);
+
+        const result = condition(windowOf([60, 58, 58, 55, 57, 56, 64, 64, 64, 64]));
         expect(result.qualified).toBe(false);
-        expect(result.reason).toMatch(/not all under 9.8%/);
-        expect(result.reason).toMatch(/needs each of 0, 1, 2 under 9.8%/);
+        expect(result.reason).toMatch(/0: 10.0% · 1: 9.7% · 2: 9.7% — not all under 10%/);
+        expect(result.reason).toMatch(/needs each of 0, 1, 2 under 10%, 0 is at 10.0%\)$/);
+    });
+
+    it('names every one of 0, 1, 2 that is at 10% or more', () => {
+        const result = condition(windowOf([60, 59, 62, 52, 55, 56, 64, 64, 64, 64]));
+        expect(result.qualified).toBe(false);
+        expect(result.reason).toMatch(/needs each of 0, 1, 2 under 10%, 0 is at 10.0%, 2 is at 10.3%\)$/);
     });
 
     it('is never qualified with fewer than 600 digits', () => {
