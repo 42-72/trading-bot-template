@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { observer } from 'mobx-react-lite';
 import { AI_SCANNER_TICK_WINDOW } from '@/constants/ai-engine';
 import { useDigitAnalysis } from '@/hooks/useDigitAnalysis';
@@ -19,14 +19,21 @@ import { useAiScanner } from './use-ai-scanner';
 const MarketFeed = observer(({ symbol }: { symbol: string }) => {
     const ai_scanner = useAiScanner();
     const is_wanted = ai_scanner.are_feeds_wanted;
-    const { digits, lastDigit, updateCount, lastUpdateKind, status, n } = useDigitAnalysis(
+    const { digits, lastDigit, updateCount, lastUpdateKind, status, n, retry } = useDigitAnalysis(
         is_wanted ? symbol : '',
         AI_SCANNER_TICK_WINDOW
     );
 
     // Counted only while open, so Run (which waits for every feed to close)
     // never waits on a feed that has already let go of its stream.
-    useEffect(() => (is_wanted ? ai_scanner.registerFeed() : undefined), [ai_scanner, is_wanted]);
+    // retry() re-subscribes this feed: the store calls every feed's at once
+    // when all go silent together (ALL_SILENT_MS).
+    const retry_ref = useRef(retry);
+    retry_ref.current = retry;
+    useEffect(
+        () => (is_wanted ? ai_scanner.registerFeed(() => retry_ref.current()) : undefined),
+        [ai_scanner, is_wanted]
+    );
 
     useEffect(() => {
         if (is_wanted) ai_scanner.setFeedStatus(symbol, { status, n });

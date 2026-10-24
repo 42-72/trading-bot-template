@@ -2,6 +2,7 @@ import { useEffect, useReducer, useRef, useState } from 'react';
 import { api_base } from '@/external/bot-skeleton/services/api/api-base';
 import { CONNECTION_STATUS } from '@/external/bot-skeleton/services/api/observables/connection-status-stream';
 import { useApiBase } from '@/hooks/useApiBase';
+import { silenceLog } from '@/utils/ai-silence-log';
 import { countDigits, createEmptyCounts, getLastDigit } from '@/utils/digit-stats';
 
 // No tick for this long after a subscription is considered live means the
@@ -182,6 +183,8 @@ export const useDigitAnalysis = (symbol: string, windowSize: number) => {
     // than this is a duplicate and never enters the window again.
     const lastEpochRef = useRef<number | null>(null);
     const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // [AI-SILENCE] (temporary): when this stream last delivered a live tick or seed.
+    const lastAliveAtRef = useRef(0);
     // The ticks_history request still waiting for its reply, if any. Outlives
     // a single effect run on purpose: a re-run for the same symbol/window must
     // not subscribe again while an earlier request for it is unanswered.
@@ -239,6 +242,7 @@ export const useDigitAnalysis = (symbol: string, windowSize: number) => {
                 console.warn(
                     `[DigitAnalysis] No tick for ${WATCHDOG_TIMEOUT_MS / 1000}s on ${symbol} - re-subscribing`
                 );
+                silenceLog(`watchdog ${symbol}: silent for ${Date.now() - lastAliveAtRef.current}ms - re-subscribing`);
                 start();
             }, WATCHDOG_TIMEOUT_MS);
         };
@@ -267,6 +271,7 @@ export const useDigitAnalysis = (symbol: string, windowSize: number) => {
                 windowSize,
             });
             setStatus('live');
+            lastAliveAtRef.current = Date.now();
             armWatchdog();
         };
 
@@ -436,6 +441,7 @@ export const useDigitAnalysis = (symbol: string, windowSize: number) => {
                     previousQuoteRef.current === null || quote >= previousQuoteRef.current ? 'R' : 'F';
                 previousQuoteRef.current = quote;
                 dispatch({ type: 'PUSH', digit, direction, quote, windowSize });
+                lastAliveAtRef.current = Date.now();
                 armWatchdog();
             });
 

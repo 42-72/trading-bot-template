@@ -471,6 +471,66 @@ describe('AiScannerStore', () => {
         });
     });
 
+    describe('all feeds silent together', () => {
+        beforeEach(() => jest.useFakeTimers());
+        afterEach(() => jest.useRealTimers());
+
+        it('2s with no live tick anywhere: every feed re-subscribed at once - armed markets stay armed, no entry', async () => {
+            const { root, store } = await startScan();
+            const retries = [jest.fn(), jest.fn()];
+            const releases = retries.map(retry => store.registerFeed(retry));
+            store.onMarketTick('JD25', qualifying, 9, true); // armed on its seed
+            const armed = armedOf(store, 'JD25');
+            store.onMarketTick('JD25', qualifying, 9); // live ticks, no entry
+            store.onMarketTick('1HZ10V', faded, 5);
+
+            jest.advanceTimersByTime(1999);
+            retries.forEach(retry => expect(retry).not.toHaveBeenCalled());
+            jest.advanceTimersByTime(501); // the next check, >= 2s after the last live tick
+            retries.forEach(retry => expect(retry).toHaveBeenCalledTimes(1));
+
+            // The re-subscribes' seeds: an entry pattern on a seed never enters.
+            store.onMarketTick('JD25', entering, 1, true);
+            store.onMarketTick('1HZ10V', faded, 5, true);
+            await flush();
+            expect(root.run_panel.onRunButtonClick).not.toHaveBeenCalled();
+            expect(armedOf(store, 'JD25')).toMatchObject({
+                armed_at: armed?.armed_at,
+                expires_at: armed?.expires_at,
+            });
+
+            // Still silent: not again within 5s.
+            jest.advanceTimersByTime(4000);
+            retries.forEach(retry => expect(retry).toHaveBeenCalledTimes(1));
+            jest.advanceTimersByTime(1000);
+            retries.forEach(retry => expect(retry).toHaveBeenCalledTimes(2));
+            releases.forEach(release => release());
+        });
+
+        it('one silent market alone is left to its own watchdog', async () => {
+            const { store } = await startScan();
+            const retry = jest.fn();
+            store.registerFeed(retry);
+            store.onMarketTick('JD25', faded, 5);
+            store.onMarketTick('1HZ10V', faded, 5);
+            for (let i = 0; i < 10; i++) {
+                jest.advanceTimersByTime(1000);
+                store.onMarketTick('1HZ10V', faded, 5); // 1HZ10V keeps ticking
+            }
+            expect(retry).not.toHaveBeenCalled();
+        });
+
+        it('stops watching when the scan ends', async () => {
+            const { store } = await startScan();
+            const retry = jest.fn();
+            store.registerFeed(retry);
+            MARKETS.forEach(market => store.onMarketTick(market.symbol, faded, 5));
+            store.cancel();
+            jest.advanceTimersByTime(30000);
+            expect(retry).not.toHaveBeenCalled();
+        });
+    });
+
     describe('armed markets', () => {
         const MIN = 60 * 1000;
         const SEC = 1000;

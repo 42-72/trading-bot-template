@@ -66,6 +66,13 @@ jest.mock('@/external/bot-skeleton/services/api/api-base', () => ({
 }));
 
 jest.mock('@/hooks/useStore', () => ({ useStore: jest.fn() }));
+// [AI-SILENCE] diagnostics stay out of these socket counts.
+jest.mock('@/utils/ai-silence-log', () => ({
+    installSilenceLog: jest.fn(),
+    silenceLog: jest.fn(),
+    probeSocket: jest.fn(),
+    lastSocketMessageAt: () => 0,
+}));
 
 const MARKETS = [
     { symbol: '1HZ10V', text: 'Volatility 10 (1s) Index', submarket: 'random_index' },
@@ -111,7 +118,7 @@ describe('AI Scanner feeds after the winner', () => {
 
     // The real AiScanner, feeds and hook, scanning 3 markets with the TEST
     // strategy (every market qualifies on its seed, any live tick enters).
-    const startScanning = async () => {
+    const startScanning = async ({ use_test = true } = {}) => {
         const run_panel = observable(
             {
                 is_running: false,
@@ -145,7 +152,7 @@ describe('AI Scanner feeds after the winner', () => {
         store.setFormField('martingale', '2');
         store.setFormField('take_profit', '5');
         store.setFormField('stop_loss', '10');
-        store.setUseTestStrategy(true);
+        store.setUseTestStrategy(use_test);
         act(() => store.start());
         await flush(); // contracts_for -> scanning -> feeds mount and seed
         expect(store.stage).toBe('scanning');
@@ -213,6 +220,24 @@ describe('AI Scanner feeds after the winner', () => {
         await advance(100);
         expect(store.target?.symbol).toBe('1HZ10V');
         expect(run_panel.onRunButtonClick).toHaveBeenCalledTimes(1);
+        warn.mockRestore();
+    });
+
+    it('every feed silent for 2s: all re-subscribed at once, before any 3s watchdog - no entry, nothing loaded', async () => {
+        const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+        // The real Over strategy: these windows never qualify, so live ticks are no entry.
+        const { store, run_panel } = await startScanning({ use_test: false });
+        await advance(1000);
+        MARKETS.forEach(market => tick(market.symbol, 601)); // one live tick each, then silence
+        await flush();
+        expect(socket.requests.filter(request => 'ticks_history' in request)).toHaveLength(3);
+
+        await advance(2500); // 2s after the last tick (checked every 0.5s)
+        expect(socket.requests.filter(request => 'ticks_history' in request)).toHaveLength(6);
+        expect(warn.mock.calls.filter(([message]) => String(message).includes('No tick for'))).toEqual([]);
+        expect(store.stage).toBe('scanning');
+        expect(run_panel.onRunButtonClick).not.toHaveBeenCalled();
+        expect(loadBotIntoBuilder).not.toHaveBeenCalled();
         warn.mockRestore();
     });
 
