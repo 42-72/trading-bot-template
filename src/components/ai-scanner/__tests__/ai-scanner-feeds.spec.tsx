@@ -109,8 +109,9 @@ describe('AI Scanner feeds after the winner', () => {
 
     afterEach(() => jest.useRealTimers());
 
-    it('after a winner is picked, 60s of timers bring zero subscribe / ticks_history / forget requests and no watchdog', async () => {
-        const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    // The real AiScanner, feeds and hook, scanning 3 markets with the TEST
+    // strategy (every market qualifies on its seed, any live tick enters).
+    const startScanning = async () => {
         const run_panel = observable(
             {
                 is_running: false,
@@ -150,28 +151,68 @@ describe('AI Scanner feeds after the winner', () => {
         expect(store.stage).toBe('scanning');
         expect(socket.requests.filter(request => 'ticks_history' in request)).toHaveLength(3);
         expect(socket.listeners.size).toBe(3);
+        return { store, run_panel };
+    };
+    const advance = async (ms: number) => {
+        await act(async () => {
+            jest.advanceTimersByTime(ms);
+        });
+        await flush();
+    };
+    const forgets = () => socket.requests.filter(request => 'forget' in request).map(request => request.forget);
+
+    it('qualifying loads nothing and sends no forget_all; the winner: feeds closed, then load, then quiet for 60s', async () => {
+        const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+        let forgets_at_load: unknown[] | null = null;
+        (loadBotIntoBuilder as jest.Mock).mockImplementation(async ({ block_string, strategy_id }) => {
+            forgets_at_load = forgets();
+            workspace_xml = block_string;
+            workspace.current_strategy_id = strategy_id;
+            return true;
+        });
+        const { store } = await startScanning();
+        expect(store.qualified).toHaveLength(3); // all qualified on their seed
+        expect(loadBotIntoBuilder).not.toHaveBeenCalled();
+        expect(socket.requests.some(request => 'forget_all' in request)).toBe(false);
 
         // Ticks arrive a second apart (the hook stamps each with Date.now()).
-        await act(async () => {
-            jest.advanceTimersByTime(1000);
-        });
+        await advance(1000);
         tick('JD50', 601); // the TEST strategy's entry on JD50
-        await flush();
+        await advance(100); // Run waits (20ms polls) for every feed to close
         expect(store.target?.symbol).toBe('JD50');
         expect(store.stage).toBe('running');
 
-        // Every feed has closed: forgot its own stream, removed its listener.
-        const forgets = socket.requests.filter(request => 'forget' in request).map(request => request.forget);
-        expect(forgets.sort()).toEqual(['sub-1HZ10V', 'sub-1HZ50V', 'sub-JD50']);
+        // Every feed had forgotten its own stream before the engine loaded.
+        expect((forgets_at_load as unknown as string[]).sort()).toEqual(['sub-1HZ10V', 'sub-1HZ50V', 'sub-JD50']);
+        expect(loadBotIntoBuilder).toHaveBeenCalledTimes(1);
         expect(socket.listeners.size).toBe(0);
 
         const after_winner = socket.requests.length;
-        await act(async () => {
-            jest.advanceTimersByTime(60000);
-        });
-        await flush();
+        await advance(60000);
         expect(socket.requests.slice(after_winner)).toEqual([]);
         expect(warn.mock.calls.filter(([message]) => String(message).includes('No tick for'))).toEqual([]);
+        warn.mockRestore();
+    });
+
+    it('a watchdog re-seed (3s without ticks) is never taken as an entry', async () => {
+        const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+        const { store, run_panel } = await startScanning();
+
+        // No ticks for 3s: every feed re-subscribes and is seeded again.
+        await advance(3000);
+        expect(warn.mock.calls.filter(([message]) => String(message).includes('No tick for 3s'))).toHaveLength(3);
+        expect(socket.requests.filter(request => 'ticks_history' in request)).toHaveLength(6);
+        await advance(0);
+        expect(store.stage).toBe('scanning');
+        expect(run_panel.onRunButtonClick).not.toHaveBeenCalled();
+        expect(loadBotIntoBuilder).not.toHaveBeenCalled();
+
+        // The next real tick is the entry.
+        await advance(1000);
+        tick('1HZ10V', 601);
+        await advance(100);
+        expect(store.target?.symbol).toBe('1HZ10V');
+        expect(run_panel.onRunButtonClick).toHaveBeenCalledTimes(1);
         warn.mockRestore();
     });
 

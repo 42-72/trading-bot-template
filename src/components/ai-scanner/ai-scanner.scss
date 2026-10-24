@@ -311,6 +311,33 @@ $ai-scanner-z: 5;
         color: var(--brand-danger, #ef4444);
     }
 
+    &__buttons {
+        display: flex;
+        flex-direction: column;
+        gap: 0.8rem;
+        margin-top: 1.2rem;
+    }
+
+    // "Load & Run": shows what the AI is doing, never pressed.
+    &__status-light {
+        height: 4rem;
+        border: 0.1rem dashed var(--border-normal);
+        border-radius: 0.8rem;
+        background: var(--general-section-1);
+        color: var(--text-less-prominent);
+        font-size: 1.4rem;
+        font-weight: 700;
+        cursor: default;
+        pointer-events: none;
+
+        &--lit {
+            border-style: solid;
+            border-color: var(--brand-success, #10b981);
+            background: var(--brand-success, #10b981);
+            color: #fff;
+        }
+    }
+
     &__primary,
     &__secondary {
         height: 4rem;

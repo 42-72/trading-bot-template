@@ -106,11 +106,12 @@ const OverUnderForm = observer(() => {
     const { form, form_errors, start_blocker, can_start, can_use_test_strategy, use_test_strategy } = ai_scanner;
 
     return (
+        // Enter in a field starts the scan, like the Scan button.
         <form
             className='ai-scanner-panel__form'
             onSubmit={event => {
                 event.preventDefault();
-                ai_scanner.start();
+                if (can_start) ai_scanner.start();
             }}
         >
             <StrategyPicker />
@@ -153,12 +154,11 @@ const OverUnderForm = observer(() => {
                 </label>
             )}
             <p className='ai-scanner-panel__notice'>
-                {localize('Scan & Run replaces the bot open in Bot Builder. Your current workspace is kept in Recent.')}
+                {localize(
+                    'When an entry hits, the engine bot replaces the bot open in Bot Builder. Your current workspace is kept in Recent.'
+                )}
             </p>
             {start_blocker && <p className='ai-scanner-panel__blocker'>{start_blocker}</p>}
-            <button type='submit' className='ai-scanner-panel__primary' disabled={!can_start}>
-                {localize('Scan & Run')}
-            </button>
         </form>
     );
 });
@@ -206,8 +206,7 @@ const ScanProgress = observer(() => {
 
 const RunStatus = observer(() => {
     const ai_scanner = useAiScanner();
-    const { stage, locked, target, message, feed_status, scan_markets, final_profit, scan_deadline, qualified } =
-        ai_scanner;
+    const { stage, locked, target, message, feed_status, scan_markets, scan_deadline, qualified } = ai_scanner;
     if (!locked) return null;
     const setup = OVER_UNDER_SETUPS[locked.strategy];
     const current = stageIndex(stage, qualified.length > 0);
@@ -280,31 +279,75 @@ const RunStatus = observer(() => {
             </dl>
 
             {message && <p className='ai-scanner-panel__message'>{message}</p>}
-            {stage === 'stopped' && final_profit !== null && (
-                <p
-                    className={clsx('ai-scanner-panel__result', {
-                        'ai-scanner-panel__result--profit': final_profit > 0,
-                        'ai-scanner-panel__result--loss': final_profit < 0,
-                    })}
-                >
-                    {localize('Total profit/loss')}: {money(final_profit)}
-                </p>
-            )}
+        </div>
+    );
+});
 
-            {stage === 'stopped' ? (
-                <button type='button' className='ai-scanner-panel__primary' onClick={ai_scanner.dismiss}>
-                    {localize('New scan')}
+/** The last run's result, shown above the form once the bot has stopped. */
+const LastResult = observer(() => {
+    const { stage, final_profit } = useAiScanner();
+    if (stage !== 'stopped' || final_profit === null) return null;
+    return (
+        <p
+            className={clsx('ai-scanner-panel__result', {
+                'ai-scanner-panel__result--profit': final_profit > 0,
+                'ai-scanner-panel__result--loss': final_profit < 0,
+            })}
+        >
+            {localize('Total profit/loss')}: {money(final_profit)}
+        </p>
+    );
+});
+
+/**
+ * Two buttons, one under the other.
+ *  - Top, the only one the trader presses: "Scan" (ready), "Stop scan"
+ *    (checking / scanning, also while waiting for an entry), "Scan" disabled
+ *    from the entry hit until the bot stops (a running bot is stopped with
+ *    the normal Stop button).
+ *  - Bottom, "Load & Run": a status light only - always disabled, out of the
+ *    tab order, no handler. Lit with "Loading…" from the entry hit until Run
+ *    is pressed, "Running" while the bot runs, greyed otherwise.
+ */
+export const ScannerButtons = observer(() => {
+    const ai_scanner = useAiScanner();
+    const { stage, can_start } = ai_scanner;
+    const is_scanning = stage === 'checking' || stage === 'scanning';
+    const is_engine_busy = stage === 'starting' || stage === 'running' || stage === 'stopping';
+
+    let status_label = localize('Load & Run');
+    if (stage === 'starting') status_label = localize('Loading…');
+    if (stage === 'running' || stage === 'stopping') status_label = localize('Running');
+
+    return (
+        <div className='ai-scanner-panel__buttons'>
+            {is_scanning ? (
+                <button type='button' className='ai-scanner-panel__secondary' onClick={ai_scanner.cancel}>
+                    {localize('Stop scan')}
                 </button>
             ) : (
                 <button
                     type='button'
-                    className='ai-scanner-panel__secondary'
-                    onClick={ai_scanner.cancel}
-                    disabled={stage === 'stopping'}
+                    className='ai-scanner-panel__primary'
+                    disabled={is_engine_busy || !can_start}
+                    onClick={ai_scanner.start}
                 >
-                    {stage === 'stopping' ? localize('Stopping...') : localize('Cancel')}
+                    {localize('Scan')}
                 </button>
             )}
+            <button
+                type='button'
+                className={clsx('ai-scanner-panel__status-light', {
+                    'ai-scanner-panel__status-light--lit': is_engine_busy,
+                })}
+                disabled
+                tabIndex={-1}
+                aria-disabled='true'
+                aria-live='polite'
+                data-testid='ai-scanner-status-light'
+            >
+                {status_label}
+            </button>
         </div>
     );
 });
@@ -314,7 +357,8 @@ type TAiScannerPanel = { style: React.CSSProperties; is_desktop: boolean };
 const AiScannerPanel = observer(({ style, is_desktop }: TAiScannerPanel) => {
     const ai_scanner = useAiScanner();
     const { active_tab, locked, stage, message } = ai_scanner;
-    const shows_status = !!locked && stage !== 'idle';
+    // Idle and stopped show the form (kept, ready for the next Scan).
+    const shows_status = !!locked && !['idle', 'stopped'].includes(stage);
 
     return (
         <section
@@ -356,10 +400,13 @@ const AiScannerPanel = observer(({ style, is_desktop }: TAiScannerPanel) => {
             </div>
 
             <div className='ai-scanner-panel__body'>
-                {/* Why the last scan ended (e.g. no market qualified) - above the
-                    form, which keeps its values for the next Load & Run. */}
+                {/* Why the last scan or run ended (no market qualified, Run
+                    failed, Scan stopped, take profit...) - above the form,
+                    which keeps its values for the next Scan. */}
                 {!shows_status && message && <p className='ai-scanner-panel__message'>{message}</p>}
+                {!shows_status && <LastResult />}
                 {shows_status ? <RunStatus /> : <OverUnderForm />}
+                <ScannerButtons />
             </div>
         </section>
     );

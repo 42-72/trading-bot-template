@@ -4,7 +4,11 @@ import path from 'path';
 import { observer as globalObserver } from '@/external/bot-skeleton/utils/observer';
 import { readEngineValues } from '@/utils/ai-engine-xml';
 import { loadBotIntoBuilder } from '@/utils/load-bot-into-builder';
-import AiScannerStore, { CONDITIONS_NOT_MET_MESSAGE, NO_MARKETS_OFFERED_MESSAGE } from '../ai-scanner-store';
+import AiScannerStore, {
+    CONDITIONS_NOT_MET_MESSAGE,
+    NO_MARKETS_OFFERED_MESSAGE,
+    SCAN_STOPPED_MESSAGE,
+} from '../ai-scanner-store';
 import RootStore from '../root-store';
 
 // jest stubs *.xml imports - hand the store the real engine.
@@ -200,21 +204,53 @@ describe('AiScannerStore', () => {
             expect(root.run_panel.onRunButtonClick).not.toHaveBeenCalled();
         });
 
-        it('loads the engine at the first qualify and keeps every market scanning', async () => {
+        it('qualifying loads nothing: every feed keeps running', async () => {
             const { store } = await startScan();
             store.onMarketTick('1HZ10V', qualifying, 9, true);
+            store.onMarketTick('JD25', qualifying, 9, true);
+            for (let i = 0; i < 10; i++) store.onMarketTick('JD25', qualifying, 9);
+            await flush();
             expect(store.stage).toBe('scanning');
             expect(store.are_feeds_wanted).toBe(true);
-            expect(store.engine_state).toBe('loading');
-            expect(qualifiedSymbols(store)).toEqual(['1HZ10V']);
-            await flush();
-            expect(store.engine_state).toBe('loaded');
-            expect(readEngineValues(workspace_xml).symbol).toBe('1HZ10V');
-
-            // A second market qualifies alongside it; the engine isn't reloaded.
-            store.onMarketTick('JD25', qualifying, 9, true);
             expect(qualifiedSymbols(store)).toEqual(['1HZ10V', 'JD25']);
-            expect(loadBotIntoBuilder).toHaveBeenCalledTimes(1);
+            expect(store.owns_workspace).toBe(false);
+            expect(loadBotIntoBuilder).not.toHaveBeenCalled();
+            expect(workspace_xml).toBe('');
+        });
+
+        it('entry: feeds closed, then load, then read-back, then Run - in that order', async () => {
+            const { root, store } = await startScan();
+            const order: string[] = [];
+            const release = store.registerFeed(); // one feed still open at the entry
+            (loadBotIntoBuilder as jest.Mock).mockImplementation(async ({ block_string, strategy_id }) => {
+                order.push('load');
+                workspace_xml = block_string;
+                workspace.current_strategy_id = strategy_id;
+                return true;
+            });
+            (window as unknown as { Blockly: { Xml: unknown } }).Blockly.Xml = {
+                workspaceToDom: () => null,
+                domToText: () => {
+                    order.push('read-back');
+                    return workspace_xml;
+                },
+            };
+            root.run_panel.clearStat.mockImplementation(() => order.push('clearStat'));
+            root.run_panel.onRunButtonClick.mockImplementation(async () => {
+                order.push('run');
+                runInAction(() => (root.run_panel.is_running = true));
+            });
+
+            store.onMarketTick('JD25', entering, 1, true);
+            store.onMarketTick('JD25', entering, 1);
+            await flush();
+            expect(order).toEqual([]); // nothing loads while a feed is still open
+            order.push('feeds closed');
+            release();
+            await new Promise(resolve => setTimeout(resolve, 60));
+            await flush();
+            expect(order).toEqual(['feeds closed', 'load', 'read-back', 'clearStat', 'run']);
+            expect(store.stage).toBe('running');
         });
 
         it('two qualified at once, the second hits its entry first: the second wins and the engine is on it', async () => {
@@ -222,7 +258,7 @@ describe('AiScannerStore', () => {
             store.onMarketTick('1HZ10V', qualifying, 9, true);
             store.onMarketTick('JD25', qualifying, 9, true);
             await flush();
-            expect(readEngineValues(workspace_xml).symbol).toBe('1HZ10V'); // loaded for the first
+            expect(loadBotIntoBuilder).not.toHaveBeenCalled();
 
             store.onMarketTick('1HZ10V', qualifying, 9); // still qualified, no entry
             store.onMarketTick('JD25', entering, 1); // entry
@@ -232,6 +268,7 @@ describe('AiScannerStore', () => {
 
             expect(store.target?.symbol).toBe('JD25');
             expect(root.run_panel.onRunButtonClick).toHaveBeenCalledTimes(1);
+            expect(loadBotIntoBuilder).toHaveBeenCalledTimes(1); // once, with the winner
             expect(readEngineValues(workspace_xml)).toMatchObject({
                 symbol: 'JD25',
                 submarket: 'jump_index',
@@ -276,14 +313,14 @@ describe('AiScannerStore', () => {
             expect(root.run_panel.onRunButtonClick).toHaveBeenCalledTimes(1);
             expect(store.target?.symbol).toBe('1HZ10V');
             expect(readEngineValues(workspace_xml).symbol).toBe('1HZ10V');
-            expect(loadBotIntoBuilder).toHaveBeenCalledTimes(1); // already on the winner - no reload
+            expect(loadBotIntoBuilder).toHaveBeenCalledTimes(1);
         });
 
         it('symbol read back from the workspace is not the winner: no Run, and the panel says why', async () => {
             const { root, store } = await startScan();
             store.onMarketTick('1HZ10V', qualifying, 9, true);
             await flush();
-            // The reload for the winner "lands" on the old market, as a refused
+            // The load for the winner "lands" on another market, as a refused
             // dropdown would leave it.
             (loadBotIntoBuilder as jest.Mock).mockImplementationOnce(async ({ block_string, strategy_id }) => {
                 workspace_xml = block_string.replace(
@@ -300,16 +337,18 @@ describe('AiScannerStore', () => {
             expect(store.message).toBe("Run not pressed: the engine's market is 1HZ10V, not the winning market JD25.");
         });
 
-        it('an engine edited in Bot Builder during the scan is reloaded with the locked values before Run', async () => {
+        it('any other locked value read back wrong: no Run either', async () => {
             const { root, store } = await startScan();
-            store.onMarketTick('1HZ10V', qualifying, 9, true);
+            (loadBotIntoBuilder as jest.Mock).mockImplementationOnce(async ({ block_string, strategy_id }) => {
+                workspace_xml = block_string.replace(/(id="bull-ai-n-mart"><field name="NUM">)2</, '$19<');
+                workspace.current_strategy_id = strategy_id;
+                return true;
+            });
+            store.onMarketTick('JD25', entering, 1, true);
+            store.onMarketTick('JD25', entering, 1);
             await flush();
-            workspace_xml = workspace_xml.replace(/(id="bull-ai-n-mart"><field name="NUM">)2</, '$19<');
-            store.onMarketTick('1HZ10V', entering, 1);
-            await flush();
-            expect(loadBotIntoBuilder).toHaveBeenCalledTimes(2);
-            expect(readEngineValues(workspace_xml).martingale).toBe(2);
-            expect(root.run_panel.onRunButtonClick).toHaveBeenCalledTimes(1);
+            expect(root.run_panel.onRunButtonClick).not.toHaveBeenCalled();
+            expect(store.message).toBe('Run not pressed: the engine bot does not hold the locked values.');
         });
 
         it('never enters on a re-seed of the window, only on a live tick', async () => {
@@ -340,26 +379,59 @@ describe('AiScannerStore', () => {
             expect(root.run_panel.onRunButtonClick).toHaveBeenCalledTimes(1);
         });
 
-        it('cancel while markets are qualified stands down without touching the run panel', async () => {
+        it('Stop scan while waiting for an entry: no load, no Run, feeds closed, "Scan stopped."', async () => {
             const { root, store } = await startScan();
             store.onMarketTick('1HZ10V', qualifying, 9, true);
             await flush();
             store.cancel();
             expect(store.stage).toBe('idle');
+            expect(store.message).toBe(SCAN_STOPPED_MESSAGE);
+            expect(store.are_feeds_wanted).toBe(false);
+            expect(store.scan_deadline).toBeNull();
             expect(store.qualified).toEqual([]);
+            expect(store.form).toMatchObject({ strategy: 'over', stake: '0.35' });
+            expect(store.can_start).toBe(true);
+            expect(loadBotIntoBuilder).not.toHaveBeenCalled();
             store.onMarketTick('1HZ10V', entering, 1);
             await flush();
             expect(root.run_panel.onRunButtonClick).not.toHaveBeenCalled();
             expect(root.run_panel.onStopBotClick).not.toHaveBeenCalled();
         });
 
-        it('owns the workspace (blocking the Market Tool sync) from the first qualify until the bot stops', async () => {
+        it('Stop scan while scanning (nothing qualified yet): no load, no Run, feeds closed', async () => {
+            const { root, store } = await startScan();
+            store.onMarketTick('1HZ10V', faded, 5, true);
+            store.cancel();
+            expect(store.stage).toBe('idle');
+            expect(store.message).toBe(SCAN_STOPPED_MESSAGE);
+            expect(store.are_feeds_wanted).toBe(false);
+            store.onMarketTick('JD25', entering, 1);
+            await flush();
+            expect(loadBotIntoBuilder).not.toHaveBeenCalled();
+            expect(root.run_panel.onRunButtonClick).not.toHaveBeenCalled();
+        });
+
+        it('Stop scan while checking which markets offer the trade', async () => {
+            const store = new AiScannerStore(makeRoot());
+            store.setMarkets(MARKETS);
+            fillForm(store);
+            store.start();
+            expect(store.stage).toBe('checking');
+            store.cancel();
+            await flush();
+            expect(store.stage).toBe('idle');
+            expect(store.message).toBe(SCAN_STOPPED_MESSAGE);
+            expect(store.are_feeds_wanted).toBe(false);
+        });
+
+        it('owns the workspace (blocking the Market Tool sync) from the entry hit until the bot stops', async () => {
             const { root, store } = await startScan();
             expect(store.owns_workspace).toBe(false);
             store.onMarketTick('1HZ10V', qualifying, 9, true);
-            expect(store.owns_workspace).toBe(true);
+            expect(store.owns_workspace).toBe(false); // qualifying loads nothing
             await flush();
             store.onMarketTick('1HZ10V', entering, 1);
+            expect(store.owns_workspace).toBe(true);
             await flush();
             expect(store.stage).toBe('running');
             expect(store.owns_workspace).toBe(true);
@@ -429,8 +501,8 @@ describe('AiScannerStore', () => {
             expect(store.message).toBe(CONDITIONS_NOT_MET_MESSAGE);
             expect(store.are_feeds_wanted).toBe(false);
             expect(root.run_panel.onRunButtonClick).not.toHaveBeenCalled();
-            // The engine loaded for it is left as it is, never run.
-            expect(workspace.current_strategy_id).toMatch(/^ai-engine-/);
+            // Nothing was ever loaded for it.
+            expect(loadBotIntoBuilder).not.toHaveBeenCalled();
         });
 
         it('before 5:00, a fade with none qualified just keeps scanning', async () => {
@@ -465,7 +537,7 @@ describe('AiScannerStore', () => {
                 store.onMarketTick('1HZ10V', full(), 5, true); // the very first check
                 expect(qualifiedSymbols(store)).toEqual(['1HZ10V']);
                 expect(store.qualified[0].reason).toMatch(/^TEST strategy/);
-                expect(store.engine_state).toBe('loading');
+                expect(loadBotIntoBuilder).not.toHaveBeenCalled();
                 await flush();
                 store.onMarketTick('1HZ10V', full(), 4); // first live tick
                 await flush();
@@ -700,8 +772,9 @@ describe('AiScannerStore', () => {
             const first = await run();
             botStops(first.root);
             expect(() => first.store.cancel()).not.toThrow();
-            expect(() => first.store.dismiss()).not.toThrow();
-            expect(first.store.stage).toBe('idle');
+            expect(first.store.stage).toBe('stopped');
+            // Scan again from the stopped state.
+            expect(first.store.can_start).toBe(true);
 
             const second = await run();
             botStops(second.root);

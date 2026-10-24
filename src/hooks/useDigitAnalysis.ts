@@ -8,7 +8,12 @@ import { countDigits, createEmptyCounts, getLastDigit } from '@/utils/digit-stat
 // stream is dead (server-side drop, a stale subscription surviving a socket
 // swap, etc.) even though nothing told us so - re-subscribing is cheaper
 // and safer than waiting indefinitely for a tick that will never come.
-const WATCHDOG_TIMEOUT_MS = 10000;
+// 3s: the bot engine's own forget_all 'ticks' (sent when Bot Builder's
+// market changes and on every bot stop / restart) silently ends every tick
+// stream on the shared socket, Market Tool's and the AI Scanner's alike, and
+// this is how they come back. (1s) and Jump indices tick every second, the
+// plain Volatility indices about every 2s.
+const WATCHDOG_TIMEOUT_MS = 3000;
 
 // Retry policy for a ticks_history subscribe that fails or never replies.
 // Deriv's server intermittently answers a valid request with
@@ -39,6 +44,14 @@ type TState = {
     /** Bumped on every accepted tick - a cheap, always-unique key for the UI's pulse animation. */
     lastTickAt: number | null;
     currentQuote: number | null;
+    /**
+     * +1 on every seed and every accepted tick, never reset (not even by a
+     * re-subscribe's RESET), so a consumer can react to each update even
+     * when two land in one render or share a millisecond.
+     */
+    updateCount: number;
+    /** What the latest update was: the ticks_history seed, or a live tick. */
+    lastUpdateKind: 'seed' | 'tick' | null;
 };
 
 type TAction =
@@ -54,6 +67,8 @@ const initialState: TState = {
     lastDirection: null,
     lastTickAt: null,
     currentQuote: null,
+    updateCount: 0,
+    lastUpdateKind: null,
 };
 
 // Reducer, not several useState calls: digits/counts/directions/lastDigit
@@ -62,7 +77,7 @@ const initialState: TState = {
 function reducer(state: TState, action: TAction): TState {
     switch (action.type) {
         case 'RESET':
-            return initialState;
+            return { ...initialState, updateCount: state.updateCount };
         case 'SEED': {
             // One-time O(n) pass over the seed window (ticks_history) - not
             // "per tick", so this doesn't conflict with the no-recount rule below.
@@ -76,6 +91,8 @@ function reducer(state: TState, action: TAction): TState {
                 lastDirection: directions.length ? directions[directions.length - 1] : null,
                 lastTickAt: digits.length ? Date.now() : null,
                 currentQuote: action.currentQuote,
+                updateCount: state.updateCount + 1,
+                lastUpdateKind: 'seed',
             };
         }
         case 'PUSH': {
@@ -99,6 +116,8 @@ function reducer(state: TState, action: TAction): TState {
                 lastDirection: action.direction,
                 lastTickAt: Date.now(),
                 currentQuote: action.quote,
+                updateCount: state.updateCount + 1,
+                lastUpdateKind: 'tick',
             };
         }
         default:
@@ -439,6 +458,8 @@ export const useDigitAnalysis = (symbol: string, windowSize: number) => {
         lastDirection: state.lastDirection,
         lastTickAt: state.lastTickAt,
         currentQuote: state.currentQuote,
+        updateCount: state.updateCount,
+        lastUpdateKind: state.lastUpdateKind,
         n: state.digits.length,
         pipSize: pipSizeRef.current,
         isLive: connectionStatus === CONNECTION_STATUS.OPENED,

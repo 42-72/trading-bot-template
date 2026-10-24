@@ -25,21 +25,19 @@ import RootStore from './root-store';
 //        -> scanning   every offered market's last 600 digits, live, all at once. On
 //                      each tick: condition() decides whether that market is
 //                      qualified (any number can be); a qualified market whose
-//                      entry() is true on that tick wins. The engine is loaded
-//                      in the background when the first market qualifies.
-//        -> starting   first entry wins: feeds closed, the engine pointed at
-//                      the winning market and read back, stats cleared, Run
+//                      entry() is true on that tick wins. Nothing is loaded
+//                      while scanning: loading the engine makes the bot engine
+//                      send forget_all 'ticks', silencing every feed.
+//        -> starting   first entry wins: feeds closed, THEN the engine loaded
+//                      with the winner's values and read back, stats cleared, Run
 //        -> running    the bot trades until its own TP / SL (an error before
 //                      its first contract settles: stopped, 'Run failed on')
 //        -> stopped    (or 'stopping' while a cancelled run closes)
 //
 // The form only ever feeds a run through `locked`, the snapshot taken when
-// Scan & Run is pressed - editing the form mid-run changes nothing.
+// Scan is pressed - editing the form mid-run changes nothing.
 
 export type TAiScannerStage = 'idle' | 'checking' | 'scanning' | 'starting' | 'running' | 'stopping' | 'stopped';
-
-/** Where the background engine load stands during a scan. */
-export type TEngineState = 'none' | 'loading' | 'loaded';
 
 export type TAiScannerTab = 'over_under' | 'even_odd';
 
@@ -72,6 +70,7 @@ export type TFeedStatus = { status: string; n: number };
 type TFormErrors = Partial<Record<keyof TAiScannerForm, string>>;
 
 const FORM_STORAGE_KEY = 'ai_scanner_form';
+export const SCAN_STOPPED_MESSAGE = 'Scan stopped.';
 export const NO_MARKETS_OFFERED_MESSAGE = 'No markets offer this trade right now.';
 export const CONDITIONS_NOT_MET_MESSAGE = `Conditions not met — no market qualified in ${
     AI_SCANNER_SCAN_LIMIT_SECONDS / 60
@@ -106,13 +105,6 @@ const parseAmount = (value: string) => {
 };
 
 const decimals = (value: string) => value.trim().split('.')[1]?.length ?? 0;
-
-type TBlocklyWorkspace = {
-    current_strategy_id?: string;
-};
-
-const getWorkspace = () =>
-    (window as unknown as { Blockly?: { derivWorkspace?: TBlocklyWorkspace } }).Blockly?.derivWorkspace;
 
 /** The engine values as they actually stand in the Bot Builder workspace right now. */
 const readWorkspaceEngineValues = () => {
@@ -155,7 +147,6 @@ export default class AiScannerStore {
     target: TAiScannerTarget | null = null;
     /** Markets whose condition holds right now, in the order they qualified. */
     qualified: TQualifiedMarket[] = [];
-    engine_state: TEngineState = 'none';
     markets: TAiScannerMarket[] = [];
     /** This scan's markets: those of `markets` whose contracts_for offers the trade (checking stage). */
     scan_markets: TAiScannerMarket[] = [];
@@ -180,8 +171,6 @@ export default class AiScannerStore {
     private run_failure: string | null = null;
     private stopRunErrorListeners: (() => void) | null = null;
     private scan_timer: ReturnType<typeof setTimeout> | null = null;
-    private engine_strategy_id: string | null = null;
-    private engine_load: Promise<boolean> | null = null;
     // Qualified markets by symbol, kept current on every tick; `qualified`
     // is published from it when the set changes, and with scan_progress for
     // reason-text updates (at most once a second).
@@ -206,7 +195,6 @@ export default class AiScannerStore {
             locked: observable,
             target: observable,
             qualified: observable.ref,
-            engine_state: observable,
             markets: observable.ref,
             scan_markets: observable.ref,
             feed_status: observable,
@@ -228,7 +216,6 @@ export default class AiScannerStore {
             setUseTestStrategy: action,
             setMarkets: action,
             setFeedStatus: action,
-            dismiss: action,
             onMarketTick: action,
             start: action,
             cancel: action,
@@ -278,7 +265,6 @@ export default class AiScannerStore {
      * Bot Builder sync must leave the market block alone (market-tool-sync.ts).
      */
     get owns_workspace() {
-        if (this.stage === 'scanning') return this.engine_state !== 'none';
         return ['starting', 'running', 'stopping'].includes(this.stage);
     }
 
@@ -363,19 +349,10 @@ export default class AiScannerStore {
         };
     };
 
-    /** Feeds render from Scan & Run until the winning entry. */
+    /** Feeds render from Scan until the winning entry. */
     get are_feeds_wanted() {
         return this.stage === 'scanning';
     }
-
-    /** Stopped -> back to the form. */
-    dismiss = () => {
-        if (this.stage !== 'stopped') return;
-        this.stage = 'idle';
-        this.target = null;
-        this.message = '';
-        this.final_profit = null;
-    };
 
     // Resolves once every scanner feed has unmounted - each one's cleanup
     // has sent `forget` for its stream (useDigitAnalysis) - or after 2s.
@@ -390,7 +367,7 @@ export default class AiScannerStore {
         });
     }
 
-    /** Scan & Run: lock the form, check which markets offer the trade, then scan those. */
+    /** Scan: lock the form, check which markets offer the trade, then scan those. */
     start = () => {
         if (!this.can_start) return;
         this.run_token += 1;
@@ -406,9 +383,6 @@ export default class AiScannerStore {
         this.target = null;
         this.final_profit = null;
         this.run_failure = null;
-        this.engine_strategy_id = null;
-        this.engine_load = null;
-        this.engine_state = 'none';
         this.qualified_by_symbol.clear();
         this.qualified = [];
         this.scan_markets = [];
@@ -464,12 +438,17 @@ export default class AiScannerStore {
         );
     }
 
-    /** Cancel at any stage. A running bot is stopped through the Stop button's own path. */
+    /**
+     * The panel's "Stop scan" (checking / scanning): ends the scan at once -
+     * feeds close, timers clear, nothing is loaded or run. Also stops a run
+     * through the Stop button's own path if ever called once a bot runs.
+     */
     cancel = () => {
-        // Entry hit but Run not pressed yet (engine being pointed at the
-        // winner, feeds closing).
+        // Nothing to stop: ready, or the last run has already ended.
+        if (!this.is_active) return;
+        // Entry hit but Run not pressed yet (feeds closing, engine loading).
         if (this.stage === 'starting' && !this.root_store.run_panel.is_stop_button_visible) {
-            this.finish('idle', 'Cancelled.');
+            this.finish('idle', SCAN_STOPPED_MESSAGE);
             return;
         }
         if (this.stage === 'running' || this.stage === 'starting') {
@@ -481,7 +460,7 @@ export default class AiScannerStore {
             return;
         }
         if (this.stage === 'stopping') return;
-        this.finish('idle', 'Cancelled.');
+        this.finish('idle', SCAN_STOPPED_MESSAGE);
     };
 
     private get strategy() {
@@ -513,9 +492,6 @@ export default class AiScannerStore {
         this.recordCheck(market, result, was_qualified !== result.qualified);
 
         if (result.qualified) {
-            // Loaded once, at the first qualify, so Run is quick; pointed at
-            // whichever market wins when the entry hits (pressRun).
-            if (this.engine_state === 'none') this.loadEngine(market, this.run_token);
             // A re-seed (stream re-subscribed) only re-checks the condition:
             // its last digit is history, not a new tick to enter on.
             if (!is_seed && this.strategy.entry(digits, new_digit)) {
@@ -610,50 +586,29 @@ export default class AiScannerStore {
             runInAction(() => this.finish('idle', `Could not prepare the engine bot: ${(error as Error).message}`));
             return false;
         }
-        const strategy_id = createAiEngineStrategyId();
-        const ok = await loadBotIntoBuilder({ block_string: xml, file_name: AI_ENGINE_BOT_NAME, strategy_id });
+        const ok = await loadBotIntoBuilder({
+            block_string: xml,
+            file_name: AI_ENGINE_BOT_NAME,
+            strategy_id: createAiEngineStrategyId(),
+        });
         if (token !== this.run_token) return false;
         if (!ok) {
             runInAction(() => this.finish('idle', 'Could not load the engine bot.'));
             return false;
         }
-        this.engine_strategy_id = strategy_id;
         return true;
     }
 
-    /** First market qualified: load the engine in the background while every market keeps scanning. */
-    private loadEngine(market: TAiScannerMarket, token: number) {
-        const { run_panel, dashboard } = this.root_store;
-        if (run_panel.is_stop_button_visible) {
-            this.finish('idle', 'Cancelled: a bot is already running.');
-            return;
-        }
-        this.engine_state = 'loading';
-        this.engine_load = this.writeAndLoadEngine(market, token).then(ok => {
-            if (!ok || token !== this.run_token) return false;
-            // Checked from the workspace itself, not the XML we sent: a
-            // dropdown can refuse a value (e.g. a symbol missing from its
-            // options).
-            if (!sameEngineValues(readWorkspaceEngineValues(), this.engineValuesFor(market))) {
-                runInAction(() => this.finish('idle', 'Could not load the engine bot with these values.'));
-                return false;
-            }
-            runInAction(() => (this.engine_state = 'loaded'));
-            dashboard.setActiveTab(DBOT_TABS.BOT_BUILDER);
-            return true;
-        });
-    }
-
     /**
-     * The first entry wins: close every feed, point the engine at `winner`,
-     * check it from the workspace, then press Run through the Run button's
-     * own path.
+     * The first entry wins: close every feed, THEN load the engine with the
+     * winner's values, check them from the workspace, and press Run through
+     * the Run button's own path. In that order because loading the engine
+     * makes the bot engine send forget_all 'ticks' - nothing of the scan may
+     * still be listening when it does.
      */
     private async pressRun(winner: TAiScannerTarget, token: number) {
-        // Only from a live scan: the engine load started on this same tick
-        // may already have stopped it (e.g. the engine couldn't be prepared).
         if (this.stage !== 'scanning' || token !== this.run_token) return;
-        const { run_panel } = this.root_store;
+        const { run_panel, dashboard } = this.root_store;
         if (run_panel.is_stop_button_visible) {
             this.finish('idle', 'Cancelled: a bot is already running.');
             return;
@@ -663,26 +618,23 @@ export default class AiScannerStore {
         this.target = winner;
         this.qualified_by_symbol.clear();
         this.qualified = [];
-        // 'starting' unmounts every feed; onMarketTick ignores everything
-        // from here, so no other entry can count - not even one on this tick.
+        // 'starting' closes every feed; onMarketTick ignores everything from
+        // here, so no other entry can count - not even one on this tick.
         this.stage = 'starting';
 
-        // The background load, if it's still going.
-        if (!(await this.engine_load)) return;
+        // 1. Every feed has let go of its stream (each one's forget sent).
+        await this.waitForFeedsToStop();
         if (token !== this.run_token) return;
 
-        // Point the engine at the winner. If it was loaded for another market,
-        // or swapped out / edited in Bot Builder during the scan, it is
-        // reloaded with the winner's values rather than edited in place: a
-        // reload writes every value by name, and is read back the same way.
+        // 2. The engine, with the winner's market and the locked values.
+        if (!(await this.writeAndLoadEngine(winner, token))) return;
+        if (token !== this.run_token) return;
+        dashboard.setActiveTab(DBOT_TABS.BOT_BUILDER);
+
+        // 3. Read back from the workspace itself, not the XML sent: a dropdown
+        //    can refuse a value (a symbol missing from its options, say).
+        //    Never Run on anything but the winning market and the locked values.
         const values = this.engineValuesFor(winner);
-        const is_ready =
-            getWorkspace()?.current_strategy_id === this.engine_strategy_id &&
-            sameEngineValues(readWorkspaceEngineValues(), values);
-        if (!is_ready && !(await this.writeAndLoadEngine(winner, token))) return;
-        if (token !== this.run_token) return;
-
-        // Never Run on anything but the winning market and the locked values.
         const actual = readWorkspaceEngineValues();
         if (actual?.symbol !== winner.symbol) {
             runInAction(() =>
@@ -699,19 +651,14 @@ export default class AiScannerStore {
             runInAction(() => this.finish('idle', 'Run not pressed: the engine bot does not hold the locked values.'));
             return;
         }
-
-        // Run only once the feeds' streams are forgotten: the bot subscribes
-        // the same symbol on the same socket, and if it leaned on our stream,
-        // our forget would then starve it of ticks.
-        await this.waitForFeedsToStop();
-        if (token !== this.run_token) return;
         if (run_panel.is_stop_button_visible) {
             runInAction(() => this.finish('idle', 'Cancelled: a bot is already running.'));
             return;
         }
 
-        // Take profit and stop loss are measured from zero: the engine's
-        // total_profit is session-wide (Total.js) and only clearStat resets it.
+        // 4. Run. Take profit and stop loss are measured from zero: the
+        //    engine's total_profit is session-wide (Total.js) and only
+        //    clearStat resets it.
         run_panel.clearStat();
         this.listenForRunErrors(winner);
         await run_panel.onRunButtonClick();

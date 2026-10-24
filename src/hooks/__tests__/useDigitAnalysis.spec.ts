@@ -213,7 +213,7 @@ describe('useDigitAnalysis', () => {
         pending[1].resolve({ ...history('1HZ100V'), subscription: undefined });
         await flush();
 
-        await advance(10000); // watchdog: the owner forgot its stream
+        await advance(3000); // watchdog: the owner forgot its stream
         expect(ticksHistoryCalls()).toHaveLength(3);
         expect(ticksHistoryCalls()[2][0]).toMatchObject({ subscribe: 1 });
         pending[2].resolve(history('1HZ100V', 'now-ours'));
@@ -268,5 +268,52 @@ describe('useDigitAnalysis', () => {
         act(() => deliver(tick(4, 100.17))); // late copy of an older tick
         expect(result.current.n).toBe(5);
         expect(result.current.digits).toEqual([2, 5, 1, 7, 9]);
+    });
+
+    it('re-subscribes after 3s without a tick - not before - and never twice at once', async () => {
+        renderHook(() => useDigitAnalysis('1HZ50V', 600));
+        await flush();
+        pending[0].resolve(history('1HZ50V', 'first'));
+        await flush();
+        expect(ticksHistoryCalls()).toHaveLength(1);
+
+        await advance(2999);
+        expect(ticksHistoryCalls()).toHaveLength(1);
+        await advance(1);
+        expect(ticksHistoryCalls()).toHaveLength(2); // the watchdog's re-subscribe
+        expect(forgetCalls()).toContain('first');
+
+        // While that re-subscribe is unanswered nothing else is sent: the
+        // watchdog only re-arms on a seed or a tick, and the overlap guard
+        // holds any retry until the request settles.
+        await advance(30000);
+        expect(ticksHistoryCalls()).toHaveLength(2);
+    });
+
+    it('says what each update was - seed or tick - with a count that a re-subscribe never resets', async () => {
+        let deliver: (message: unknown) => void = () => undefined;
+        (api_base as unknown as { api: unknown }).api = {
+            send,
+            onMessage: () => ({
+                subscribe: (listener: (message: unknown) => void) => {
+                    deliver = listener;
+                    return { unsubscribe: jest.fn() };
+                },
+            }),
+        };
+        const { result } = renderHook(() => useDigitAnalysis('1HZ50V', 600));
+        await flush();
+        expect(result.current).toMatchObject({ updateCount: 0, lastUpdateKind: null });
+        pending[0].resolve(history('1HZ50V'));
+        await flush();
+        expect(result.current).toMatchObject({ updateCount: 1, lastUpdateKind: 'seed' });
+        act(() => deliver({ data: { msg_type: 'tick', tick: { symbol: '1HZ50V', quote: 100.17, epoch: 4 } } }));
+        expect(result.current).toMatchObject({ updateCount: 2, lastUpdateKind: 'tick' });
+
+        await advance(3000); // watchdog: RESET, then a fresh seed
+        expect(result.current.updateCount).toBe(2);
+        pending[1].resolve(history('1HZ50V', 'again'));
+        await flush();
+        expect(result.current).toMatchObject({ updateCount: 3, lastUpdateKind: 'seed' });
     });
 });
