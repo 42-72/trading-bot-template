@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import classNames from 'classnames';
+import { botNotification } from '@/components/bot-notification/bot-notification';
 import { useDigitAnalysis } from '@/hooks/useDigitAnalysis';
 import { useStore } from '@/hooks/useStore';
 import { useSyntheticSymbols } from '@/hooks/useSyntheticSymbols';
@@ -15,7 +16,12 @@ import {
     MIN_WINDOW_SIZE,
     rankDigits,
 } from '@/utils/digit-stats';
-import { readStoredMarketToolSymbol, storeMarketToolSymbol, syncBotBuilderSymbol } from '@/utils/market-tool-sync';
+import {
+    notOfferedNotice,
+    readStoredMarketToolSymbol,
+    storeMarketToolSymbol,
+    syncBotBuilderSymbolIfOffered,
+} from '@/utils/market-tool-sync';
 import DigitCircle from './digit-circle';
 import StatPanel from './stat-panel';
 import TickRibbon from './tick-ribbon';
@@ -54,19 +60,29 @@ const MarketTool = () => {
     }, [symbols, symbol]);
 
     // One-way: Market Tool -> Bot Builder's trade_definition_market block, live.
-    // Rules (enforced in syncBotBuilderSymbol): never while a bot is running or
-    // a contract is open, and only when the strategy is already on one of the
-    // symbols offered here. On a sync, the workspace is saved to Recent so the
-    // Bot Builder reopens on the new symbol after a reload.
-    const onSymbolChange = (next: string) => {
+    // Rules (enforced in syncBotBuilderSymbolIfOffered): never while a bot is
+    // running or a contract is open, only when the strategy is already on one
+    // of the symbols offered here, and only when the new market offers the
+    // bot's current trade (contracts_for) - otherwise the bot stays where it
+    // is and a notice says why. On a sync, the workspace is saved to Recent so
+    // the Bot Builder reopens on the new symbol after a reload.
+    const sync_request_ref = useRef(0);
+    const onSymbolChange = async (next: string) => {
         setSymbol(next);
         storeMarketToolSymbol(next);
-        const result = syncBotBuilderSymbol(next, {
+        const request = ++sync_request_ref.current;
+        const { result, current_symbol } = await syncBotBuilderSymbolIfOffered(next, () => ({
             is_bot_live: run_panel.is_stop_button_visible,
             is_ai_scanner_active: !!ai_scanner?.owns_workspace,
             offered: symbols.map(s => s.value),
-        });
+            // A later pick in the meantime wins; this one must not apply.
+            is_stale: () => request !== sync_request_ref.current,
+        }));
         if (result === 'synced') run_panel.dbot.saveRecentWorkspace();
+        if ((result === 'not-offered' || result === 'check-failed') && request === sync_request_ref.current) {
+            const name = (value?: string) => symbols.find(s => s.value === value)?.text ?? value ?? '';
+            botNotification(notOfferedNotice(name(next), name(current_symbol)));
+        }
     };
 
     // Debounced commit: typing 1000 -> 1500 shouldn't fire a resubscribe per keystroke.
