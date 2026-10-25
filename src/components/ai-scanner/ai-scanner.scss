@@ -7,9 +7,12 @@
 // the Run controls; it never overlaps those anyway.
 $ai-scanner-z: 5;
 
-// The laptop panel opens in the middle of the window, over the Run bar
-// (main.scss: up to 100) and the run panel.
-$ai-scanner-panel-desktop-z: 101;
+// The panel, on every screen: over the Run bar (main.scss, toolbar: 100),
+// the run panel and the run drawer (5-20), but under everything the app
+// stacks over the page - dialogs and tooltips (999), its modals
+// (.modal-root: 9998; Deriv UI modals: 9999) and toasts, including the
+// engine's TP / SL notifications (Toastify: 9999).
+$ai-scanner-panel-z: 998;
 
 .ai-scanner-button {
     position: fixed;
@@ -93,7 +96,7 @@ $ai-scanner-panel-desktop-z: 101;
 
 .ai-scanner-panel {
     position: fixed;
-    z-index: $ai-scanner-z;
+    z-index: $ai-scanner-panel-z;
     display: flex;
     flex-direction: column;
     // JS sets the box (top / bottom / left / right): the panel is as tall as
@@ -109,10 +112,6 @@ $ai-scanner-panel-desktop-z: 101;
     font-size: 1.3rem;
     box-shadow: var(--shadow-menu);
     overflow: hidden;
-
-    &:not(&--mobile) {
-        z-index: $ai-scanner-panel-desktop-z;
-    }
 
     &__header {
         display: flex;
@@ -305,7 +304,6 @@ $ai-scanner-panel-desktop-z: 101;
         }
     }
 
-    &__notice,
     &__meta {
         margin: 0;
         font-size: 1.2rem;

@@ -199,11 +199,6 @@ const OverUnderForm = observer(() => {
                     </span>
                 </label>
             )}
-            <p className='ai-scanner-panel__notice'>
-                {localize(
-                    'When an entry hits, the engine bot replaces the bot open in Bot Builder. Your current workspace is kept in Recent.'
-                )}
-            </p>
             {start_blocker && <p className='ai-scanner-panel__blocker'>{start_blocker}</p>}
         </form>
     );
