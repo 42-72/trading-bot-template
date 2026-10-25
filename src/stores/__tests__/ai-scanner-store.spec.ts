@@ -3,6 +3,7 @@ import { observable, runInAction } from 'mobx';
 import path from 'path';
 import { observer as globalObserver } from '@/external/bot-skeleton/utils/observer';
 import { readEngineValues } from '@/utils/ai-engine-xml';
+import { setTestStrategy } from '@/utils/ai-strategies/__mocks__/test-strategy';
 import { loadBotIntoBuilder } from '@/utils/load-bot-into-builder';
 import AiScannerStore, {
     CONDITIONS_NOT_MET_MESSAGE,
@@ -13,6 +14,10 @@ import AiScannerStore, {
 import RootStore from '../root-store';
 
 // jest stubs *.xml imports - hand the store the real engine.
+// The TEST strategy (tests only) drives scan -> load -> Run without real patterns.
+jest.mock('@/utils/ai-strategies', () =>
+    jest.requireActual('@/utils/ai-strategies/__mocks__/test-strategy').strategiesWithTestSwitch()
+);
 jest.mock('../../assets/ai-engine/bull-ai-overunder.xml', () => {
     const { readFileSync } = jest.requireActual('fs');
     const { join } = jest.requireActual('path');
@@ -137,7 +142,7 @@ const startScan = async (
     store.setMarkets(MARKETS);
     store.setActiveTab(tab);
     fillForm(store, strategy);
-    store.setUseTestStrategy(use_test);
+    setTestStrategy(use_test);
     store.start();
     await flush();
     return { root, store };
@@ -223,7 +228,6 @@ describe('AiScannerStore', () => {
             fillForm(first, 'under');
             const second = new AiScannerStore(makeRoot()); // the reload
             expect(second.form).toEqual(DEFAULT_FORM);
-            expect(second.use_test_strategy).toBe(false);
             expect(localStorage.getItem('ai_scanner_form')).toBeNull();
         });
 
@@ -289,12 +293,10 @@ describe('AiScannerStore', () => {
             expect(store.stage).toBe('running');
         });
 
-        it('never runs the TEST strategy on a real account', async () => {
-            const root = makeRoot();
-            runInAction(() => (root.client.is_virtual = false));
-            const store = new AiScannerStore(root);
-            store.setUseTestStrategy(true);
-            expect(store.use_test_strategy).toBe(false);
+        it('the old hidden-switch key is cleared - the scanner shows for everyone', async () => {
+            localStorage.setItem('ct_ai_scanner', '1');
+            new AiScannerStore(makeRoot()); // eslint-disable-line no-new
+            expect(localStorage.getItem('ct_ai_scanner')).toBeNull();
         });
 
         it('ships the engine unmodified', async () => {
@@ -1064,7 +1066,6 @@ describe('AiScannerStore', () => {
             'with %s selected: qualifies on the first check of the seeded history, runs on the next live tick',
             async strategy => {
                 const { root, store } = await startScan(strategy, true);
-                expect(store.locked?.use_test_strategy).toBe(true);
                 store.onMarketTick('1HZ10V', full(), 5, true); // the very first check
                 expect(armedSymbols(store)).toEqual(['1HZ10V']);
                 expect(store.armed[0].reason).toMatch(/^TEST strategy/);

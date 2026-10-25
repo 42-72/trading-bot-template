@@ -59,7 +59,6 @@ const atStage = (store: AiScannerStore, stage: TAiScannerStage) =>
                 martingale: 2,
                 take_profit: 5,
                 stop_loss: 10,
-                use_test_strategy: false,
                 loginid: 'VRTC1',
             };
             store.stage = stage;

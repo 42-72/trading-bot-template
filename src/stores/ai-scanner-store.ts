@@ -66,7 +66,6 @@ export type TAiScannerLocked = {
     martingale: number;
     take_profit: number;
     stop_loss: number;
-    use_test_strategy: boolean;
     loginid: string;
 };
 
@@ -98,6 +97,8 @@ type TFormErrors = Partial<Record<keyof TAiScannerForm, string>>;
 
 // The form used to be remembered here; it now always starts from the defaults.
 const OLD_FORM_STORAGE_KEY = 'ai_scanner_form';
+// The scanner's old hidden switch (?ai=on); the scanner now shows for everyone.
+const OLD_SWITCH_STORAGE_KEY = 'ct_ai_scanner';
 export const SCAN_STOPPED_MESSAGE = 'Scan stopped.';
 export const NO_MARKETS_OFFERED_MESSAGE = 'No markets offer this trade right now.';
 // No scanner feed with a live tick for this long (they tick about once a
@@ -168,8 +169,6 @@ export default class AiScannerStore {
     is_panel_open = false;
     active_tab: TAiScannerTab = 'over_under';
     form: TAiScannerForm = { ...DEFAULT_FORM };
-    // Demo-only pipeline check - never remembered, off on every visit.
-    use_test_strategy = false;
 
     stage: TAiScannerStage = 'idle';
     locked: TAiScannerLocked | null = null;
@@ -232,6 +231,7 @@ export default class AiScannerStore {
         this.root_store = root_store;
         try {
             localStorage.removeItem(OLD_FORM_STORAGE_KEY); // values the form no longer restores
+            localStorage.removeItem(OLD_SWITCH_STORAGE_KEY);
         } catch {
             // Storage unavailable - nothing to clean up.
         }
@@ -241,7 +241,6 @@ export default class AiScannerStore {
             is_panel_open: observable,
             active_tab: observable,
             form: observable,
-            use_test_strategy: observable,
             stage: observable,
             locked: observable,
             target: observable,
@@ -257,7 +256,6 @@ export default class AiScannerStore {
             is_active: computed,
             is_pre_run: computed,
             owns_workspace: computed,
-            can_use_test_strategy: computed,
             form_errors: computed,
             start_blocker: computed,
             can_start: computed,
@@ -265,7 +263,6 @@ export default class AiScannerStore {
             setPanelOpen: action,
             setActiveTab: action,
             setFormField: action,
-            setUseTestStrategy: action,
             setMarkets: action,
             setFeedStatus: action,
             onMarketTick: action,
@@ -289,15 +286,13 @@ export default class AiScannerStore {
         );
 
         // Account switch (only possible before Run - it's locked while a bot
-        // runs) invalidates the locked values: currency, and for the TEST
-        // strategy, the demo-only rule.
+        // runs) invalidates the locked values (currency).
         reaction(
             () => this.root_store.client.loginid,
             loginid => {
                 if (this.is_pre_run && this.locked && loginid !== this.locked.loginid) {
                     this.finish('idle', 'Cancelled: the account changed.');
                 }
-                if (!this.can_use_test_strategy) runInAction(() => (this.use_test_strategy = false));
             }
         );
     }
@@ -318,10 +313,6 @@ export default class AiScannerStore {
      */
     get owns_workspace() {
         return ['starting', 'running', 'stopping'].includes(this.stage);
-    }
-
-    get can_use_test_strategy() {
-        return !!this.root_store.client.is_virtual;
     }
 
     get form_errors(): TFormErrors {
@@ -349,8 +340,6 @@ export default class AiScannerStore {
         if (!client.is_logged_in) return 'Log in to use the AI Scanner.';
         if (client.currency !== AI_SCANNER_CURRENCY) return 'The AI Scanner supports USD accounts only for now.';
         if (run_panel.is_stop_button_visible) return 'A bot is already running. Stop it first.';
-        if (this.use_test_strategy && !this.can_use_test_strategy)
-            return 'The TEST strategy is for demo accounts only.';
         if (this.markets.length === 0) return 'Loading markets...';
         return null;
     }
@@ -403,10 +392,6 @@ export default class AiScannerStore {
         this.form[key] = value;
     };
 
-    setUseTestStrategy = (use: boolean) => {
-        this.use_test_strategy = use && this.can_use_test_strategy;
-    };
-
     setMarkets = (markets: TAiScannerMarket[]) => {
         this.markets = markets;
     };
@@ -454,7 +439,6 @@ export default class AiScannerStore {
             martingale: parseAmount(this.form.martingale),
             take_profit: parseAmount(this.form.take_profit),
             stop_loss: parseAmount(this.form.stop_loss),
-            use_test_strategy: this.use_test_strategy,
             loginid: this.root_store.client.loginid,
         };
         this.target = null;
@@ -544,7 +528,7 @@ export default class AiScannerStore {
 
     private get strategy() {
         const locked = this.locked as TAiScannerLocked;
-        return getScannerStrategy(locked.tab, locked.strategy, locked.use_test_strategy && this.can_use_test_strategy);
+        return getScannerStrategy(locked.tab, locked.strategy);
     }
 
     /** Called by each market's tick feed (components/ai-scanner/market-feed.tsx) on every new tick. */
@@ -552,12 +536,8 @@ export default class AiScannerStore {
         // Only while scanning: once a winner is picked every later entry -
         // even another market's on the same tick - is ignored.
         // No window-length gate here: each strategy decides what it needs
-        // (Over requires all 600); TEST must qualify on the first check.
+        // (Over requires all 600).
         if (this.stage !== 'scanning' || !this.locked || digits.length === 0) return;
-        if (this.locked.use_test_strategy && !this.can_use_test_strategy) {
-            this.finish('idle', 'Cancelled: the TEST strategy only runs on a demo account.');
-            return;
-        }
         const market = this.scan_markets.find(item => item.symbol === symbol);
         if (!market) return;
         if (!is_seed) {

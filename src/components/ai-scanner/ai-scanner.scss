@@ -288,22 +288,6 @@ $ai-scanner-panel-z: 998;
         }
     }
 
-    &__test {
-        display: flex;
-        align-items: flex-start;
-        gap: 0.8rem;
-        padding: 1rem;
-        border: 0.1rem dashed var(--brand-warning, #f59e0b);
-        border-radius: 0.8rem;
-        font-size: 1.2rem;
-        line-height: 1.4;
-
-        input {
-            flex-shrink: 0;
-            margin-top: 0.2rem;
-        }
-    }
-
     &__meta {
         margin: 0;
         font-size: 1.2rem;

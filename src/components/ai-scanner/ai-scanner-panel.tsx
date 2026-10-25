@@ -148,8 +148,7 @@ const ArmedMarket = ({ armed }: { armed: TArmedMarket }) => {
 
 const OverUnderForm = observer(() => {
     const ai_scanner = useAiScanner();
-    const { form, form_errors, start_blocker, can_start, can_use_test_strategy, use_test_strategy, active_tab } =
-        ai_scanner;
+    const { form, form_errors, start_blocker, can_start, active_tab } = ai_scanner;
 
     return (
         // Enter in a field starts the scan, like the Scan button.
@@ -185,20 +184,6 @@ const OverUnderForm = observer(() => {
                     );
                 })}
             </div>
-            {can_use_test_strategy && (
-                <label className='ai-scanner-panel__test'>
-                    <input
-                        type='checkbox'
-                        checked={use_test_strategy}
-                        onChange={event => ai_scanner.setUseTestStrategy(event.target.checked)}
-                    />
-                    <span>
-                        {localize(
-                            'TEST strategy (demo only): qualifies the first market at once and enters on the next tick - for checking the pipeline.'
-                        )}
-                    </span>
-                </label>
-            )}
             {start_blocker && <p className='ai-scanner-panel__blocker'>{start_blocker}</p>}
         </form>
     );
@@ -386,10 +371,7 @@ const RunStatus = observer(() => {
 
             <dl className='ai-scanner-panel__facts ai-scanner-panel__facts--locked'>
                 <dt>{localize('Locked for this run')}</dt>
-                <dd>
-                    {is_even_odd ? localize('Even/Odd') : setup.label}
-                    {locked.use_test_strategy && ` · ${localize('TEST strategy')}`}
-                </dd>
+                <dd>{is_even_odd ? localize('Even/Odd') : setup.label}</dd>
                 <dt>{localize('Stake')}</dt>
                 <dd>{money(locked.stake)}</dd>
                 <dt>{localize('Martingale')}</dt>

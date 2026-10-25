@@ -2,6 +2,7 @@ import { observable, runInAction } from 'mobx';
 import { useStore } from '@/hooks/useStore';
 import AiScannerStore from '@/stores/ai-scanner-store';
 import RootStore from '@/stores/root-store';
+import { setTestStrategy } from '@/utils/ai-strategies/__mocks__/test-strategy';
 import { loadBotIntoBuilder } from '@/utils/load-bot-into-builder';
 import { act, render, screen } from '@testing-library/react';
 import AiScanner from '../ai-scanner';
@@ -9,6 +10,10 @@ import AiScanner from '../ai-scanner';
 // The real AiScanner, MarketFeed and useDigitAnalysis against a fake socket:
 // once the winner is picked, scanner feeds must go completely quiet.
 
+// The TEST strategy (tests only) qualifies every market on its seed.
+jest.mock('@/utils/ai-strategies', () =>
+    jest.requireActual('@/utils/ai-strategies/__mocks__/test-strategy').strategiesWithTestSwitch()
+);
 jest.mock('../../../assets/ai-engine/bull-ai-overunder.xml', () => {
     const { readFileSync } = jest.requireActual('fs');
     const { join } = jest.requireActual('path');
@@ -158,7 +163,7 @@ describe('AI Scanner feeds after the winner', () => {
         store.setFormField('martingale', '2');
         store.setFormField('take_profit', '5');
         store.setFormField('stop_loss', '10');
-        store.setUseTestStrategy(use_test);
+        setTestStrategy(use_test);
         act(() => store.start());
         await flush(); // contracts_for -> scanning -> feeds mount and seed
         expect(store.stage).toBe('scanning');
@@ -277,6 +282,14 @@ describe('AI Scanner feeds after the winner', () => {
         });
     });
 
+    it('on a laptop the run panel being open changes nothing: the panel stays on top, centred', () => {
+        Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1366 });
+        Object.defineProperty(window, 'innerHeight', { configurable: true, value: 768 });
+        const style = renderScanner(true);
+        expect(style.zIndex).toBeUndefined();
+        expect(style).toMatchObject({ top: 16, bottom: 16, width: 420 });
+    });
+
     it('on a phone the panel box runs 12px below the header to 12px above the toggle bar', () => {
         mockDevice.isDesktop = false;
         Object.defineProperty(window, 'innerWidth', { configurable: true, value: 375 });
@@ -333,6 +346,10 @@ describe('AI Scanner feeds after the winner', () => {
             act(() => store.setPanelOpen(true));
             // Drawer open: the panel is drawn over it, down to the bottom.
             expect(screen.getByTestId('ai-scanner-panel')).toHaveAttribute('data-bottom', '8');
+            // ...and BEHIND it: the drawer (z-index 5) floats over the still-open panel.
+            const zIndex = () =>
+                JSON.parse(screen.getByTestId('ai-scanner-panel').getAttribute('data-style') ?? '{}').zIndex;
+            expect(zIndex()).toBe('calc(var(--zindex-drawer, 5) - 1)');
 
             // The trader closes the drawer: the store flips first, the bar slides down after.
             act(() => {
@@ -346,6 +363,7 @@ describe('AI Scanner feeds after the winner', () => {
             });
             // 812 - 714 + 12: the panel's bottom (and its footer) end 12px above the bar.
             expect(screen.getByTestId('ai-scanner-panel')).toHaveAttribute('data-bottom', '110');
+            expect(zIndex()).toBeUndefined(); // back to the stylesheet's 998, on top
         } finally {
             mockDevice.isDesktop = true;
             toggle.remove();

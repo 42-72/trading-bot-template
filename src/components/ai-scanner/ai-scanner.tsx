@@ -23,7 +23,7 @@ const SIDE_GAP = 8;
  * Laptop: the middle of the whole window, over the Run bar and the run panel,
  * wherever the AI button is. Phone / tablet: the middle of the free space
  * between the header and the run drawer's toggle bar (measured live); with
- * the drawer open (Run opens it) over the drawer, as before.
+ * the drawer open (Run opens it) behind the drawer, still open underneath.
  */
 const panelStyle = (is_desktop: boolean, is_drawer_open: boolean): React.CSSProperties => {
     if (is_desktop) {
@@ -38,7 +38,8 @@ const panelStyle = (is_desktop: boolean, is_drawer_open: boolean): React.CSSProp
     }
     // getSafeBounds ends 4px above the toggle bar (12px less clampToBounds'
     // 8) and right at the header's bottom.
-    const bounds = getSafeBounds({ ignore_run_drawer: isRunDrawerOpen(is_drawer_open) });
+    const drawer_open = isRunDrawerOpen(is_drawer_open);
+    const bounds = getSafeBounds({ ignore_run_drawer: drawer_open });
     const top = bounds.top + BAR_GAP;
     const bottom = window.innerHeight - bounds.bottom + SIDE_GAP;
     return {
@@ -47,6 +48,11 @@ const panelStyle = (is_desktop: boolean, is_drawer_open: boolean): React.CSSProp
         right: window.innerWidth - bounds.right + SIDE_GAP,
         bottom,
         maxHeight: window.innerHeight - top - bottom,
+        // Drawer open (Run opens it): the drawer - Summary, Transactions,
+        // Journal, Stop, Reset - floats over the panel, which stays mounted
+        // and live underneath; closing the drawer brings it back as it was.
+        // Only the panel moves down: dialogs and toasts stay where they were.
+        ...(drawer_open && { zIndex: 'calc(var(--zindex-drawer, 5) - 1)' }),
     };
 };
 
