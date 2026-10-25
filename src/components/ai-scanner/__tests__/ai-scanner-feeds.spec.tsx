@@ -77,13 +77,6 @@ jest.mock('@/external/bot-skeleton/services/api/api-base', () => ({
 }));
 
 jest.mock('@/hooks/useStore', () => ({ useStore: jest.fn() }));
-// [AI-SILENCE] diagnostics stay out of these socket counts.
-jest.mock('@/utils/ai-silence-log', () => ({
-    installSilenceLog: jest.fn(),
-    silenceLog: jest.fn(),
-    probeSocket: jest.fn(),
-    lastSocketMessageAt: () => 0,
-}));
 
 const MARKETS = [
     { symbol: '1HZ10V', text: 'Volatility 10 (1s) Index', submarket: 'random_index' },

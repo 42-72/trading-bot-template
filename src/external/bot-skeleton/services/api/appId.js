@@ -73,7 +73,11 @@ export const generateDerivApiInstance = async (forceNew = false) => {
 
             currentWebSocketURL = wsURL;
 
-            console.log('[DerivAPI] Creating new WebSocket connection to:', wsURL);
+            // The one-time login code (otp) is a credential: never print it.
+            console.log(
+                '[DerivAPI] Creating new WebSocket connection to:',
+                String(wsURL).replace(/([?&]otp=)[^&#]*/gi, '$1***')
+            );
             const deriv_socket = new WebSocket(wsURL);
             const deriv_api = new DerivAPIBasic({
                 connection: deriv_socket,

@@ -17,7 +17,6 @@ import { api_base } from '@/external/bot-skeleton/services/api/api-base';
 import { observer as globalObserver } from '@/external/bot-skeleton/utils/observer';
 import { readEngineValues, TEngineValues, writeEngineValues } from '@/utils/ai-engine-xml';
 import { filterOfferedMarkets } from '@/utils/ai-scanner-offered';
-import { installSilenceLog, lastSocketMessageAt, probeSocket, silenceLog } from '@/utils/ai-silence-log';
 import { getScannerStrategy, TConditionResult, TSide } from '@/utils/ai-strategies';
 import { createAiEngineStrategyId } from '@/utils/library-strategies';
 import { loadBotIntoBuilder } from '@/utils/load-bot-into-builder';
@@ -209,7 +208,6 @@ export default class AiScannerStore {
     private silence_message_subscription: { unsubscribe: () => void } | null = null;
     private feed_retries = new Set<() => void>();
     private newest_live_tick_at: number | null = null;
-    private silent_since: number | null = null;
     private resubscribed_all_at: number | null = null;
     // Armed markets by symbol, kept current on every tick, and each one's
     // 3-minute timer. `armed` is published from it at once when a market arms,
@@ -235,7 +233,6 @@ export default class AiScannerStore {
         } catch {
             // Storage unavailable - nothing to clean up.
         }
-        installSilenceLog(); // [AI-SILENCE] temporary diagnostics
 
         makeObservable<AiScannerStore, 'finish'>(this, {
             is_panel_open: observable,
@@ -478,7 +475,6 @@ export default class AiScannerStore {
     private startScanning(token: number) {
         this.stage = 'scanning';
         this.newest_live_tick_at = null;
-        this.silent_since = null;
         this.resubscribed_all_at = null;
 
         // Each feed seeds its window from ticks_history (count 600) the
@@ -542,10 +538,6 @@ export default class AiScannerStore {
         if (!market) return;
         if (!is_seed) {
             this.newest_live_tick_at = Date.now();
-            if (this.silent_since !== null) {
-                silenceLog(`live ticks back after ${Date.now() - this.silent_since}ms (first: ${symbol})`);
-                this.silent_since = null;
-            }
             this.scheduleSilenceCheck(this.run_token);
         }
 
@@ -753,8 +745,7 @@ export default class AiScannerStore {
     /**
      * All scanner feeds silent together (none had a live tick for
      * ALL_SILENT_MS) - Deriv pausing every stream, or the connection stalling:
-     * log it, ping the socket to tell which, and re-subscribe every feed in
-     * one go. A re-subscribe only re-seeds the windows: a seed is never an
+     * re-subscribe every feed in one go. A re-subscribe only re-seeds the windows: a seed is never an
      * entry and nothing disarms (disarming is the 3-minute clock alone).
      */
     private checkSilence(token: number) {
@@ -763,29 +754,14 @@ export default class AiScannerStore {
         // loads must not switch the watch off.
         if (this.newest_live_tick_at === null || this.scan_markets.length === 0) return;
         const now = Date.now();
-        const newest = this.newest_live_tick_at;
-        const silent_for = now - newest;
-        if (silent_for < ALL_SILENT_MS) return;
+        if (now - this.newest_live_tick_at < ALL_SILENT_MS) return;
 
-        if (this.silent_since === null) {
-            this.silent_since = newest;
-            const last_message = lastSocketMessageAt();
-            silenceLog(
-                `all ${this.scan_markets.length} feeds silent for ${silent_for}ms (last live tick ${new Date(newest)
-                    .toISOString()
-                    .slice(11, 23)}; last socket message of any kind ${
-                    last_message ? `${now - last_message}ms ago` : 'never'
-                })`
-            );
-            probeSocket('all feeds silent');
-        }
         if (this.resubscribed_all_at !== null && now - this.resubscribed_all_at < RESUBSCRIBE_COOLDOWN_MS) {
             // Inside the throttle: the timer comes back when it ends.
             if (!this.silence_timer) this.scheduleSilenceCheck(token);
             return;
         }
         this.resubscribed_all_at = now;
-        silenceLog(`re-subscribing all ${this.feed_retries.size} feeds at once (silent for ${silent_for}ms)`);
         this.feed_retries.forEach(resubscribe => resubscribe());
         // Still silent 5s from now? Again then.
         this.scheduleSilenceCheck(token);
