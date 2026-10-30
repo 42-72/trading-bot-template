@@ -8,6 +8,7 @@ import { DBOT_TABS } from '@/constants/bot-contents';
 import { useStore } from '@/hooks/useStore';
 import {
     DTRADER_EMBED_URL,
+    DTRADER_IFRAME_SANDBOX,
     getDTraderSession,
     getSafeNavigateUrl,
     isDTraderEmbedEnabled,
@@ -147,6 +148,7 @@ const DTraderPanel = observer(() => {
                         title='DTrader'
                         className='dtrader-container'
                         frameRef={frame_ref}
+                        sandbox={DTRADER_IFRAME_SANDBOX}
                         fallbackMessage='DTrader is temporarily unavailable'
                     />
                 </div>

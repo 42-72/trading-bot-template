@@ -15,6 +15,24 @@ export const DTRADER_ORIGIN = 'https://dtrader.charlestraders.com';
 export const DTRADER_URL = DTRADER_ORIGIN;
 export const DTRADER_EMBED_URL = `${DTRADER_ORIGIN}/?embedded=1`;
 
+/**
+ * Sandbox for the DTrader frame. Deliberately WITHOUT allow-top-navigation (and its
+ * by-user-activation variant), so nothing inside the frame can ever navigate this
+ * window away. Pages DTrader needs here are opened by this app instead (ct:navigate,
+ * ct:login-required); its links to other sites open in new tabs (allow-popups +
+ * allow-popups-to-escape-sandbox). allow-same-origin keeps DTrader's own origin,
+ * which its storage, websocket and the exact-origin postMessage checks rely on.
+ */
+export const DTRADER_IFRAME_SANDBOX = [
+    'allow-scripts',
+    'allow-same-origin',
+    'allow-forms',
+    'allow-popups',
+    'allow-popups-to-escape-sandbox',
+    'allow-modals',
+    'allow-downloads',
+].join(' ');
+
 const EMBED_SWITCH_KEY = 'ct_dtrader_embed';
 const EMBED_SWITCH_PARAM = 'dtrader_embed';
 
