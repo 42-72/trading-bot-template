@@ -21,7 +21,6 @@ import {
     enableUrlParameterApplication,
     setupTradeTypeChangeListener,
 } from '@/utils/blockly-url-param-handler';
-import { DTRADER_URL, isDTraderEmbedEnabled } from '@/utils/dtrader-embed';
 import {
     checkAndShowTradeTypeModal,
     getModalState,
@@ -47,7 +46,6 @@ import ChartModal from '../chart/chart-modal';
 import ComingSoon from '../coming-soon';
 import Dashboard from '../dashboard';
 import RunStrategy from '../dashboard/run-strategy';
-import DTraderRedirect from '../dtrader-redirect';
 import MarketTool from '../market-tool';
 import Tbots from '../tbots';
 import './main.scss';
@@ -98,8 +96,6 @@ const AppWrapper = observer(() => {
     const { isDesktop } = useDevice();
     const location = useLocation();
     const navigate = useNavigate();
-    // Hidden test switch (?dtrader_embed=1): DTrader inside the tab instead of a new tab
-    const [is_dtrader_embedded] = useState(isDTraderEmbedEnabled);
     const [left_tab_shadow, setLeftTabShadow] = useState<boolean>(false);
     const [right_tab_shadow, setRightTabShadow] = useState<boolean>(false);
 
@@ -350,9 +346,6 @@ const AppWrapper = observer(() => {
 
     const handleTabChange = React.useCallback(
         (tab_index: number) => {
-            if (tab_index === DBOT_TABS.DTRADER && !is_dtrader_embedded) {
-                window.open(DTRADER_URL, '_blank', 'noopener');
-            }
             setActiveTab(tab_index);
             const el_id = TAB_IDS[tab_index];
             if (el_id) {
@@ -458,8 +451,7 @@ const AppWrapper = observer(() => {
                                 }
                                 id='id-dtrader'
                             >
-                                {/* Embedded: DTraderPanel (app-content.jsx) draws over this tab */}
-                                {!is_dtrader_embedded && <DTraderRedirect />}
+                                {/* DTraderPanel (app-content.jsx) draws over this tab */}
                             </div>
                             <div
                                 label={

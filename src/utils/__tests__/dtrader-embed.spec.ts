@@ -2,9 +2,9 @@ import {
     DTRADER_ORIGIN,
     getDTraderSession,
     getSafeNavigateUrl,
-    isDTraderEmbedEnabled,
     isDTraderMessage,
     postToDTrader,
+    removeLegacyDTraderEmbedSwitch,
 } from '@/utils/dtrader-embed';
 
 const setAuthInfo = (expires_at: number) => {
@@ -21,25 +21,19 @@ describe('dtrader-embed', () => {
         window.history.replaceState({}, '', '/');
     });
 
-    describe('isDTraderEmbedEnabled (test switch)', () => {
-        it('is off by default', () => {
-            expect(isDTraderEmbedEnabled()).toBe(false);
-        });
-
-        it('turns on with ?dtrader_embed=1, remembers it and cleans the URL', () => {
-            window.history.replaceState({}, '', '/?dtrader_embed=1#dtrader');
-            expect(isDTraderEmbedEnabled()).toBe(true);
-            expect(localStorage.getItem('ct_dtrader_embed')).toBe('1');
-            expect(window.location.search).toBe('');
-            expect(window.location.hash).toBe('#dtrader');
-            expect(isDTraderEmbedEnabled()).toBe(true);
-        });
-
-        it('turns off with ?dtrader_embed=0', () => {
+    describe('removeLegacyDTraderEmbedSwitch', () => {
+        it('removes the old test switch key', () => {
             localStorage.setItem('ct_dtrader_embed', '1');
-            window.history.replaceState({}, '', '/?dtrader_embed=0');
-            expect(isDTraderEmbedEnabled()).toBe(false);
+            removeLegacyDTraderEmbedSwitch();
             expect(localStorage.getItem('ct_dtrader_embed')).toBeNull();
+        });
+
+        it('does not throw when storage is blocked', () => {
+            const remove = jest.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
+                throw new Error('blocked');
+            });
+            expect(() => removeLegacyDTraderEmbedSwitch()).not.toThrow();
+            remove.mockRestore();
         });
     });
 

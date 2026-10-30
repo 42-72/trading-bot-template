@@ -24,13 +24,27 @@ describe('DTraderPanel', () => {
         window.history.replaceState({}, '', '/');
     });
 
-    it('renders nothing while the test switch is off', () => {
+    it('shows embedded DTrader for every visitor, with no test switch', () => {
         const { container } = renderPanel();
-        expect(container).toBeEmptyDOMElement();
+        expect(getFrame(container)).toHaveAttribute('src', DTRADER_EMBED_URL);
+    });
+
+    it('ignores the old ?dtrader_embed=0 and removes the old switch key', () => {
+        localStorage.setItem('ct_dtrader_embed', '1');
+        window.history.replaceState({}, '', '/?dtrader_embed=0#dtrader');
+        const { container } = renderPanel();
+        expect(getFrame(container)).toHaveAttribute('src', DTRADER_EMBED_URL);
+        expect(localStorage.getItem('ct_dtrader_embed')).toBeNull();
+    });
+
+    it('does not open DTrader in a new tab', () => {
+        const open = jest.spyOn(window, 'open').mockImplementation(() => null);
+        renderPanel();
+        expect(open).not.toHaveBeenCalled();
+        open.mockRestore();
     });
 
     it('frames embedded DTrader in a sandbox that cannot navigate this window', () => {
-        localStorage.setItem('ct_dtrader_embed', '1');
         const { container } = renderPanel();
         const frame = getFrame(container);
 
@@ -51,7 +65,6 @@ describe('DTraderPanel', () => {
     });
 
     it('answers ct:ready from the frame with the session, only to the DTrader origin', () => {
-        localStorage.setItem('ct_dtrader_embed', '1');
         const { container } = renderPanel();
         const frame_window = getFrame(container).contentWindow as Window;
         const postMessage = jest.spyOn(frame_window, 'postMessage').mockImplementation(() => undefined);
@@ -70,7 +83,6 @@ describe('DTraderPanel', () => {
     });
 
     it('ignores ct:ready from any other origin', () => {
-        localStorage.setItem('ct_dtrader_embed', '1');
         const { container } = renderPanel();
         const frame_window = getFrame(container).contentWindow as Window;
         const postMessage = jest.spyOn(frame_window, 'postMessage').mockImplementation(() => undefined);
@@ -89,7 +101,6 @@ describe('DTraderPanel', () => {
     });
 
     it('waits for the DTrader tab before loading the frame', () => {
-        localStorage.setItem('ct_dtrader_embed', '1');
         const { container } = renderPanel(DBOT_TABS.DASHBOARD);
         expect(getFrame(container)).toBeNull();
     });

@@ -2,17 +2,13 @@ import { OAuthTokenExchangeService } from '@/services/oauth-token-exchange.servi
 import { isDemoAccount } from '@/utils/account-helpers';
 
 /**
- * DTrader shown inside the DTrader tab (embedded mode).
- *
- * Hidden test switch: ?dtrader_embed=1 turns it on for this browser, ?dtrader_embed=0
- * turns it off. While off, the DTrader tab keeps opening DTrader in a new tab.
+ * DTrader shown inside the DTrader tab (embedded mode), for every visitor.
  *
  * The frame gets the trader's session over postMessage, only to the exact DTrader
  * origin, and never the refresh token (only this app refreshes / logs in).
  */
 
 export const DTRADER_ORIGIN = 'https://dtrader.charlestraders.com';
-export const DTRADER_URL = DTRADER_ORIGIN;
 export const DTRADER_EMBED_URL = `${DTRADER_ORIGIN}/?embedded=1`;
 
 /**
@@ -33,8 +29,8 @@ export const DTRADER_IFRAME_SANDBOX = [
     'allow-downloads',
 ].join(' ');
 
-const EMBED_SWITCH_KEY = 'ct_dtrader_embed';
-const EMBED_SWITCH_PARAM = 'dtrader_embed';
+// Left in browsers by the old test switch (?dtrader_embed=1); it no longer does anything
+const LEGACY_EMBED_SWITCH_KEY = 'ct_dtrader_embed';
 
 export type TDTraderSession = {
     access_token: string;
@@ -54,23 +50,12 @@ export type TDTraderToParentMessage =
     | { type: 'ct:login-required' }
     | { type: 'ct:navigate'; target: string; url: string };
 
-/**
- * Reads ?dtrader_embed=1 / ?dtrader_embed=0 into localStorage (then drops the
- * param from the address bar) and returns whether embedded DTrader is on.
- */
-export const isDTraderEmbedEnabled = (): boolean => {
+/** Drops the old test switch's localStorage key. Safe when storage is blocked. */
+export const removeLegacyDTraderEmbedSwitch = () => {
     try {
-        const url = new URL(window.location.href);
-        const param = url.searchParams.get(EMBED_SWITCH_PARAM);
-        if (param === '1') localStorage.setItem(EMBED_SWITCH_KEY, '1');
-        if (param === '0') localStorage.removeItem(EMBED_SWITCH_KEY);
-        if (param !== null) {
-            url.searchParams.delete(EMBED_SWITCH_PARAM);
-            window.history.replaceState(window.history.state, '', url.toString());
-        }
-        return localStorage.getItem(EMBED_SWITCH_KEY) === '1';
+        localStorage.removeItem(LEGACY_EMBED_SWITCH_KEY);
     } catch {
-        return false;
+        // storage blocked (private mode etc.) - nothing to clean up
     }
 };
 

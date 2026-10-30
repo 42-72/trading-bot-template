@@ -11,9 +11,9 @@ import {
     DTRADER_IFRAME_SANDBOX,
     getDTraderSession,
     getSafeNavigateUrl,
-    isDTraderEmbedEnabled,
     isDTraderMessage,
     postToDTrader,
+    removeLegacyDTraderEmbedSwitch,
     TDTraderSession,
 } from '@/utils/dtrader-embed';
 import './dtrader.scss';
@@ -26,7 +26,7 @@ const SESSION_CHECK_MS = 30000;
 const TOKEN_RETRY_WINDOW_MS = 60000;
 
 /**
- * Embedded DTrader (behind the ct_dtrader_embed test switch). Rendered as an
+ * Embedded DTrader in the DTrader tab, for every visitor. Rendered as an
  * always-mounted sibling of the Tabs component like TradingViewPanel, so the
  * iframe - once opened - survives tab switches. It hands DTrader this app's
  * session over postMessage and follows login, logout and Demo/Real switches.
@@ -35,7 +35,6 @@ const DTraderPanel = observer(() => {
     const { dashboard, client } = useStore();
     const { active_tab } = dashboard;
     const is_active = active_tab === DBOT_TABS.DTRADER;
-    const [is_enabled] = useState(isDTraderEmbedEnabled);
     const [has_opened, setHasOpened] = useState(false);
     const frame_ref = useRef<HTMLIFrameElement>(null);
     // undefined until the frame says ct:ready; null once it was told "logged out"
@@ -43,10 +42,14 @@ const DTraderPanel = observer(() => {
     const last_token_retry_ref = useRef(0);
 
     useEffect(() => {
-        if (is_enabled && is_active && !has_opened) {
+        removeLegacyDTraderEmbedSwitch();
+    }, []);
+
+    useEffect(() => {
+        if (is_active && !has_opened) {
             setHasOpened(true);
         }
-    }, [is_enabled, is_active, has_opened]);
+    }, [is_active, has_opened]);
 
     const getFrameWindow = () => frame_ref.current?.contentWindow;
 
@@ -136,8 +139,6 @@ const DTraderPanel = observer(() => {
             clearInterval(interval_id);
         };
     }, [client, has_opened, sendLogout, sendSession, syncSession]);
-
-    if (!is_enabled) return null;
 
     return (
         <div className={classNames('dtrader-panel', { 'dtrader-panel--active': is_active })}>
