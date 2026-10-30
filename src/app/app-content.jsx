@@ -18,6 +18,7 @@ import Audio from '../components/audio';
 import BlocklyLoading from '../components/blockly-loading';
 import BotStopped from '../components/bot-stopped';
 import BotBuilder from '../pages/bot-builder';
+import DTraderPanel from '../pages/dtrader';
 import Main from '../pages/main';
 import TradingViewPanel from '../pages/tradingview';
 import './app.scss';
@@ -170,6 +171,7 @@ const AppContent = observer(() => {
                     <Main />
                     <BotBuilder />
                     <TradingViewPanel />
+                    <DTraderPanel />
                     <BotStopped />
                     <TransactionDetailsModal />
                     <ToastContainer limit={3} draggable={false} />

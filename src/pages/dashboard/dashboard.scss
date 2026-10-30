@@ -50,9 +50,10 @@
             padding-top: var(--run-strategy-bar-space, 0px);
         }
 
-        // Absolutely positioned tabs (Bot Builder, TradingView):
+        // Absolutely positioned tabs (Bot Builder, TradingView, DTrader):
         .bot-builder,
-        .tradingview-panel {
+        .tradingview-panel,
+        .dtrader-panel {
             top: calc(6.6rem + var(--run-strategy-bar-space, 0px));
         }
     }

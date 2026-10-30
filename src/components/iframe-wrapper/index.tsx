@@ -6,6 +6,9 @@ type TIframeWrapperProps = {
     src: string;
     title: string;
     className?: string;
+    // Lets the caller talk to the framed page (postMessage) - optional
+    frameRef?: React.Ref<HTMLIFrameElement>;
+    fallbackMessage?: string;
 };
 
 // If the iframe hasn't fired onLoad within this window (or fires onError),
@@ -17,7 +20,13 @@ const LOAD_TIMEOUT_MS = 15000;
  * Not specific to any one embedded page (TradingView, DTrader, ...) - callers
  * supply src/title.
  */
-const IframeWrapper = ({ src, title, className }: TIframeWrapperProps) => {
+const IframeWrapper = ({
+    src,
+    title,
+    className,
+    frameRef,
+    fallbackMessage = 'Charts are temporarily unavailable',
+}: TIframeWrapperProps) => {
     const [has_failed, setHasFailed] = useState(false);
     const has_loaded_ref = useRef(false);
 
@@ -45,13 +54,8 @@ const IframeWrapper = ({ src, title, className }: TIframeWrapperProps) => {
     if (has_failed) {
         return (
             <div className={classNames('iframe-wrapper', 'iframe-wrapper--fallback', className)}>
-                <p className='iframe-wrapper__fallback-message'>Charts are temporarily unavailable</p>
-                <a
-                    className='iframe-wrapper__fallback-link'
-                    href={src}
-                    target='_blank'
-                    rel='noopener noreferrer'
-                >
+                <p className='iframe-wrapper__fallback-message'>{fallbackMessage}</p>
+                <a className='iframe-wrapper__fallback-link' href={src} target='_blank' rel='noopener noreferrer'>
                     {src}
                 </a>
             </div>
@@ -61,6 +65,7 @@ const IframeWrapper = ({ src, title, className }: TIframeWrapperProps) => {
     return (
         <div className={classNames('iframe-wrapper', className)}>
             <iframe
+                ref={frameRef}
                 src={src}
                 title={title}
                 className='iframe-wrapper__frame'
