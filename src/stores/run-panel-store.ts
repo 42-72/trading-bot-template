@@ -6,7 +6,14 @@ import { contract_stages, TContractStage } from '@/constants/contract-stage';
 import { run_panel } from '@/constants/run-panel';
 import { ErrorTypes, MessageTypes, observer, unrecoverable_errors } from '@/external/bot-skeleton';
 import { getSelectedTradeType } from '@/external/bot-skeleton/scratch/utils';
+import { setExecutionMode as setEngineExecutionMode } from '@/external/bot-skeleton/services/tradeEngine/utils/execution-mode';
 import { handleBackendError, isBackendError } from '@/utils/error-handler';
+import {
+    isExecutionModeLocked,
+    readStoredExecutionMode,
+    storeExecutionMode,
+    TExecutionMode,
+} from '@/utils/execution-mode';
 // import { journalError, switch_account_notification } from '@/utils/bot-notifications';
 import GTM from '@/utils/gtm';
 import { helpers } from '@/utils/store-helpers';
@@ -45,6 +52,9 @@ export default class RunPanelStore {
             run_id: observable,
             error_type: observable,
             show_bot_stop_message: observable,
+            execution_mode: observable,
+            is_execution_mode_locked: computed,
+            setExecutionMode: action,
             is_stop_button_visible: computed,
             is_stop_button_disabled: computed,
             is_clear_stat_disabled: computed,
@@ -108,6 +118,7 @@ export default class RunPanelStore {
     is_sell_requested = false;
     show_bot_stop_message = false;
     is_contract_buying_in_progress = false;
+    execution_mode: TExecutionMode = readStoredExecutionMode();
 
     run_id = '';
     onOkButtonClick: (() => void) | null = null;
@@ -117,6 +128,16 @@ export default class RunPanelStore {
     // we activate run-button and clear trade info and set the ContractStage to NOT_RUNNING
     // otherwise we keep opening new contracts and set the ContractStage to PURCHASE_SENT
     error_type: ErrorTypes | undefined = undefined;
+
+    get is_execution_mode_locked() {
+        return isExecutionModeLocked(this.is_stop_button_visible, this.root_store.ai_scanner?.stage);
+    }
+
+    setExecutionMode = (mode: TExecutionMode) => {
+        if (this.is_execution_mode_locked) return;
+        this.execution_mode = mode;
+        storeExecutionMode(mode);
+    };
 
     get is_stop_button_visible() {
         return this.is_running || this.has_open_contract;
@@ -211,6 +232,11 @@ export default class RunPanelStore {
 
             summary_card.clear();
             this.setContractStage(contract_stages.STARTING);
+            setEngineExecutionMode(this.execution_mode);
+            this.root_store.journal.pushMessage(
+                this.execution_mode === 'fast' ? localize('Execution: Fast') : localize('Execution: Normal'),
+                MessageTypes.NOTIFY
+            );
             this.dbot.runBot();
         });
         this.setShowBotStopMessage(false);

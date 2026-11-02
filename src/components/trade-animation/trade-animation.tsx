@@ -14,6 +14,7 @@ import Button from '../shared_ui/button';
 import Tooltip from '../shared_ui/tooltip/tooltip';
 import CircularWrapper from './circular-wrapper';
 import ContractStageText from './contract-stage-text';
+import ExecutionModeSwitch from './execution-mode-switch';
 import './run-panel-tooltip.scss';
 
 type TTradeAnimation = {
@@ -166,6 +167,7 @@ const TradeAnimation = observer(({ className, should_show_overlay }: TTradeAnima
 
     return (
         <div className={classNames('animation__wrapper', className)}>
+            <ExecutionModeSwitch />
             {should_show_tooltip ? (
                 <div className='run__button_wrapper'>
                     <Tooltip

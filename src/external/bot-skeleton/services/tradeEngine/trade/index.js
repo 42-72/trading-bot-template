@@ -4,10 +4,10 @@ import { getLocalizedErrorMessage } from '@/constants/backend-error-messages';
 import { createError } from '../../../utils/error';
 import { observer as globalObserver } from '../../../utils/observer';
 import { api_base } from '../../api/api-base';
+import { isFastExecution } from '../utils/execution-mode';
 import { checkBlocksForProposalRequest, doUntilDone } from '../utils/helpers';
 import { expectInitArg } from '../utils/sanitize';
 import { proposalsReady, start } from './state/actions';
-import * as constants from './state/constants';
 import rootReducer from './state/reducers';
 import Balance from './Balance';
 import OpenContract from './OpenContract';
@@ -16,51 +16,7 @@ import Purchase from './Purchase';
 import Sell from './Sell';
 import Ticks from './Ticks';
 import Total from './Total';
-
-const watchBefore = store =>
-    watchScope({
-        store,
-        stopScope: constants.DURING_PURCHASE,
-        passScope: constants.BEFORE_PURCHASE,
-        passFlag: 'proposalsReady',
-    });
-
-const watchDuring = store =>
-    watchScope({
-        store,
-        stopScope: constants.STOP,
-        passScope: constants.DURING_PURCHASE,
-        passFlag: 'openContract',
-    });
-
-/* The watchScope function is called randomly and resets the prevTick
- * which leads to the same problem we try to solve. So prevTick is isolated
- */
-let prevTick;
-const watchScope = ({ store, stopScope, passScope, passFlag }) => {
-    // in case watch is called after stop is fired
-    if (store.getState().scope === stopScope) {
-        return Promise.resolve(false);
-    }
-    return new Promise(resolve => {
-        const unsubscribe = store.subscribe(() => {
-            const newState = store.getState();
-
-            if (newState.newTick === prevTick) return;
-            prevTick = newState.newTick;
-
-            if (newState.scope === passScope && newState[passFlag]) {
-                unsubscribe();
-                resolve(true);
-            }
-
-            if (newState.scope === stopScope) {
-                unsubscribe();
-                resolve(false);
-            }
-        });
-    });
-};
+import { watchBefore, watchDuring } from './watch-scope';
 
 export default class TradeEngine extends Balance(Purchase(Sell(OpenContract(Proposal(Ticks(Total(class {}))))))) {
     constructor($scope) {
@@ -83,6 +39,8 @@ export default class TradeEngine extends Balance(Purchase(Sell(OpenContract(Prop
 
         this.initArgs = args;
         this.options = options;
+        // Fast execution: the first buy of a run (or after a restart) waits for a tick, as in Normal.
+        this.has_fast_pass = false;
         this.startPromise = this.loginAndGetBalance(token);
 
         if (!this.checkTicksPromiseExists()) this.watchTicks(symbol);
@@ -145,10 +103,15 @@ export default class TradeEngine extends Balance(Purchase(Sell(OpenContract(Prop
     }
 
     watch(watchName) {
+        const is_fast = isFastExecution();
         if (watchName === 'before') {
-            return watchBefore(this.store);
+            // Single use: granted when a result arrives (OpenContract), spent on the first
+            // "before" after it. Later passes of the same "before" wait for ticks as usual.
+            const fast_pass = is_fast && this.has_fast_pass;
+            this.has_fast_pass = false;
+            return watchBefore(this.store, fast_pass);
         }
-        return watchDuring(this.store);
+        return watchDuring(this.store, is_fast);
     }
 
     makeDirectPurchaseDecision() {

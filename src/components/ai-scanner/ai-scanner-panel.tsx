@@ -9,6 +9,7 @@ import {
     TOverUnderSetup,
     TOverUnderStrategyId,
 } from '@/constants/ai-engine';
+import { useStore } from '@/hooks/useStore';
 import type { TAiScannerForm, TAiScannerStage, TAiScannerTab, TArmedMarket } from '@/stores/ai-scanner-store';
 import { localize } from '@deriv-com/translations';
 import { useAiScanner } from './use-ai-scanner';
@@ -297,6 +298,8 @@ const ScanProgress = observer(() => {
 
 const RunStatus = observer(() => {
     const ai_scanner = useAiScanner();
+    // Read-only: the scanner presses the same Run, so it follows the switch beside it.
+    const is_fast = useStore().run_panel?.execution_mode === 'fast';
     const { stage, locked, target, feed_status, scan_markets, scan_deadline, armed } = ai_scanner;
     if (!locked) return null;
     const is_even_odd = locked.tab === 'even_odd';
@@ -380,6 +383,8 @@ const RunStatus = observer(() => {
                 <dd>{money(locked.take_profit)}</dd>
                 <dt>{localize('Stop loss')}</dt>
                 <dd>{money(locked.stop_loss)}</dd>
+                <dt>{localize('Execution')}</dt>
+                <dd data-testid='ai-scanner-execution'>{is_fast ? localize('Fast') : localize('Normal')}</dd>
             </dl>
         </div>
     );

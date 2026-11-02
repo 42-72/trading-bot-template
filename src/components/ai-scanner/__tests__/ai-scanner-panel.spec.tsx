@@ -26,6 +26,7 @@ const setup = () => {
             {
                 is_running: false,
                 has_open_contract: false,
+                execution_mode: 'normal',
                 get is_stop_button_visible(): boolean {
                     return this.is_running || this.has_open_contract;
                 },
@@ -427,5 +428,25 @@ describe('AI Scanner panel - all-markets dots', () => {
         expect(dot('JD25').className).toMatch(/__dot--entry/);
         expect(dot('JD25')).toHaveAttribute('title', 'J25 — entry hit');
         expect(dot('JD50').className).toMatch(/__dot--scanning/);
+    });
+});
+
+describe('AI Scanner panel - execution mode', () => {
+    beforeEach(() => localStorage.clear());
+
+    it("shows the switch's mode read-only in the run facts, and follows it", () => {
+        const store = setup();
+        atStage(store, 'running');
+        expect(screen.getByTestId('ai-scanner-execution')).toHaveTextContent('Normal');
+
+        const { run_panel } = (useStore as jest.Mock).mock.results[0].value;
+        act(() => {
+            runInAction(() => {
+                run_panel.execution_mode = 'fast';
+            });
+        });
+        expect(screen.getByTestId('ai-scanner-execution')).toHaveTextContent('Fast');
+        // Read-only: no second switch in the AI panel.
+        expect(screen.queryByRole('radiogroup', { name: 'Execution' })).not.toBeInTheDocument();
     });
 });

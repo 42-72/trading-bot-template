@@ -1,6 +1,7 @@
 import { LogTypes } from '../../../constants/messages';
 import { api_base } from '../../api/api-base';
 import { contractStatus, info, log } from '../utils/broadcast';
+import { getBuyGapDelayMs, isFastExecution } from '../utils/execution-mode';
 import { doUntilDone, getUUID, recoverFromError, tradeOptionToBuy } from '../utils/helpers';
 import { purchaseSuccessful } from './state/actions';
 import { BEFORE_PURCHASE } from './state/constants';
@@ -15,6 +16,20 @@ export default Engine =>
             if (this.store.getState().scope !== BEFORE_PURCHASE) {
                 return Promise.resolve();
             }
+
+            const gap_ms = isFastExecution() ? getBuyGapDelayMs(this.last_buy_sent_at, Date.now()) : 0;
+            if (gap_ms > 0) {
+                return new Promise(resolve => setTimeout(resolve, gap_ms)).then(() => {
+                    // Stopped, or no longer before purchase, while waiting: don't buy.
+                    if (!api_base.is_running || this.store.getState().scope !== BEFORE_PURCHASE) return undefined;
+                    return this.sendPurchase(contract_type);
+                });
+            }
+            return this.sendPurchase(contract_type);
+        }
+
+        sendPurchase(contract_type) {
+            this.last_buy_sent_at = Date.now();
 
             const onSuccess = response => {
                 // Don't unnecessarily send a forget request for a purchased contract.
