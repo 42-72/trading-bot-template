@@ -1,78 +1,11 @@
 @use 'components/shared/styles/constants' as *;
 @use 'components/shared/styles/devices' as *;
 
-@keyframes animate-progress {
-    0% {
-        width: 0%;
-    }
-
-    100% {
-        width: 51%;
-    }
-}
-
-@keyframes animate-progress-complete {
-    0% {
-        width: 50%;
-    }
-
-    100% {
-        width: 100%;
-    }
-}
-
-@keyframes animate-circle {
-    0% {
-        transform: scale(0);
-    }
-
-    50% {
-        transform: scale(1.5);
-    }
-
-    100% {
-        transform: scale(0);
-    }
-}
-
-@keyframes animate-circle-appear {
-    0% {
-        transform: scale(0);
-    }
-
-    100% {
-        transform: scale(1);
-    }
-}
-
-@keyframes animate-circle-pop {
-    0% {
-        transform: scale(0);
-    }
-
-    50% {
-        transform: scale(1);
-    }
-
-    100% {
-        transform: scale(0);
-    }
-}
-
 .animation {
-    $static-circle-diameter: 2px;
-    $dynamic-circle-diameter: 10px;
-    $animation: &;
-
     &__wrapper {
         display: flex;
         align-items: center;
         height: 40px;
-    }
-
-    &__overlay {
-        border-top-left-radius: 0;
-        border-bottom-right-radius: $BORDER_RADIUS;
     }
 
     &__run-button {
@@ -98,133 +31,6 @@
             background-color: var(--button-primary-default) !important;
         }
     }
-
-    &__container {
-        height: 100%;
-        padding: 5px 12px;
-        display: flex;
-        flex-direction: column;
-        justify-content: space-evenly;
-        border-start-end-radius: $BORDER_RADIUS;
-        border-end-end-radius: $BORDER_RADIUS;
-        border: solid 1px var(--border-normal);
-        position: relative;
-    }
-
-    &__text {
-        color: var(--text-general);
-        font-size: 12px;
-        font-weight: bold;
-        text-align: center;
-        margin-bottom: 5px;
-        line-height: 18px;
-    }
-
-    &__progress {
-        display: flex;
-        justify-content: space-between;
-        position: relative;
-        height: 6px;
-
-        .circular-wrapper {
-            width: $static-circle-diameter;
-            height: $static-circle-diameter;
-            align-self: center;
-            display: flex;
-
-            .static-circle {
-                width: $static-circle-diameter;
-                height: $static-circle-diameter;
-                background-color: $color-black-7;
-                border-radius: 100%;
-                align-self: center;
-                z-index: 1;
-            }
-
-            .dynamic-circle {
-                border-radius: 100%;
-                height: $dynamic-circle-diameter;
-                width: $dynamic-circle-diameter;
-                margin-left: -4px;
-                margin-top: -4px;
-                opacity: 0.32;
-                position: absolute;
-            }
-
-            &:nth-child(2) {
-                margin-left: 3px;
-            }
-
-            &:last-child {
-                margin-right: 3px;
-            }
-        }
-
-        &-line {
-            background-color: var(--border-normal);
-            height: 100%;
-            width: 100%;
-            border-radius: $BORDER_RADIUS;
-            position: absolute;
-        }
-
-        &-bar {
-            background-color: var(--status-success);
-            border-radius: $BORDER_RADIUS;
-            width: 0;
-            height: 100%;
-        }
-
-        &-4 {
-            animation: animate-progress 0.5s 1;
-            animation-fill-mode: forwards;
-        }
-
-        &-5 {
-            width: 51%;
-            border-radius: 5px 0 0 5px;
-        }
-
-        &-6 {
-            animation: animate-progress-complete 0.5s 1;
-            animation-fill-mode: forwards;
-        }
-    }
-
-    &--running {
-        #{$animation}__progress {
-            .circular-wrapper {
-                &.completed,
-                &.active {
-                    .static-circle {
-                        background-color: $color-green-2;
-                    }
-                }
-
-                &.active {
-                    .dynamic-circle {
-                        animation: animate-circle 0.8s infinite;
-                        animation-timing-function: cubic-bezier(0.25, 0.1, 0.25, 1);
-                        background-color: var(--status-success);
-
-                        // transform: translate(-50%, -50%);
-                        // z-index: 1;
-                    }
-                }
-
-                .static-circle {
-                    animation: animate-circle-appear 1s;
-                    background-color: $COLOR_CORAL_RED;
-                }
-
-                .dynamic-circle {
-                    animation: animate-circle 1s;
-                    background-color: $COLOR_CORAL_RED;
-                    transform: scale(0);
-                }
-            }
-        }
-    }
 }
 
 .dc-modal__container_animation__modal {
@@ -233,50 +39,59 @@
     }
 }
 
-// "Execution: Normal | Fast" beside Run - same 40px height as the Run bar.
+// The Run bar's right half: "Execution  NORMAL ◯". Off (grey) = Normal,
+// on (brand green) = Fast. Fills the bar beside Run at the bar's own height.
 .execution-mode {
-    flex: 0 0 auto;
+    flex: 1 1 auto;
+    min-width: 0;
     display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: 0.2rem;
+    align-items: center;
+    gap: 0.8rem;
     height: 100%;
-    margin-inline-end: 0.8rem;
+    padding: 0 1.2rem;
+    border: 1px solid var(--border-normal);
+    border-start-end-radius: $BORDER_RADIUS;
+    border-end-end-radius: $BORDER_RADIUS;
+    white-space: nowrap;
+
+    // Joined to Run, which has square right corners.
+    .animation__run-button + &,
+    .animation__stop-button + & {
+        border-inline-start: none;
+    }
 
     &__label {
-        font-size: 1rem;
-        line-height: 1.2rem;
-        font-weight: bold;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
+        font-size: 1.2rem;
         color: var(--text-less-prominent);
     }
 
-    &__options {
-        display: flex;
-        border: 1px solid var(--border-normal);
-        border-radius: $BORDER_RADIUS;
-        overflow: hidden;
+    &__value {
+        // Room for NORMAL, so the toggle doesn't shift when the mode changes.
+        min-width: 5.4rem;
+        font-size: 1.2rem;
+        font-weight: bold;
+        color: var(--text-general);
     }
 
-    &__option {
-        min-width: 4.4rem;
-        height: 2.2rem;
-        padding: 0 0.6rem;
+    &__toggle {
+        position: relative;
+        flex: 0 0 auto;
+        width: 3.6rem;
+        height: 2rem;
+        padding: 0;
         border: none;
-        background: var(--general-main-1);
-        color: var(--text-general);
-        font-size: 1.1rem;
-        font-weight: bold;
+        border-radius: 1rem;
+        background: #94a3b8;
         cursor: pointer;
+        transition: background-color 0.2s;
 
-        & + & {
-            border-inline-start: 1px solid var(--border-normal);
+        &[aria-checked='true'] {
+            background: #22c55e;
         }
 
-        &--selected {
-            background: var(--purchase-main-1);
-            color: #fff;
+        &:focus-visible {
+            outline: 2px solid var(--brand-primary, #3b82f6);
+            outline-offset: 2px;
         }
 
         &:disabled {
@@ -284,18 +99,41 @@
         }
     }
 
+    &__thumb {
+        position: absolute;
+        top: 0.2rem;
+        inset-inline-start: 0.2rem;
+        width: 1.6rem;
+        height: 1.6rem;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 1px 2px rgb(0 0 0 / 30%);
+        transition: transform 0.2s;
+
+        [aria-checked='true'] > & {
+            transform: translateX(1.6rem);
+        }
+
+        [dir='rtl'] [aria-checked='true'] > & {
+            transform: translateX(-1.6rem);
+        }
+    }
+
     &--locked {
         opacity: 0.6;
     }
 
-    // Phone: narrower, so the Run status beside it keeps one line at 360px wide.
+    // Phone: Run on the left, the switch on the right.
     @include mobile-or-tablet-screen {
-        margin-inline-end: 0.6rem;
+        justify-content: flex-end;
+        gap: 0.6rem;
+        padding: 0 1rem;
+    }
 
-        &__option {
-            min-width: 0;
-            padding: 0 0.5rem;
-            font-size: 1rem;
+    @media (prefers-reduced-motion: reduce) {
+        &__toggle,
+        &__thumb {
+            transition: none;
         }
     }
 }
