@@ -316,6 +316,28 @@ describe('api_base session handling (ct_session_v2 on)', () => {
             );
         });
 
+        it('auth_info expired in storage (e.g. edited in DevTools): caught when the tab is visible again', async () => {
+            const base = await loggedIn();
+            base.initEventListeners();
+            mockGetAuthInfo.mockReturnValue(null); // getAuthInfo drops an expired auth_info
+            document.dispatchEvent(new Event('visibilitychange'));
+
+            expect(emitted).toEqual(['session.expired']);
+            expect(session_status.notice).toBe('session_expired');
+            expect(client_store.logout).toHaveBeenCalledTimes(1);
+        });
+
+        it('a deliberate logout is not an expiry', async () => {
+            const base = await loggedIn();
+            base.initEventListeners();
+            localStorage.removeItem('active_loginid');
+            mockGetAuthInfo.mockReturnValue(null);
+            document.dispatchEvent(new Event('visibilitychange'));
+
+            expect(emitted).toEqual([]);
+            expect(session_status.notice).toBeNull();
+        });
+
         it('a 401 on the OTP request is a genuine expiry', async () => {
             const base = await loggedIn();
             mockGenerate.mockRejectedValueOnce(new SessionExpiredError('otp_401'));

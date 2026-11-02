@@ -722,12 +722,17 @@ class APIBase {
         this.expiry_timer = setTimeout(() => this.checkSessionExpiry('expires_at timer'), delay);
     }
 
-    /** Genuine expiry by time: expires_at has passed for the session this page had. */
+    /**
+     * Genuine expiry by time: expires_at has passed for the session this page
+     * had - by the timer's copy, or by the stored auth_info itself (which
+     * getAuthInfo removes once expired, so a vanished one counts too).
+     */
     checkSessionExpiry(source: string) {
         if (!isSessionV2Enabled() || this.is_session_expired || !this.had_session) return false;
         if (!localStorage.getItem('active_loginid')) return false; // logged out on purpose
-        if (!this.session_expires_at || Date.now() < this.session_expires_at) return false;
-        this.onSessionExpired('expires_at passed', source);
+        const is_past_expiry = !!this.session_expires_at && Date.now() >= this.session_expires_at;
+        if (!is_past_expiry && this.hasSession()) return false;
+        this.onSessionExpired(is_past_expiry ? 'expires_at passed' : 'auth_info expired or gone', source);
         return true;
     }
 
