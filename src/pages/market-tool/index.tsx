@@ -12,9 +12,12 @@ import {
     computeStreak,
     DEFAULT_WINDOW_SIZE,
     DIGITS,
+    getOverUnderOutcome,
     MAX_WINDOW_SIZE,
     MIN_WINDOW_SIZE,
+    OVER_UNDER_CHIP_TEXT,
     rankDigits,
+    TOverUnderOutcome,
 } from '@/utils/digit-stats';
 import {
     notOfferedNotice,
@@ -27,13 +30,22 @@ import StatPanel from './stat-panel';
 import TickRibbon from './tick-ribbon';
 import './market-tool.scss';
 
-type TTone = 'tone-green' | 'tone-red' | 'tone-blue' | 'tone-yellow';
+type TTone = 'tone-green' | 'tone-red' | 'tone-blue' | 'tone-yellow' | 'tone-neutral';
 
 const EVEN_ODD_TONE: Record<'Even' | 'Odd', TTone> = { Even: 'tone-green', Odd: 'tone-red' };
-const OVER_UNDER_ROW_TONE: Record<'Over' | 'Under', TTone> = { Over: 'tone-green', Under: 'tone-yellow' };
+const OVER_UNDER_ROW_TONE: Record<TOverUnderOutcome, TTone> = {
+    Over: 'tone-green',
+    Under: 'tone-yellow',
+    Equal: 'tone-neutral',
+};
 // Chip colours for Over/Under deliberately differ from the row colours
 // (O green, U red - not U yellow). Matches the spec exactly.
-const OVER_UNDER_CHIP_TONE: Record<'Over' | 'Under', TTone> = { Over: 'tone-green', Under: 'tone-red' };
+// "=" (tick landed on the barrier digit) is neither, so it gets a neutral grey.
+const OVER_UNDER_CHIP_TONE: Record<TOverUnderOutcome, TTone> = {
+    Over: 'tone-green',
+    Under: 'tone-red',
+    Equal: 'tone-neutral',
+};
 const MATCH_DIFFER_TONE: Record<'Match' | 'Differ', TTone> = { Match: 'tone-green', Differ: 'tone-red' };
 const RISE_FALL_TONE: Record<'Rise' | 'Fall', TTone> = { Rise: 'tone-green', Fall: 'tone-red' };
 
@@ -117,7 +129,7 @@ const MarketTool = () => {
         [digits]
     );
     const overUnderOutcomes = useMemo(
-        (): ('Over' | 'Under' | null)[] => digits.map(d => (d > barrier ? 'Over' : d < barrier ? 'Under' : null)),
+        (): TOverUnderOutcome[] => digits.map(d => getOverUnderOutcome(d, barrier)),
         [digits, barrier]
     );
     const matchDifferOutcomes = useMemo(
@@ -278,9 +290,10 @@ const MarketTool = () => {
                             tone: OVER_UNDER_ROW_TONE[overUnderStreak.label],
                         }
                     }
-                    chips={overUnderOutcomes
-                        .filter((o): o is 'Over' | 'Under' => o !== null)
-                        .map(o => ({ text: o === 'Over' ? 'O' : 'U', tone: OVER_UNDER_CHIP_TONE[o] }))}
+                    chips={overUnderOutcomes.map(o => ({
+                        text: OVER_UNDER_CHIP_TEXT[o],
+                        tone: OVER_UNDER_CHIP_TONE[o],
+                    }))}
                 />
 
                 <StatPanel

@@ -3,13 +3,13 @@ import classNames from 'classnames';
 import { DIGITS } from '@/utils/digit-stats';
 import StatRow from './stat-row';
 
-type TTone = 'tone-green' | 'tone-red' | 'tone-blue' | 'tone-yellow';
+type TTone = 'tone-green' | 'tone-red' | 'tone-blue' | 'tone-yellow' | 'tone-neutral';
 
 type TChip = { text: string; tone: TTone };
 
 type TStatPanelProps = {
     title: string;
-    rows: { label: string; pct: number; hasData: boolean; tone: TTone }[];
+    rows: { label: string; pct: number; hasData: boolean; tone: Exclude<TTone, 'tone-neutral'> }[];
     streak: { label: string; count: number; tone: TTone } | null;
     picker?: { value: number; onChange: (digit: number) => void; ariaLabel: string };
     /** Oldest first, newest last - already the full available history (component slices to 10/40 itself). */

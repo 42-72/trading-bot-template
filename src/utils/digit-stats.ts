@@ -66,7 +66,17 @@ export type TStat = {
  */
 export const computeStat = (successCount: number, n: number, expected: number, label = ''): TStat => {
     if (n <= 0) {
-        return { label, pHat: 0, expected, se: 0, bandLow: expected, bandHigh: expected, z: 0, isInsideBand: true, n: 0 };
+        return {
+            label,
+            pHat: 0,
+            expected,
+            se: 0,
+            bandLow: expected,
+            bandHigh: expected,
+            z: 0,
+            isInsideBand: true,
+            n: 0,
+        };
     }
     const pHat = successCount / n;
     const se = Math.sqrt((expected * (1 - expected)) / n);
@@ -132,29 +142,52 @@ export const computeRiseFallStats = (directions: ('R' | 'F')[]) => {
 export type TDigitRank = 1 | 2 | 3 | 4;
 
 /**
- * Ranks only the two most- and two least-frequent digits in the window (1 =
- * most frequent, 2 = 2nd most, 3 = 2nd least, 4 = least); the other six are
- * unranked. Ties are broken by digit value ascending, so ranking is stable
- * and reproducible rather than jumping around for cosmetic reasons.
+ * Colours digits by their place among the DISTINCT counts in the window (1 =
+ * every digit on the highest count, 2 = every digit on the 2nd-highest
+ * distinct count, 3 = every digit on the 2nd-lowest distinct count, 4 =
+ * every digit on the lowest count); the rest are unranked. Tied digits share
+ * a rank. Raw counts are compared, never the rounded percentages shown. When
+ * there are too few distinct counts for all four ranks, the extremes (1 and
+ * 4) win over 2 and 3; if all ten digits share one count, nothing is ranked.
  */
 export const rankDigits = (counts: number[]): Map<number, TDigitRank> => {
     const ranks = new Map<number, TDigitRank>();
     const total = counts.reduce((sum, c) => sum + c, 0);
     if (total === 0) return ranks;
-    const sorted = DIGITS.slice().sort((a, b) => counts[b] - counts[a] || a - b);
-    ranks.set(sorted[0], 1);
-    ranks.set(sorted[1], 2);
-    ranks.set(sorted[8], 3);
-    ranks.set(sorted[9], 4);
+    const distinct = Array.from(new Set(DIGITS.map(d => counts[d] ?? 0))).sort((a, b) => b - a);
+    if (distinct.length < 2) return ranks;
+    const highest = distinct[0];
+    const lowest = distinct[distinct.length - 1];
+    // With 2 distinct counts these collapse onto the extremes, and with 3
+    // both point at the same middle count - the extremes check runs first.
+    const secondHighest = distinct[1];
+    const secondLowest = distinct[distinct.length - 2];
+    DIGITS.forEach(digit => {
+        const c = counts[digit] ?? 0;
+        if (c === highest) ranks.set(digit, 1);
+        else if (c === lowest) ranks.set(digit, 4);
+        else if (c === secondHighest) ranks.set(digit, 2);
+        else if (c === secondLowest) ranks.set(digit, 3);
+    });
     return ranks;
 };
+
+export type TOverUnderOutcome = 'Over' | 'Under' | 'Equal';
+
+/** Over/Under result of one tick against the selected barrier digit; a hit on the barrier itself is "Equal". */
+export const getOverUnderOutcome = (digit: number, barrier: number): TOverUnderOutcome => {
+    if (digit > barrier) return 'Over';
+    if (digit < barrier) return 'Under';
+    return 'Equal';
+};
+
+export const OVER_UNDER_CHIP_TEXT: Record<TOverUnderOutcome, string> = { Over: 'O', Under: 'U', Equal: '=' };
 
 /**
  * Length of the run of the most recent shared outcome at the end of a
  * history (e.g. "3x Under"). `null` entries (an outcome that belongs to
- * neither label, such as the barrier digit itself for Over/Under) are
- * skipped rather than breaking the streak, so a barrier hit doesn't reset an
- * otherwise-unbroken run. Purely descriptive of what already happened - not
+ * no label) are skipped rather than breaking the streak. Over/Under passes
+ * no nulls - a barrier hit is its own "Equal" outcome. Purely descriptive of what already happened - not
  * a prediction of what comes next.
  */
 export const computeStreak = <T extends string>(outcomes: (T | null)[]): { label: T; count: number } | null => {

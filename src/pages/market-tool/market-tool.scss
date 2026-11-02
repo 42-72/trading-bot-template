@@ -97,6 +97,17 @@
     --tone-border-soft: rgb(255 208 0 / 50%);
 }
 
+// Neither-side outcome (Over/Under "=" chip and "Equal" streak badge).
+.tone-neutral {
+    --tone-rank: #64748b;
+    --tone-text: #334155;
+    --tone-grad-dark: #334155;
+    --tone-grad-mid: #64748b;
+    --tone-grad-light: #94a3b8;
+    --tone-tint: rgb(100 116 139 / 14%);
+    --tone-border-soft: rgb(100 116 139 / 45%);
+}
+
 // ---- Controls -------------------------------------------------------------
 
 .market-tool__controls {
