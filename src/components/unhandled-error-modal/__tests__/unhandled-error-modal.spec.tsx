@@ -2,6 +2,12 @@ import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import UnhandledErrorModal from '../unhandled-error-modal';
 
+// jsdom 26 locks window.location (reload can't be replaced or spied on). Its reload()
+// reports "Not implemented: navigation" to the console instead, so that is the signal.
+const spyOnPageReload = () => jest.spyOn(console, 'error').mockImplementation(() => {});
+const reloadWasCalled = (console_error: jest.SpyInstance) =>
+    console_error.mock.calls.some(([error]) => String(error?.message ?? error).includes('Not implemented: navigation'));
+
 describe('<UnhandledErrorModal />', () => {
     let modal_root_el: HTMLDivElement;
 
@@ -25,13 +31,10 @@ describe('<UnhandledErrorModal />', () => {
 
     it('should call reload function when refresh button is clicked', () => {
         jest.spyOn(React, 'useState').mockImplementationOnce(() => React.useState<boolean>(true));
-        const reloadFn = jest.fn();
-        Object.defineProperty(window, 'location', {
-            configurable: true,
-            value: { reload: reloadFn },
-        });
+        const console_error = spyOnPageReload();
         render(<UnhandledErrorModal />);
         fireEvent.click(screen.getByText('Refresh'));
-        expect(reloadFn).toHaveBeenCalled();
+        expect(reloadWasCalled(console_error)).toBe(true);
+        console_error.mockRestore();
     });
 });

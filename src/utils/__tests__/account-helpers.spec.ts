@@ -11,6 +11,11 @@ import {
     removeUrlParameter,
 } from '../account-helpers';
 
+// jsdom 26 locks window.location, so the URL is set through the real history API
+// (same origin only: the test page is http://localhost/).
+const originalReplaceState = window.history.replaceState.bind(window.history);
+const setUrl = (path: string) => originalReplaceState({}, '', path);
+
 describe('account-helpers', () => {
     // Mock localStorage
     let localStorageMock: { [key: string]: string };
@@ -27,8 +32,7 @@ describe('account-helpers', () => {
         });
 
         // Reset window location
-        delete (window as any).location;
-        (window as any).location = new URL('https://example.com');
+        setUrl('/');
 
         // Reset window.history
         window.history.replaceState = jest.fn();
@@ -36,6 +40,7 @@ describe('account-helpers', () => {
 
     afterEach(() => {
         jest.clearAllMocks();
+        window.history.replaceState = originalReplaceState;
     });
 
     describe('isDemoAccount', () => {
@@ -183,8 +188,7 @@ describe('account-helpers', () => {
     describe('getAccountId', () => {
         it('should prioritize URL parameter over localStorage', () => {
             localStorageMock['active_loginid'] = 'CR12345';
-            delete (window as any).location;
-            (window as any).location = new URL('https://example.com?account_id=CR67890');
+            setUrl('/?account_id=CR67890');
 
             const result = getAccountId();
 
@@ -193,8 +197,7 @@ describe('account-helpers', () => {
         });
 
         it('should store URL account_id in localStorage', () => {
-            delete (window as any).location;
-            (window as any).location = new URL('https://example.com?account_id=CR12345');
+            setUrl('/?account_id=CR12345');
 
             getAccountId();
 
@@ -202,8 +205,7 @@ describe('account-helpers', () => {
         });
 
         it('should remove token from URL if present', () => {
-            delete (window as any).location;
-            (window as any).location = new URL('https://example.com?token=abc123&account_id=CR12345');
+            setUrl('/?token=abc123&account_id=CR12345');
 
             getAccountId();
 
@@ -212,22 +214,19 @@ describe('account-helpers', () => {
 
         it('should fall back to localStorage when no URL parameter', () => {
             localStorageMock['active_loginid'] = 'CR12345';
-            delete (window as any).location;
-            (window as any).location = new URL('https://example.com');
+            setUrl('/');
 
             expect(getAccountId()).toBe('CR12345');
         });
 
         it('should return null when no account_id available', () => {
-            delete (window as any).location;
-            (window as any).location = new URL('https://example.com');
+            setUrl('/');
 
             expect(getAccountId()).toBeNull();
         });
 
         it('should remove account_id from URL after storing', () => {
-            delete (window as any).location;
-            (window as any).location = new URL('https://example.com?account_id=CR12345');
+            setUrl('/?account_id=CR12345');
 
             getAccountId();
 
@@ -237,20 +236,18 @@ describe('account-helpers', () => {
 
     describe('removeUrlParameter', () => {
         it('should remove specified parameter from URL', () => {
-            delete (window as any).location;
-            (window as any).location = new URL('https://example.com?foo=bar&baz=qux');
+            setUrl('/?foo=bar&baz=qux');
 
             removeUrlParameter('foo');
 
             expect(window.history.replaceState).toHaveBeenCalled();
             const calls = (window.history.replaceState as jest.Mock).mock.calls;
             const newUrl = calls[0][2];
-            expect(newUrl).toBe('https://example.com/?baz=qux');
+            expect(newUrl).toBe('http://localhost/?baz=qux');
         });
 
         it('should preserve other parameters', () => {
-            delete (window as any).location;
-            (window as any).location = new URL('https://example.com?foo=bar&baz=qux&hello=world');
+            setUrl('/?foo=bar&baz=qux&hello=world');
 
             removeUrlParameter('baz');
 
@@ -262,8 +259,7 @@ describe('account-helpers', () => {
         });
 
         it('should handle removing non-existent parameter', () => {
-            delete (window as any).location;
-            (window as any).location = new URL('https://example.com?foo=bar');
+            setUrl('/?foo=bar');
 
             removeUrlParameter('nonexistent');
 
@@ -272,8 +268,7 @@ describe('account-helpers', () => {
 
         it('should maintain document title', () => {
             document.title = 'Test Page';
-            delete (window as any).location;
-            (window as any).location = new URL('https://example.com?foo=bar');
+            setUrl('/?foo=bar');
 
             removeUrlParameter('foo');
 
@@ -282,16 +277,11 @@ describe('account-helpers', () => {
         });
 
         it('should update history state', () => {
-            delete (window as any).location;
-            (window as any).location = new URL('https://example.com?token=abc123');
+            setUrl('/?token=abc123');
 
             removeUrlParameter('token');
 
-            expect(window.history.replaceState).toHaveBeenCalledWith(
-                {},
-                expect.any(String),
-                expect.any(String)
-            );
+            expect(window.history.replaceState).toHaveBeenCalledWith({}, expect.any(String), expect.any(String));
         });
     });
 
