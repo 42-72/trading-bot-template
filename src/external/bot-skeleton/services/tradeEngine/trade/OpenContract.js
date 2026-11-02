@@ -1,6 +1,7 @@
 import { getRoundedNumber } from '@/components/shared';
 import { api_base } from '../../api/api-base';
 import { contract as broadcastContract, contractStatus } from '../utils/broadcast';
+import { isFastExecution } from '../utils/execution-mode';
 import { openContractReceived, sell } from './state/actions';
 
 export default Engine =>
@@ -35,6 +36,9 @@ export default Engine =>
                             this.afterPromise();
                         }
 
+                        // The result is recorded (updateTotals above), so Fast mode may let the
+                        // next "before" run without waiting for a new tick.
+                        this.has_fast_pass = isFastExecution();
                         this.store.dispatch(sell());
                     } else {
                         this.store.dispatch(openContractReceived());

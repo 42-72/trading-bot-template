@@ -232,3 +232,70 @@
         width: 31.2rem !important;
     }
 }
+
+// "Execution: Normal | Fast" beside Run - same 40px height as the Run bar.
+.execution-mode {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.2rem;
+    height: 100%;
+    margin-inline-end: 0.8rem;
+
+    &__label {
+        font-size: 1rem;
+        line-height: 1.2rem;
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--text-less-prominent);
+    }
+
+    &__options {
+        display: flex;
+        border: 1px solid var(--border-normal);
+        border-radius: $BORDER_RADIUS;
+        overflow: hidden;
+    }
+
+    &__option {
+        min-width: 4.4rem;
+        height: 2.2rem;
+        padding: 0 0.6rem;
+        border: none;
+        background: var(--general-main-1);
+        color: var(--text-general);
+        font-size: 1.1rem;
+        font-weight: bold;
+        cursor: pointer;
+
+        & + & {
+            border-inline-start: 1px solid var(--border-normal);
+        }
+
+        &--selected {
+            background: var(--purchase-main-1);
+            color: #fff;
+        }
+
+        &:disabled {
+            cursor: not-allowed;
+        }
+    }
+
+    &--locked {
+        opacity: 0.6;
+    }
+
+    // Phone: narrower, so the Run status beside it keeps one line at 360px wide.
+    @include mobile-or-tablet-screen {
+        margin-inline-end: 0.6rem;
+
+        &__option {
+            min-width: 0;
+            padding: 0 0.5rem;
+            font-size: 1rem;
+        }
+    }
+}
