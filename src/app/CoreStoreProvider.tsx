@@ -9,6 +9,8 @@ import { useApiBase } from '@/hooks/useApiBase';
 import { useLogout } from '@/hooks/useLogout';
 import { useStore } from '@/hooks/useStore';
 import { TSocketResponseData } from '@/types/api-types';
+import { logConnEvent } from '@/utils/connection-log';
+import { isSessionV2Enabled } from '@/utils/session-flags';
 import { clearInvalidTokenParams } from '@/utils/url-utils';
 import { useTranslations } from '@deriv-com/translations';
 
@@ -116,7 +118,7 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
 
     const handleMessages = useCallback(
         // Changed parameter type from Record<string, unknown> to unknown to match onMessage signature
-        async (res: unknown) => {
+        async (res: unknown, source_api?: typeof api_base.api) => {
             if (!res) return;
             const data = (res as Record<string, unknown>).data as TSocketResponseData<'balance'>;
             const { msg_type, error } = data;
@@ -128,10 +130,23 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
                 error?.code === 'DisabledClient' ||
                 error?.code === 'InvalidToken'
             ) {
+                // ct_session_v2: api_base decides - only a repeated error on the
+                // current, fully logged-in socket ends the session.
+                if (isSessionV2Enabled()) {
+                    api_base.reportAuthError(error.code, `CoreStoreProvider ${msg_type ?? ''}`.trim(), source_api);
+                    return;
+                }
+                logConnEvent(
+                    'auth_error',
+                    `${error.code} on ${msg_type ?? 'message'} - logging out (CoreStoreProvider)`
+                );
                 // Clear all URL query parameters for these auth errors
                 clearInvalidTokenParams();
                 // Call client store logout directly to avoid double logout
-                await client?.logout();
+                await client?.logout(
+                    `${error.code} on ${msg_type ?? 'message'}`,
+                    'CoreStoreProvider.tsx handleMessages'
+                );
             }
 
             if (msg_type === 'balance' && data && !error) {
@@ -152,7 +167,11 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
 
     useEffect(() => {
         if (!isAuthorizing && client) {
-            const subscription = api_base?.api?.onMessage().subscribe(handleMessages);
+            // The socket each message came from, so a stale socket's errors can be told apart.
+            const subscribed_api = api_base?.api;
+            const subscription = subscribed_api
+                ?.onMessage()
+                .subscribe((res: unknown) => handleMessages(res, subscribed_api));
             // Fixed unsubscribe type - only store if subscription exists
             if (subscription) {
                 msg_listener.current = { unsubscribe: subscription.unsubscribe };

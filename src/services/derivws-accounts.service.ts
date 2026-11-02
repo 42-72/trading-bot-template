@@ -1,4 +1,5 @@
 import { isProduction, useProductionHostsLocally } from '@/components/shared';
+import { logConnEvent } from '@/utils/connection-log';
 import brandConfig from '../../brand.config.json';
 
 /**
@@ -33,6 +34,20 @@ interface OTPResponseData {
 interface OTPResponse {
     data: OTPResponseData;
     // JSON string containing OTPResponseData
+}
+
+/**
+ * A failed DerivWS HTTP call, with its status - 401 means the access token
+ * itself was refused (a genuine session expiry), anything else is retryable.
+ */
+export class DerivWSRequestError extends Error {
+    status: number;
+
+    constructor(message: string, status: number) {
+        super(message);
+        this.name = 'DerivWSRequestError';
+        this.status = status;
+    }
 }
 
 /**
@@ -144,7 +159,10 @@ export class DerivWSAccountsService {
                 });
 
                 if (!response.ok) {
-                    throw new Error(`Failed to fetch accounts: ${response.status} ${response.statusText}`);
+                    throw new DerivWSRequestError(
+                        `Failed to fetch accounts: ${response.status} ${response.statusText}`,
+                        response.status
+                    );
                 }
 
                 const data: AccountsResponse = await response.json();
@@ -162,6 +180,12 @@ export class DerivWSAccountsService {
                 return accounts;
             } catch (error) {
                 console.error('[DerivWS] Error fetching accounts:', error);
+                logConnEvent(
+                    'accounts_failed',
+                    error instanceof DerivWSRequestError
+                        ? `HTTP ${error.status}`
+                        : String((error as Error)?.message ?? error)
+                );
                 // Clear the cached promise on error so retry is possible
                 this.accountsFetchPromise = null;
                 throw error;
@@ -208,7 +232,10 @@ export class DerivWSAccountsService {
                 });
 
                 if (!response.ok) {
-                    throw new Error(`Failed to fetch OTP: ${response.status} ${response.statusText}`);
+                    throw new DerivWSRequestError(
+                        `Failed to fetch OTP: ${response.status} ${response.statusText}`,
+                        response.status
+                    );
                 }
 
                 const otpResponse: OTPResponse = await response.json();
@@ -218,9 +245,14 @@ export class DerivWSAccountsService {
                 if (!websocketURL) {
                     throw new Error('WebSocket URL not found in OTP response');
                 }
+                logConnEvent('otp_ok', accountId);
                 return websocketURL;
             } catch (error) {
                 console.error('[DerivWS] Error fetching OTP:', error);
+                logConnEvent(
+                    'otp_failed',
+                    `${accountId} ${error instanceof DerivWSRequestError ? `HTTP ${error.status}` : String((error as Error)?.message ?? error)}`
+                );
                 // Clear the cached promise on error so retry is possible
                 this.otpFetchPromises.delete(cacheKey);
                 throw error;
@@ -270,8 +302,7 @@ export class DerivWSAccountsService {
             // localStorage before triggering a WebSocket regeneration, so we honour
             // that selection here instead of always falling back to accounts[0].
             const activeLoginId = localStorage.getItem('active_loginid');
-            const targetAccount =
-                (activeLoginId && accounts.find(a => a.account_id === activeLoginId)) || accounts[0];
+            const targetAccount = (activeLoginId && accounts.find(a => a.account_id === activeLoginId)) || accounts[0];
 
             // Step 4: Fetch OTP and WebSocket URL for the resolved account (always fresh OTP)
             const websocketURL = await this.fetchOTPWebSocketURL(accessToken, targetAccount.account_id);

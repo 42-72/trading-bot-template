@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { useStore } from '@/hooks/useStore';
+import { clearLocalStorageKeepingConnLog, logConnEvent } from '@/utils/connection-log';
 import { ErrorLogger } from '@/utils/error-logger';
 
 /**
@@ -13,11 +14,12 @@ export const useLogout = () => {
     return useCallback(async () => {
         try {
             // Call the client store logout method which clears all storage
-            await client?.logout();
+            await client?.logout('logout button', 'useLogout.ts');
             // Analytics.reset() removed - Analytics package has been removed from the project
             // See migrate-docs/MONITORING_PACKAGES.md for re-enabling analytics if needed
         } catch (error) {
             ErrorLogger.error('Logout', 'Logout failed', error);
+            logConnEvent('auth_wipe', 'logout failed - auth keys cleared directly (useLogout.ts fallback)');
             // If logout fails, clear only auth-related storage keys
             // This preserves user preferences (theme, language, etc.) while ensuring auth data is cleared
             try {
@@ -35,7 +37,7 @@ export const useLogout = () => {
                 // Last resort: if targeted clearing fails, clear all storage
                 try {
                     sessionStorage.clear();
-                    localStorage.clear();
+                    clearLocalStorageKeepingConnLog();
                 } catch (finalError) {
                     ErrorLogger.error('Logout', 'Failed to clear all storage', finalError);
                 }

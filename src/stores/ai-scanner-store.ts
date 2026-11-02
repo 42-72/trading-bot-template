@@ -265,6 +265,7 @@ export default class AiScannerStore {
             onMarketTick: action,
             start: action,
             cancel: action,
+            stopForSession: action,
             finish: action,
         });
 
@@ -520,6 +521,25 @@ export default class AiScannerStore {
         }
         if (this.stage === 'stopping') return;
         this.finish('idle', SCAN_STOPPED_MESSAGE);
+    };
+
+    /**
+     * The connection or session is gone (run-panel-store.stopForSession): end
+     * the scan or the run with `message`. A running bot is stopped through
+     * the Stop button's own path; nothing is restarted.
+     */
+    stopForSession = (message: string) => {
+        if (!this.is_active) return;
+        if (this.stage === 'stopping') {
+            this.run_failure = message;
+            return;
+        }
+        if (['starting', 'running'].includes(this.stage) && this.root_store.run_panel.is_stop_button_visible) {
+            this.run_failure = message;
+            this.cancel();
+            return;
+        }
+        this.finish('idle', message);
     };
 
     private get strategy() {

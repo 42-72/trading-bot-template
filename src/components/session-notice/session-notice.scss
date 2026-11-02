@@ -1,0 +1,68 @@
+.session-notice {
+    position: fixed;
+    inset-block-start: 6.4rem;
+    inset-inline: 0;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0 1.2rem;
+    pointer-events: none;
+
+    &__card,
+    &__pill {
+        pointer-events: auto;
+        font-size: 1.4rem;
+        box-shadow: 0 4px 16px rgb(0 0 0 / 16%);
+    }
+
+    &__card {
+        display: flex;
+        align-items: center;
+        gap: 1.2rem;
+        max-width: 48rem;
+        padding: 1rem 1.4rem;
+        border-radius: 8px;
+        color: var(--text-prominent);
+        background: var(--general-main-1);
+        border: 1px solid var(--border-normal);
+
+        &--expired {
+            border-color: var(--status-danger, #ec3f3f);
+        }
+
+        &--lost {
+            border-color: var(--status-warning, #ffad3a);
+        }
+    }
+
+    &__action {
+        flex-shrink: 0;
+        padding: 0.6rem 1.4rem;
+        border: 0;
+        border-radius: 4px;
+        font-weight: bold;
+        color: #fff;
+        background: var(--purchase-main-1, #ff444f);
+        cursor: pointer;
+    }
+
+    &__close {
+        flex-shrink: 0;
+        border: 0;
+        font-size: 2rem;
+        line-height: 1;
+        color: var(--text-less-prominent);
+        background: none;
+        cursor: pointer;
+    }
+
+    &__pill {
+        padding: 0.4rem 1.2rem;
+        border-radius: 999px;
+        color: var(--text-general);
+        background: var(--general-section-1);
+        border: 1px solid var(--border-normal);
+    }
+}

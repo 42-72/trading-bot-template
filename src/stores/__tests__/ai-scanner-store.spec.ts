@@ -1321,4 +1321,41 @@ describe('AiScannerStore', () => {
             expect(store.stage).toBe('stopped');
         });
     });
+
+    describe('connection or session gone (ct_session_v2)', () => {
+        it('while scanning: the scan ends at once with the reason, feeds closed, nothing run', async () => {
+            const { root, store } = await startScan();
+            store.onMarketTick('1HZ10V', qualifying, 9, true);
+            store.stopForSession('Connection lost – AI Scanner stopped');
+            expect(store.stage).toBe('idle');
+            expect(store.message).toBe('Connection lost – AI Scanner stopped');
+            expect(store.are_feeds_wanted).toBe(false);
+            store.onMarketTick('1HZ10V', entering, 1);
+            await flush();
+            expect(root.run_panel.onRunButtonClick).not.toHaveBeenCalled();
+        });
+
+        it('while running: the bot is stopped through the Stop path and the panel shows the reason - no re-run', async () => {
+            const { root, store } = await startScan();
+            store.onMarketTick('JD25', entering, 1, true);
+            await flush();
+            store.onMarketTick('JD25', entering, 1);
+            await flush();
+            expect(store.stage).toBe('running');
+            store.stopForSession('Session expired – bot stopped');
+            expect(root.run_panel.onStopBotClick).toHaveBeenCalledTimes(1);
+            expect(store.stage).toBe('idle');
+            expect(store.message).toBe('Session expired – bot stopped');
+            await flush();
+            expect(root.run_panel.onRunButtonClick).toHaveBeenCalledTimes(1);
+        });
+
+        it('does nothing when the scanner is idle', () => {
+            const root = makeRoot();
+            const store = new AiScannerStore(root);
+            store.stopForSession('Connection lost – AI Scanner stopped');
+            expect(store.stage).toBe('idle');
+            expect(root.run_panel.onStopBotClick).not.toHaveBeenCalled();
+        });
+    });
 });

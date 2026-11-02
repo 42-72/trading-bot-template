@@ -16,6 +16,8 @@ import {
 } from '@/utils/execution-mode';
 // import { journalError, switch_account_notification } from '@/utils/bot-notifications';
 import GTM from '@/utils/gtm';
+import { session_status } from '@/utils/session-status';
+import { stopRunsForSession, TSessionStopReason } from '@/utils/session-stop';
 import { helpers } from '@/utils/store-helpers';
 import { generateUrlWithRedirect } from '@/utils/url-redirect-utils';
 import { Buy, ProposalOpenContract } from '@deriv/api-types';
@@ -95,6 +97,7 @@ export default class RunPanelStore {
             switchToJournal: action,
             unregisterBotListeners: action,
             handleInvalidToken: action,
+            stopForSession: action,
             preloadAudio: action,
             onMount: action,
             onUnmount: action,
@@ -105,6 +108,10 @@ export default class RunPanelStore {
         this.core = core;
         this.disposeReactionsFn = this.registerReactions();
         this.timer = null;
+
+        // ct_session_v2 (api-base.ts emits these only with the flag on).
+        observer.register('session.connection_lost', this.onSessionConnectionLost);
+        observer.register('session.expired', this.onSessionExpired);
     }
 
     active_index = 0;
@@ -882,6 +889,27 @@ export default class RunPanelStore {
         observer.unregisterAll('ui.log.notify');
         observer.unregisterAll('ui.log.success');
         observer.unregisterAll('client.invalid_token');
+    };
+
+    /** ct_session_v2: stop a running bot / AI Scanner when the connection or session is gone (utils/session-stop.ts). */
+    stopForSession = (reason: TSessionStopReason) =>
+        stopRunsForSession(
+            {
+                is_running: this.is_running,
+                ai_scanner: this.root_store.ai_scanner,
+                journal: this.root_store.journal,
+                stopBot: this.stopBot,
+                error_message_type: MessageTypes.ERROR,
+            },
+            reason
+        );
+
+    onSessionConnectionLost = () => {
+        if (this.stopForSession('connection_lost')) session_status.setNotice('connection_lost');
+    };
+
+    onSessionExpired = () => {
+        this.stopForSession('session_expired');
     };
 
     handleInvalidToken = async () => {

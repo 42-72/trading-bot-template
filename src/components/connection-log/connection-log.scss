@@ -1,0 +1,65 @@
+.connection-log {
+    &__button {
+        position: fixed;
+        inset-block-end: 8rem;
+        inset-inline-end: 1.2rem;
+        z-index: 9998;
+        padding: 0.4rem 1rem;
+        border: 1px solid var(--border-normal);
+        border-radius: 999px;
+        font-size: 1.2rem;
+        color: var(--text-general);
+        background: var(--general-section-1);
+        opacity: 0.85;
+        cursor: pointer;
+    }
+
+    &__panel {
+        position: fixed;
+        inset: 6rem 1rem 12rem;
+        z-index: 10000;
+        display: flex;
+        flex-direction: column;
+        max-width: 72rem;
+        margin: 0 auto;
+        border: 1px solid var(--border-normal);
+        border-radius: 8px;
+        color: var(--text-general);
+        background: var(--general-main-1);
+        box-shadow: 0 8px 24px rgb(0 0 0 / 24%);
+    }
+
+    &__header {
+        display: flex;
+        align-items: center;
+        gap: 0.8rem;
+        padding: 0.8rem 1.2rem;
+        border-block-end: 1px solid var(--border-normal);
+        font-size: 1.4rem;
+
+        strong {
+            flex: 1;
+        }
+
+        button {
+            padding: 0.4rem 1rem;
+            border: 1px solid var(--border-normal);
+            border-radius: 4px;
+            font-size: 1.3rem;
+            color: var(--text-general);
+            background: var(--general-section-1);
+            cursor: pointer;
+        }
+    }
+
+    &__entries {
+        flex: 1;
+        margin: 0;
+        padding: 1rem 1.2rem;
+        overflow: auto;
+        font-size: 1.1rem;
+        line-height: 1.5;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+}

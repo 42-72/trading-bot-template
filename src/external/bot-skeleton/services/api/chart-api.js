@@ -1,3 +1,4 @@
+import { isSessionV2Enabled } from '@/utils/session-flags';
 import { generateDerivApiInstance } from './appId';
 
 class ChartAPI {
@@ -5,6 +6,8 @@ class ChartAPI {
     chart_active_symbols = null; // Separate variable for chart-specific symbols
 
     onsocketclose() {
+        // ct_session_v2: api_base owns reconnecting (it re-inits the chart too).
+        if (isSessionV2Enabled()) return;
         this.reconnectIfNotConnected();
     }
 

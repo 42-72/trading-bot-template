@@ -1,4 +1,5 @@
 import { getSocketURL } from '@/components/shared';
+import { describeSocketURL, isAuthenticatedSocketURL, logConnEvent } from '@/utils/connection-log';
 import DerivAPIBasic from '@deriv/deriv-api/dist/DerivAPIBasic';
 import APIMiddleware from './api-middleware';
 
@@ -83,13 +84,20 @@ export const generateDerivApiInstance = async (forceNew = false) => {
                 connection: deriv_socket,
                 middleware: new APIMiddleware({}),
             });
+            // Logged-in (otp) or public socket - api_base only authorizes on the former (ct_session_v2).
+            deriv_api.ct_is_authenticated = isAuthenticatedSocketURL(wsURL);
+            logConnEvent('socket_create', describeSocketURL(wsURL));
 
             // Store the instance immediately (don't wait for connection)
             derivApiInstance = deriv_api;
 
             // Set up close handler to clear instance
-            deriv_socket.addEventListener('close', () => {
+            deriv_socket.addEventListener('close', event => {
                 console.log('[DerivAPI] WebSocket connection closed');
+                logConnEvent(
+                    'socket_close',
+                    `code ${event?.code ?? '?'}${event?.reason ? ` ${event.reason}` : ''}${event?.wasClean === false ? ' (not clean)' : ''} ${deriv_api.ct_is_authenticated ? 'authenticated' : 'public'}`
+                );
                 if (derivApiInstance === deriv_api) {
                     derivApiInstance = null;
                     currentWebSocketURL = null;
@@ -99,6 +107,7 @@ export const generateDerivApiInstance = async (forceNew = false) => {
             // Log when connection opens
             deriv_socket.addEventListener('open', () => {
                 console.log('[DerivAPI] WebSocket connection established');
+                logConnEvent('socket_open', deriv_api.ct_is_authenticated ? 'authenticated' : 'public');
             });
 
             deriv_socket.addEventListener('error', error => {
@@ -108,6 +117,7 @@ export const generateDerivApiInstance = async (forceNew = false) => {
             return deriv_api;
         } catch (error) {
             console.error('[DerivAPI] Error creating instance:', error);
+            logConnEvent('socket_create_failed', String(error?.message ?? error));
             derivApiPromise = null;
             derivApiInstance = null;
             throw error;
