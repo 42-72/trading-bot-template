@@ -29,6 +29,7 @@ const setup = ({ mode = 'normal', locked = false }: { mode?: TExecutionMode; loc
 };
 
 const toggle = () => screen.getByRole('switch', { name: 'Fast execution' });
+const pill = () => screen.getByTestId('dt_execution_mode_pill');
 
 describe('ExecutionModeSwitch', () => {
     it('shows "Execution", the mode in capitals and one switch - Normal (off) by default', () => {
@@ -50,6 +51,20 @@ describe('ExecutionModeSwitch', () => {
         expect(run_panel.setExecutionMode).toHaveBeenLastCalledWith('normal');
         expect(toggle()).toHaveAttribute('aria-checked', 'false');
         expect(screen.getByText('NORMAL')).toBeInTheDocument();
+    });
+
+    it('the label, the word and the toggle sit in one pill, tinted (fast class) only when Fast', () => {
+        setup();
+        expect(pill()).toContainElement(screen.getByText('Execution'));
+        expect(pill()).toContainElement(screen.getByText('NORMAL'));
+        expect(pill()).toContainElement(toggle());
+        expect(pill()).not.toHaveClass('execution-mode__pill--fast');
+
+        fireEvent.click(toggle());
+        expect(pill()).toHaveClass('execution-mode__pill--fast');
+
+        fireEvent.click(toggle());
+        expect(pill()).not.toHaveClass('execution-mode__pill--fast');
     });
 
     it('Space and Enter toggle it from the keyboard', async () => {

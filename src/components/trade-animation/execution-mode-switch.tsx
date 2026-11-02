@@ -4,7 +4,8 @@ import { useStore } from '@/hooks/useStore';
 import { localize } from '@deriv-com/translations';
 
 /**
- * "Execution  NORMAL ◯" inside the Run bar: one toggle, off = Normal, on = Fast.
+ * "Execution  NORMAL ◯" inside the Run bar, in its own pill: one toggle, off =
+ * Normal, on = Fast (the pill takes a soft green tint).
  * Locked while a bot runs or the AI Scanner is starting/running - the engine
  * reads the mode once, at Run.
  *
@@ -25,23 +26,28 @@ const ExecutionModeSwitch = observer(() => {
             title={is_execution_mode_locked ? localize('Locked while a bot is running') : undefined}
             data-testid='dt_execution_mode'
         >
-            <span className='execution-mode__label' aria-hidden='true'>
-                {localize('Execution')}
-            </span>
-            <span className='execution-mode__value' aria-hidden='true'>
-                {is_fast ? localize('FAST') : localize('NORMAL')}
-            </span>
-            <button
-                type='button'
-                role='switch'
-                aria-checked={is_fast}
-                aria-label={localize('Fast execution')}
-                className='execution-mode__toggle'
-                disabled={is_execution_mode_locked}
-                onClick={() => setExecutionMode(is_fast ? 'normal' : 'fast')}
+            <div
+                className={classNames('execution-mode__pill', { 'execution-mode__pill--fast': is_fast })}
+                data-testid='dt_execution_mode_pill'
             >
-                <span className='execution-mode__thumb' />
-            </button>
+                <span className='execution-mode__label' aria-hidden='true'>
+                    {localize('Execution')}
+                </span>
+                <span className='execution-mode__value' aria-hidden='true'>
+                    {is_fast ? localize('FAST') : localize('NORMAL')}
+                </span>
+                <button
+                    type='button'
+                    role='switch'
+                    aria-checked={is_fast}
+                    aria-label={localize('Fast execution')}
+                    className='execution-mode__toggle'
+                    disabled={is_execution_mode_locked}
+                    onClick={() => setExecutionMode(is_fast ? 'normal' : 'fast')}
+                >
+                    <span className='execution-mode__thumb' />
+                </button>
+            </div>
         </div>
     );
 });
