@@ -1,0 +1,26 @@
+.startup-failed {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.6rem;
+    min-height: 60vh;
+    padding: 2.4rem;
+    text-align: center;
+    color: var(--text-general);
+
+    &__text {
+        font-size: 1.6rem;
+    }
+
+    &__button {
+        padding: 0.8rem 2.4rem;
+        border: 0;
+        border-radius: 4px;
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: #fff;
+        background: var(--brand-primary, #ff444f);
+        cursor: pointer;
+    }
+}

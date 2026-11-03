@@ -5,12 +5,15 @@ import AuthLoadingWrapper from '@/components/auth-loading-wrapper';
 import useLiveChat from '@/components/chat/useLiveChat';
 import ChunkLoader from '@/components/loader/chunk-loader';
 import { getUrlBase } from '@/components/shared';
+import StartupFailed from '@/components/startup-failed/startup-failed';
 import TransactionDetailsModal from '@/components/transaction-details';
 import { api_base, ApiHelpers, ServerTime } from '@/external/bot-skeleton';
 import { CONNECTION_STATUS } from '@/external/bot-skeleton/services/api/observables/connection-status-stream';
 import { useApiBase } from '@/hooks/useApiBase';
+import { useStartupWatchdog } from '@/hooks/useStartupWatchdog';
 import { useStore } from '@/hooks/useStore';
 import useThemeSwitcher from '@/hooks/useThemeSwitcher';
+import { startLog } from '@/utils/start-log';
 import { ThemeProvider } from '@deriv-com/quill-ui';
 import { setSmartChartsPublicPath } from '@deriv-com/smartcharts-champion';
 import { localize } from '@deriv-com/translations';
@@ -121,11 +124,16 @@ const AppContent = observer(() => {
         const retrieveActiveSymbols = () => {
             const { active_symbols } = ApiHelpers.instance;
 
+            startLog(
+                `bot area: loading market hours and markets (${client.is_logged_in ? 'logged in' : 'logged out'})`
+            );
             active_symbols
                 .retrieveActiveSymbols(true)
+                .then(() => startLog('bot area: markets ready'))
                 .catch(() => {
                     // Never stay on "Initializing..." for good: the app loads, and the
                     // market list is asked again with the next connection.
+                    startLog('bot area: markets failed - loading without them');
                 })
                 .finally(() => {
                     setIsLoading(false);
@@ -164,7 +172,20 @@ const AppContent = observer(() => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [is_api_initialized, client.loginid]);
 
+    // Safety net: a start-up still waiting after 15 s is retried once from scratch
+    // (market hours and markets asked again on the current socket); still waiting
+    // after another 15 s, a message with a Reload button replaces the loader.
+    const retryStartup = () => {
+        const { active_symbols, trading_times } = ApiHelpers?.instance ?? {};
+        trading_times?.reset?.();
+        active_symbols?.clearCache?.();
+        if (api_base?.api) changeActiveSymbolLoadingState();
+    };
+    const { has_failed: has_startup_failed } = useStartupWatchdog(is_loading, retryStartup);
+
     if (common?.error) return null;
+
+    if (is_loading && has_startup_failed) return <StartupFailed />;
 
     return is_loading ? (
         <ChunkLoader message={localize('Initializing Deriv Bot account...')} />

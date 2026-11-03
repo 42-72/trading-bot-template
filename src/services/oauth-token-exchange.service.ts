@@ -1,5 +1,6 @@
 import { clearCodeVerifier, getCodeVerifier, isProduction, useProductionHostsLocally } from '@/components/shared';
 import { ErrorLogger } from '@/utils/error-logger';
+import { startLog } from '@/utils/start-log';
 import brandConfig from '../../brand.config.json';
 
 /**
@@ -159,6 +160,7 @@ export class OAuthTokenExchangeService {
                 code_verifier: codeVerifier, // PKCE: Include code verifier
             });
 
+            startLog('login return: exchanging the code for a token');
             const response = await fetch(tokenEndpoint, {
                 method: 'POST',
                 credentials: 'include', // Include cookies for session-based auth
@@ -203,6 +205,7 @@ export class OAuthTokenExchangeService {
 
                 // Store as JSON string
                 sessionStorage.setItem('auth_info', JSON.stringify(authInfo));
+                startLog('login return: token received, fetching accounts');
 
                 // Immediately fetch accounts and initialize WebSocket after token exchange
                 try {
@@ -231,6 +234,7 @@ export class OAuthTokenExchangeService {
                         // Trigger WebSocket initialization by reloading or reinitializing api_base
                         // The api_base will pick up the active_loginid and authorize
                         const { api_base } = await import('@/external/bot-skeleton');
+                        startLog('login return: accounts received, opening the logged-in socket');
                         await api_base.init(true); // Force new connection with the account
                     } else {
                         // No accounts returned - this is an error condition

@@ -1,6 +1,11 @@
+import { startLog } from '@/utils/start-log';
 import { getTradingTimes, TRADING_TIMES } from '../../../../components/shared/utils/common-data';
 import PendingPromise from '../../utils/pending-promise';
 import { api_base } from './api-base';
+
+/** How long the bot area's start-up waits for an answer before asking again. */
+export const TRADING_TIMES_TIMEOUT_MS = 8000;
+const NO_ANSWER = Symbol('no answer');
 
 export default class TradingTimes {
     constructor({ ws, server_time }) {
@@ -81,8 +86,12 @@ export default class TradingTimes {
                 return;
             }
 
-            const response = await (api_base.api?.send({ trading_times: last_update_date }) ||
-                this.ws?.send({ trading_times: last_update_date }));
+            const response = await this.requestTradingTimes(last_update_date);
+            if (response === NO_ANSWER) {
+                startLog('trading_times: no answer - using the built-in market hours');
+                this.setTradingTimes();
+                return;
+            }
 
             if (response?.error) {
                 this.setTradingTimes();
@@ -161,6 +170,41 @@ export default class TradingTimes {
             this.setTradingTimes();
             return;
         }
+    }
+
+    /**
+     * Asks the current socket. A request on a socket that closes before it
+     * answers is never answered (deriv-api) - e.g. the public socket a login
+     * return replaces with the logged-in one - so the wait is bounded, and the
+     * new socket is asked once if the socket changed meanwhile.
+     */
+    async requestTradingTimes(date) {
+        for (let attempt = 1; attempt <= 2; attempt++) {
+            const socket = api_base.api || this.ws;
+            if (!socket) return NO_ANSWER;
+            let timer;
+            const timeout = new Promise(resolve => {
+                timer = setTimeout(() => resolve(NO_ANSWER), TRADING_TIMES_TIMEOUT_MS);
+            });
+            // eslint-disable-next-line no-await-in-loop
+            const response = await Promise.race([socket.send({ trading_times: date }), timeout]);
+            clearTimeout(timer);
+            if (response !== NO_ANSWER) return response;
+            const current = api_base.api || this.ws;
+            if (attempt === 1 && current && current !== socket) {
+                startLog('trading_times: no answer on a socket that was replaced - asking the new one');
+                continue; // eslint-disable-line no-continue
+            }
+            return NO_ANSWER;
+        }
+        return NO_ANSWER;
+    }
+
+    /** The safety net's retry (app-content): start over instead of waiting on a request that never ends. */
+    reset() {
+        clearTimeout(this.update_timer);
+        this.is_initialised = false;
+        this.init_promise = new PendingPromise();
     }
 
     injectAdditionalTradingTimes() {

@@ -6,7 +6,9 @@ import ChunkLoader from '@/components/loader/chunk-loader';
 import SessionNotice from '@/components/session-notice/session-notice';
 import { api_base } from '@/external/bot-skeleton';
 import { useStore } from '@/hooks/useStore';
-import { whenPageActivated } from '@/utils/page-start';
+import { isOAuthCallbackURL, whenOAuthExchangeSettled } from '@/utils/oauth-start';
+import { isPrerendering, whenPageActivated } from '@/utils/page-start';
+import { startLog } from '@/utils/start-log';
 import { localize } from '@deriv-com/translations';
 import './app-root.scss';
 
@@ -45,9 +47,18 @@ const AppRoot = () => {
         let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
         const initializeApi = async () => {
+            startLog(`page start${isOAuthCallbackURL() ? ' (login return)' : ''}`);
             // A page prerendered from the address bar can't see the tab's login
             // (sessionStorage) yet: opening the socket now would start it logged out.
+            if (isPrerendering()) startLog('prerendered - waiting until the page is shown');
             await whenPageActivated();
+            // Login return: the token exchange opens the logged-in socket itself.
+            // A public socket opened meanwhile would be closed again by it, and
+            // what waits on it would never be answered.
+            if (isOAuthCallbackURL()) {
+                startLog('login return - waiting for the token exchange before connecting');
+                await whenOAuthExchangeSettled();
+            }
             timeoutId = setTimeout(() => {
                 if (!is_api_initialized) {
                     setIsApiInitialized(true);
@@ -55,7 +66,13 @@ const AppRoot = () => {
             }, 5000);
             if (!api_base_initialized.current) {
                 try {
-                    await api_base.init();
+                    const ready_state = api_base.api?.connection?.readyState;
+                    if (ready_state === 0 || ready_state === 1) {
+                        startLog('connection already opened by the token exchange - using it');
+                    } else {
+                        startLog('connecting');
+                        await api_base.init();
+                    }
                     api_base_initialized.current = true;
                 } catch (error) {
                     console.error('API initialization failed:', error);

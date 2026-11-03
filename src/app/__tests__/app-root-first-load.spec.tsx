@@ -4,11 +4,12 @@
  */
 import { api_base } from '@/external/bot-skeleton';
 import { useStore } from '@/hooks/useStore';
+import { markOAuthExchangeSettled, OAUTH_EXCHANGE_WAIT_MS, resetOAuthStartForTests } from '@/utils/oauth-start';
 import { removeRetiredStorageKeys, RETIRED_STORAGE_KEYS } from '@/utils/page-start';
 import { act, render } from '@testing-library/react';
 import AppRoot from '../app-root';
 
-jest.mock('@/external/bot-skeleton', () => ({ api_base: { init: jest.fn(() => Promise.resolve()) } }));
+jest.mock('@/external/bot-skeleton', () => ({ api_base: { api: null, init: jest.fn(() => Promise.resolve()) } }));
 jest.mock('@/hooks/useStore', () => ({ useStore: jest.fn() }));
 jest.mock('@/components/session-notice/session-notice', () => ({ __esModule: true, default: () => null }));
 jest.mock('@/components/loader/chunk-loader', () => ({ __esModule: true, default: () => null }));
@@ -59,6 +60,57 @@ describe('first load', () => {
         document.dispatchEvent(new Event('prerenderingchange'));
         await flush();
         expect(api_base.init).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('login return (?code=...&state=...) in a fresh tab', () => {
+    const api = api_base as unknown as { api: unknown };
+
+    beforeEach(() => {
+        jest.spyOn(console, 'info').mockImplementation(() => {});
+        resetOAuthStartForTests();
+        (api_base.init as jest.Mock).mockClear();
+        (useStore as jest.Mock).mockReturnValue({ common: {} });
+        api.api = null;
+        window.history.replaceState({}, '', '/?code=abc&state=xyz');
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
+        window.history.replaceState({}, '', '/');
+    });
+
+    it('opens no public socket while the token exchange runs; then uses the socket the exchange opened', async () => {
+        render(<AppRoot />);
+        await flush();
+        expect(api_base.init).not.toHaveBeenCalled();
+
+        // The exchange stored the login and opened the logged-in socket (api_base.init(true)).
+        api.api = { connection: { readyState: 1 } };
+        markOAuthExchangeSettled('token exchange done - logged-in socket opened');
+        await flush();
+        expect(api_base.init).not.toHaveBeenCalled();
+        const lines = (console.info as jest.Mock).mock.calls.map(([line]) => String(line));
+        expect(lines).toContain('[CT start] connection already opened by the token exchange - using it');
+        expect(lines.join(' ')).not.toMatch(/abc|xyz/);
+    });
+
+    it('a failed exchange: connects then (public socket, logged-out page) - never waits for good', async () => {
+        render(<AppRoot />);
+        await flush();
+        markOAuthExchangeSettled('token exchange failed (invalid_grant)');
+        await flush();
+        expect(api_base.init).toHaveBeenCalledTimes(1);
+    });
+
+    it('an exchange that never answers: connects anyway after the wait limit', async () => {
+        jest.useFakeTimers();
+        render(<AppRoot />);
+        await act(() => jest.advanceTimersByTimeAsync(OAUTH_EXCHANGE_WAIT_MS - 1));
+        expect(api_base.init).not.toHaveBeenCalled();
+        await act(() => jest.advanceTimersByTimeAsync(1));
+        expect(api_base.init).toHaveBeenCalledTimes(1);
+        jest.useRealTimers();
     });
 });
 

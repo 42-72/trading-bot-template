@@ -9,6 +9,7 @@ import { useLanguageFromURL } from '@/hooks/useLanguageFromURL';
 import { useOAuthCallback } from '@/hooks/useOAuthCallback';
 import { StoreProvider } from '@/hooks/useStore';
 import { OAuthTokenExchangeService } from '@/services/oauth-token-exchange.service';
+import { markOAuthExchangeSettled } from '@/utils/oauth-start';
 import { initializeI18n, localize, TranslationProvider } from '@deriv-com/translations';
 import CoreStoreProvider from './CoreStoreProvider';
 import './app-root.scss';
@@ -82,21 +83,26 @@ function App() {
             OAuthTokenExchangeService.exchangeCodeForToken(params.code)
                 .then(response => {
                     if (response.access_token) {
+                        markOAuthExchangeSettled('token exchange done - logged-in socket opened');
                         cleanupURL();
-                    } else if (response.error) {
+                    } else {
                         console.error('❌ Token exchange failed:', response.error);
                         console.error('Error description:', response.error_description);
+                        markOAuthExchangeSettled(`token exchange failed (${response.error ?? 'unknown'})`);
                         // Clean up URL even on error
                         cleanupURL();
                     }
                 })
                 .catch(error => {
                     console.error('❌ Token exchange request failed:', error);
+                    markOAuthExchangeSettled('token exchange request failed');
                     // Clean up URL even on error
                     cleanupURL();
                 });
-        } else if (!isProcessing && error) {
-            console.error('OAuth callback error:', error);
+        } else if (!isProcessing) {
+            if (error) console.error('OAuth callback error:', error);
+            // Not a login return, or one that won't be exchanged: the start-up needn't wait.
+            markOAuthExchangeSettled(error ? 'not exchanged (callback error)' : 'none');
         }
     }, [isProcessing, isValid, params.code, error, cleanupURL]);
 

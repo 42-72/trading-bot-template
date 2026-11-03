@@ -1,4 +1,5 @@
 import { getSocketURL } from '@/components/shared';
+import { startLog } from '@/utils/start-log';
 import DerivAPIBasic from '@deriv/deriv-api/dist/DerivAPIBasic';
 import APIMiddleware from './api-middleware';
 
@@ -88,6 +89,7 @@ export const generateDerivApiInstance = async (forceNew = false) => {
             });
             // Logged-in (otp) or public socket - api_base only authorizes on the former.
             deriv_api.ct_is_authenticated = isAuthenticatedSocketURL(wsURL);
+            startLog(`socket created (${deriv_api.ct_is_authenticated ? 'logged-in' : 'public'})`);
 
             // Store the instance immediately (don't wait for connection)
             derivApiInstance = deriv_api;
@@ -104,6 +106,7 @@ export const generateDerivApiInstance = async (forceNew = false) => {
             // Log when connection opens
             deriv_socket.addEventListener('open', () => {
                 console.log('[DerivAPI] WebSocket connection established');
+                startLog(`socket open (${deriv_api.ct_is_authenticated ? 'logged-in' : 'public'})`);
             });
 
             deriv_socket.addEventListener('error', error => {

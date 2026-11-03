@@ -8,6 +8,7 @@ import { TAuthData } from '@/types/api-types';
 import { handleBackendError, isBackendError } from '@/utils/error-handler';
 import { session_status, SessionExpiredError } from '@/utils/session-status';
 import { keep_alive } from '@/utils/socket-keep-alive';
+import { startLog } from '@/utils/start-log';
 import { activeSymbolsProcessorService } from '../../../../services/active-symbols-processor.service';
 import { observer as globalObserver } from '../../utils/observer';
 import { doUntilDone, socket_state } from '../tradeEngine/utils/helpers';
@@ -185,12 +186,16 @@ class APIBase {
             if (!this.api?.ct_is_authenticated) {
                 setIsAuthorizing(false);
                 if (!this.checkSessionExpiry()) {
+                    startLog('no login in this tab - loading the logged-out page');
                     this.loadLoggedOutApp();
                 }
                 return;
             }
+            startLog('authorizing');
             setIsAuthorizing(true);
             await this.authorizeAndSubscribe();
+        } else {
+            startLog('no account - logged-out page');
         }
     }
 
@@ -387,6 +392,7 @@ class APIBase {
 
             setIsAuthorized(true);
             this.is_authorized = true;
+            startLog('authorized');
             if (generation === this.connection_generation) this.onSessionAuthorized(generation);
             localStorage.setItem('client_account_details', JSON.stringify(accountList));
             localStorage.setItem('client.country', balance?.country);
