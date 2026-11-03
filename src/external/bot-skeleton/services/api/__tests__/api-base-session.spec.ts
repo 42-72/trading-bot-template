@@ -1,5 +1,4 @@
 import { OAuthTokenExchangeService } from '@/services/oauth-token-exchange.service';
-import { readConnLog } from '@/utils/connection-log';
 import { session_status, SessionExpiredError } from '@/utils/session-status';
 import { keep_alive, KEEP_ALIVE_INTERVAL_MS } from '@/utils/socket-keep-alive';
 import { observer as globalObserver } from '../../../utils/observer';
@@ -88,8 +87,6 @@ const loggedIn = async (api: TFakeApi = makeApi()) => {
     return base;
 };
 
-const events = (name: string) => readConnLog().filter(entry => entry.e === name);
-
 const setVisibility = (state: 'visible' | 'hidden') =>
     Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
 
@@ -138,7 +135,6 @@ describe('api_base session handling', () => {
     it('a logged-in socket that finished its handshake counts as fully logged in', async () => {
         const base = await loggedIn();
         expect(base.isFullyLoggedIn()).toBe(true);
-        expect(events('authorized')).toHaveLength(1);
     });
 
     describe('auth errors during a handshake or a socket swap (the v1 mistake)', () => {
@@ -148,8 +144,6 @@ describe('api_base session handling', () => {
 
             expect(client_store.logout).not.toHaveBeenCalled();
             expect(localStorage.getItem('active_loginid')).toBe('VRTC1');
-            expect(events('auth_error_ignored')).toHaveLength(1);
-            expect(events('auth_wipe')).toHaveLength(0);
         });
 
         it('an auth error on a message before the handshake finished is ignored', async () => {
@@ -158,11 +152,10 @@ describe('api_base session handling', () => {
             mockGenerate.mockResolvedValueOnce(api);
             await base.init();
             // Not open / not authorized yet.
-            base.reportAuthError('AuthorizationRequired', 'test', base.api);
+            base.reportAuthError('AuthorizationRequired', base.api);
 
             expect(client_store.logout).not.toHaveBeenCalled();
             expect(base.auth_error_check).toBeNull();
-            expect(events('auth_error_ignored')).toHaveLength(1);
         });
 
         it('an auth error from the old socket after a swap is ignored', async () => {
@@ -171,11 +164,10 @@ describe('api_base session handling', () => {
             mockGenerate.mockResolvedValueOnce(makeApi());
             await base.init(true);
             old_api.close();
-            base.reportAuthError('InvalidToken', 'test', old_api as never);
+            base.reportAuthError('InvalidToken', old_api as never);
 
             expect(client_store.logout).not.toHaveBeenCalled();
             expect(emitted).toEqual([]);
-            expect(events('socket_close_ignored')).toHaveLength(1);
         });
 
         it('the public socket is never asked to authorize - no balance call, no logout', async () => {
@@ -188,7 +180,6 @@ describe('api_base session handling', () => {
 
             expect(api.balance).not.toHaveBeenCalled();
             expect(client_store.logout).not.toHaveBeenCalled();
-            expect(events('authorize_skipped')).toHaveLength(1);
         });
     });
 
@@ -224,10 +215,8 @@ describe('api_base session handling', () => {
             logged_in_api.open();
             await flush();
 
-            expect(events('session_found')[0].d).toBe('focus - logging in on a new socket');
             expect(base.api).toBe(logged_in_api);
             expect(base.isFullyLoggedIn()).toBe(true);
-            expect(events('authorized')).toHaveLength(1);
         });
 
         it('stays on the public socket while there is still no session', async () => {
@@ -236,7 +225,6 @@ describe('api_base session handling', () => {
             window.dispatchEvent(new Event('focus'));
             await flush();
             expect(base.api).toBe(api);
-            expect(events('session_found')).toHaveLength(0);
         });
     });
 
@@ -285,13 +273,17 @@ describe('api_base session handling', () => {
             mockGenerate.mockRejectedValue(new Error('Failed to fetch'));
             (base.api as unknown as TFakeApi).close();
             await flush();
+            // Page load + the first try, at once.
+            expect(mockGenerate).toHaveBeenCalledTimes(2);
+            // Each failure schedules the next try after the backoff gap.
+            let tries = 2;
             for (const delay of [1000, 2000, 5000, 10000, 30000, 30000]) {
-                await jest.advanceTimersByTimeAsync(delay);
+                await jest.advanceTimersByTimeAsync(delay - 1);
+                expect(mockGenerate).toHaveBeenCalledTimes(tries);
+                await jest.advanceTimersByTimeAsync(1);
+                tries += 1;
+                expect(mockGenerate).toHaveBeenCalledTimes(tries);
             }
-
-            const delays = events('reconnect_scheduled').map(entry => entry.d?.match(/in (\d+)s/)?.[1]);
-            // The first try is immediate; each failure schedules the next.
-            expect(delays).toEqual(['0', '1', '2', '5', '10', '30', '30', '30']);
             expect(client_store.logout).not.toHaveBeenCalled();
             expect(localStorage.getItem('active_loginid')).toBe('VRTC1');
         });
@@ -303,7 +295,6 @@ describe('api_base session handling', () => {
             (base.api as unknown as TFakeApi).close();
             await jest.advanceTimersByTimeAsync(60000);
             expect(mockGenerate).toHaveBeenCalledTimes(1);
-            expect(events('reconnect_wait')).toHaveLength(1);
 
             const next_api = makeApi();
             mockGenerate.mockResolvedValueOnce(next_api);
@@ -311,39 +302,6 @@ describe('api_base session handling', () => {
             document.dispatchEvent(new Event('visibilitychange'));
             await flush();
             expect(mockGenerate).toHaveBeenCalledTimes(2);
-        });
-
-        it('every reconnect logs its steps before "authorized" - even when the socket was not newly made', async () => {
-            const base = await loggedIn();
-            const next_api = makeApi();
-            mockGenerate.mockResolvedValueOnce(next_api);
-            (base.api as unknown as TFakeApi).close();
-            await flush();
-            next_api.open();
-            await flush();
-
-            const names = readConnLog().map(entry => entry.e);
-            const from = names.lastIndexOf('reconnect_scheduled');
-            expect(names.slice(from)).toEqual([
-                'reconnect_scheduled',
-                'reconnect_start',
-                'connect',
-                'connection',
-                'authorized',
-            ]);
-            expect(events('reconnect_start').pop()?.d).toBe('socket closed - attempt 1');
-            expect(events('connect').pop()?.d).toBe('new socket (reconnect)');
-            expect(events('connection').pop()?.d).toBe(
-                `${base.connection_generation} - authenticated socket, Connecting`
-            );
-        });
-
-        it('a reconnect asked for while one is under way is logged, not silently dropped', async () => {
-            const base = await loggedIn();
-            base.is_reconnecting_now = true;
-            base.scheduleReconnect('focus');
-            expect(events('reconnect_skipped')[0].d).toBe('focus - a reconnect is already under way');
-            base.is_reconnecting_now = false;
         });
 
         it('a closed logged-in socket reports the lost connection (so a running bot is stopped)', async () => {
@@ -361,7 +319,7 @@ describe('api_base session handling', () => {
             const base = await loggedIn();
             const fresh_api = makeApi();
             mockGenerate.mockResolvedValueOnce(fresh_api);
-            base.reportAuthError('InvalidToken', 'test', base.api);
+            base.reportAuthError('InvalidToken', base.api);
             await flush();
             fresh_api.open();
             await flush();
@@ -375,11 +333,11 @@ describe('api_base session handling', () => {
             const base = await loggedIn();
             const fresh_api = makeApi();
             mockGenerate.mockResolvedValueOnce(fresh_api);
-            base.reportAuthError('InvalidToken', 'test', base.api);
+            base.reportAuthError('InvalidToken', base.api);
             await flush();
             fresh_api.open();
             await flush();
-            base.reportAuthError('InvalidToken', 'test', base.api);
+            base.reportAuthError('InvalidToken', base.api);
 
             expect(emitted).toContain('session.expired');
             expect(session_status.notice).toBe('session_expired');
@@ -395,10 +353,7 @@ describe('api_base session handling', () => {
 
             expect(emitted).toEqual(['session.expired']);
             expect(session_status.notice).toBe('session_expired');
-            expect(client_store.logout).toHaveBeenCalledWith(
-                'session expired: expires_at passed',
-                'api-base.ts onSessionExpired'
-            );
+            expect(client_store.logout).toHaveBeenCalledTimes(1);
         });
 
         it('auth_info expired in storage (e.g. edited in DevTools): caught when the tab is visible again', async () => {
@@ -432,7 +387,6 @@ describe('api_base session handling', () => {
             expect(emitted).toEqual(['session.connection_lost', 'session.expired']);
             expect(session_status.notice).toBe('session_expired');
             expect(client_store.logout).toHaveBeenCalledTimes(1);
-            expect(events('session_expired')[0].d).toContain('otp_401');
         });
 
         it('nothing is re-run or resumed afterwards', async () => {
@@ -467,28 +421,6 @@ describe('api_base session handling', () => {
             globalObserver.unregisterAll('session.reconnected');
         });
 
-        it('logs the first buy after a reconnect, once per connection, and not before any reconnect', async () => {
-            const base = await loggedIn();
-            base.noteBuy();
-            expect(events('first_buy_after_reconnect')).toHaveLength(0);
-
-            await reconnectTo(base, makeApi());
-            base.noteBuy();
-            base.noteBuy();
-            expect(events('first_buy_after_reconnect')).toHaveLength(1);
-            expect(events('first_buy_after_reconnect')[0].d).toBe(`connection ${base.connection_generation}`);
-        });
-
-        it('"waiting until visible" records what the page actually reported', async () => {
-            const base = await loggedIn();
-            setVisibility('hidden');
-            (base.api as unknown as TFakeApi).close();
-            await flush();
-            expect(events('reconnect_wait')[0].d).toMatch(
-                /waiting until visible \(visibility=hidden online=(true|false) focus=(true|false)\)/
-            );
-        });
-
         it('keeps the market-data helpers through a reconnect (rebuilt only by a reload before) and refreshes offerings', async () => {
             const base = await loggedIn();
             await reconnectTo(base, makeApi());
@@ -507,7 +439,6 @@ describe('api_base session handling', () => {
             mockGenerate.mockResolvedValueOnce(makeApi());
             (base.api as unknown as TFakeApi).close();
             await flush();
-            expect(events('reconnect_wait')).toHaveLength(0);
             expect(mockGenerate).toHaveBeenCalledTimes(2);
             has_focus.mockRestore();
         });
@@ -574,13 +505,6 @@ describe('api_base session handling', () => {
             expect(keep_alive.is_lock_held).toBe(false);
             expect(release).toHaveBeenCalled();
             delete (navigator as unknown as { locks?: unknown }).locks;
-        });
-
-        it('a late beat (the timer was held back) is logged', () => {
-            keep_alive.start(jest.fn());
-            jest.setSystemTime(Date.now() + 70000);
-            keep_alive.beat();
-            expect(events('keepalive_late')[0].d).toMatch(/^70s since the last ping/);
         });
     });
 });

@@ -1,6 +1,5 @@
 import Cookies from 'js-cookie';
 import { BOT_VERSION_CONFIG } from '@/constants/bot-version';
-import { clearLocalStorageKeepingConnLog, logConnEvent } from '@/utils/connection-log';
 
 /**
  * Clears all localStorage data except for the bot_version
@@ -10,9 +9,8 @@ const clearLocalStorage = (): void => {
         // Get the current bot_version before clearing
         const currentBotVersion = localStorage.getItem(BOT_VERSION_CONFIG.STORAGE_KEY);
 
-        // Clear all localStorage - except the connection log and its switches
-        clearLocalStorageKeepingConnLog();
-        logConnEvent('auth_wipe', 'new bot version - localStorage cleared (version-check.ts)');
+        // Clear all localStorage
+        localStorage.clear();
 
         // Restore the bot_version if it existed
         if (currentBotVersion) {

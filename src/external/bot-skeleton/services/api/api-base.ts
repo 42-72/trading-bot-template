@@ -5,7 +5,6 @@ import CommonStore from '@/stores/common-store';
 import { DerivWSAccountsService } from '@/services/derivws-accounts.service';
 import { OAuthTokenExchangeService } from '@/services/oauth-token-exchange.service';
 import { TAuthData } from '@/types/api-types';
-import { logConnEvent } from '@/utils/connection-log';
 import { handleBackendError, isBackendError } from '@/utils/error-handler';
 import { session_status, SessionExpiredError } from '@/utils/session-status';
 import { keep_alive } from '@/utils/socket-keep-alive';
@@ -38,11 +37,6 @@ export const RECONNECT_BACKOFF_MS = [1000, 2000, 5000, 10000, 30000];
 /** how long after a fresh reconnect a repeated auth error still confirms the first one. */
 export const AUTH_ERROR_CONFIRM_WINDOW_MS = 60000;
 
-const getErrorCode = (error: unknown): string | undefined => {
-    const e = error as { code?: string; error?: { code?: string } } | undefined;
-    return e?.error?.code ?? e?.code;
-};
-
 const isPageHidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden';
 const isOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false;
 const hasFocus = () =>
@@ -56,14 +50,6 @@ const whatToWaitFor = (): 'online' | 'visible' | null => {
     if (isOffline()) return 'online';
     if (isPageHidden() && !hasFocus()) return 'visible';
     return null;
-};
-/** The raw page state behind a reconnect_wait, so the log shows what was actually read. */
-const describePageState = () => {
-    const visibility = typeof document !== 'undefined' ? document.visibilityState : '?';
-    const online = typeof navigator !== 'undefined' ? String(navigator.onLine) : '?';
-    const focus =
-        typeof document !== 'undefined' && typeof document.hasFocus === 'function' ? String(document.hasFocus()) : '?';
-    return `visibility=${visibility} online=${online} focus=${focus}`;
 };
 
 type TApiBaseApi = {
@@ -114,8 +100,6 @@ class APIBase {
     session_expires_at: number | null = null;
     expiry_timer: ReturnType<typeof setTimeout> | null = null;
     auth_error_check: { generation: number; confirm_until: number | null } | null = null;
-    /** The connection whose first buy has been logged (first_buy_after_reconnect). */
-    private buy_logged_generation = -1;
     /** The first connection this page authorized: later ones are reconnects. */
     private first_authorized_generation = -1;
     private retired_apis = new WeakSet<object>();
@@ -200,8 +184,7 @@ class APIBase {
             // session appears (onResume) or the trader logs in.
             if (!this.api?.ct_is_authenticated) {
                 setIsAuthorizing(false);
-                if (!this.checkSessionExpiry('public socket open')) {
-                    logConnEvent('authorize_skipped', 'public socket - no session to authorize');
+                if (!this.checkSessionExpiry()) {
                     this.loadLoggedOutApp();
                 }
                 return;
@@ -219,8 +202,7 @@ class APIBase {
 
     /** The market list; a failure is logged and asked again later (never an unhandled rejection). */
     private fetchActiveSymbols() {
-        this.active_symbols_promise = this.getActiveSymbols().catch(error => {
-            logConnEvent('active_symbols_failed', String((error as Error)?.message ?? error));
+        this.active_symbols_promise = this.getActiveSymbols().catch(() => {
             this.active_symbols_promise = null;
             return undefined;
         });
@@ -228,12 +210,6 @@ class APIBase {
 
     async init(force_create_connection = false) {
         this.toggleRunButton(true);
-        logConnEvent(
-            'connect',
-            `${force_create_connection ? 'new socket' : 'socket if none open'}${
-                this.is_reconnecting_now ? ' (reconnect)' : ''
-            }`
-        );
 
         if (this.api) {
             this.unsubscribeAllSubscriptions();
@@ -256,7 +232,7 @@ class APIBase {
                 // Page load / login / account switch: retried here. Reconnects handle their own (reconnectNow).
                 if (!this.is_reconnecting_now) {
                     this.initEventListeners();
-                    if (error instanceof SessionExpiredError) this.onSessionExpired(error.reason, 'api-base.ts init');
+                    if (error instanceof SessionExpiredError) this.onSessionExpired(error.reason);
                     else this.scheduleReconnect('connection failed');
                 }
                 throw error;
@@ -264,12 +240,6 @@ class APIBase {
                 this.is_swapping = false;
             }
             this.connection_generation += 1;
-            logConnEvent(
-                'connection',
-                `${this.connection_generation} - ${this.api?.ct_is_authenticated ? 'authenticated' : 'public'} socket, ${
-                    socket_state[this.api?.connection?.readyState as keyof typeof socket_state] ?? 'unknown'
-                }`
-            );
             this.attachSessionSocketListeners(this.api);
 
             // Store the current account ID used for this WebSocket connection
@@ -340,8 +310,7 @@ class APIBase {
 
                 // Authorization error
                 console.error('Authorization error:', errorMessage);
-                logConnEvent('auth_error', `${getErrorCode(error) ?? 'error'} answering balance (api-base.ts)`);
-                this.onHandshakeError(error, 'api-base.ts authorizeAndSubscribe (balance error)');
+                this.onHandshakeError();
 
                 setIsAuthorizing(false);
                 return { ...error, localizedMessage: errorMessage };
@@ -435,7 +404,7 @@ class APIBase {
         } catch (e) {
             // An error during the handshake never wipes auth - the connection
             // is retried instead (see onHandshakeError).
-            this.onHandshakeError(e, 'api-base.ts authorizeAndSubscribe (catch)');
+            this.onHandshakeError();
         } finally {
             setIsAuthorizing(false);
         }
@@ -560,7 +529,6 @@ class APIBase {
 
     onSessionSocketClose(api: TApiBaseApi) {
         if (api !== this.api || this.retired_apis.has(api)) {
-            logConnEvent('socket_close_ignored', 'old socket (swap)');
             return;
         }
         setConnectionStatus(CONNECTION_STATUS.CLOSED);
@@ -574,16 +542,14 @@ class APIBase {
         if (this.is_session_expired && this.hasSession()) return;
         if (this.hasSession()) session_status.setReconnecting(true);
         if (this.is_reconnecting_now) {
-            logConnEvent('reconnect_skipped', `${reason} - a reconnect is already under way`);
             return;
         }
 
-        // Read once, so the reason logged is the one that decided.
+        // Read once, so the reason that decides is the one acted on.
         const wait_for = whatToWaitFor();
         if (wait_for) {
             if (this.reconnect_timer) clearTimeout(this.reconnect_timer);
             this.reconnect_timer = null;
-            logConnEvent('reconnect_wait', `${reason} - waiting until ${wait_for} (${describePageState()})`);
             return;
         }
 
@@ -597,7 +563,6 @@ class APIBase {
             immediate || this.reconnect_step === 0
                 ? 0
                 : RECONNECT_BACKOFF_MS[Math.min(this.reconnect_step - 1, RECONNECT_BACKOFF_MS.length - 1)];
-        logConnEvent('reconnect_scheduled', `${reason} - attempt ${this.reconnect_step + 1} in ${delay / 1000}s`);
         this.reconnect_timer = setTimeout(() => {
             this.reconnect_timer = null;
             this.reconnectNow(reason);
@@ -606,7 +571,6 @@ class APIBase {
 
     reconnectNow = async (reason: string) => {
         if (this.is_reconnecting_now) {
-            logConnEvent('reconnect_skipped', `${reason} - a reconnect is already under way`);
             return;
         }
         if (whatToWaitFor()) {
@@ -615,15 +579,13 @@ class APIBase {
         }
         this.is_reconnecting_now = true;
         this.reconnect_step += 1;
-        logConnEvent('reconnect_start', `${reason} - attempt ${this.reconnect_step}`);
         let should_retry = false;
         try {
             await this.init(true);
         } catch (error) {
             if (error instanceof SessionExpiredError) {
-                this.onSessionExpired(error.reason, 'config.ts getSocketURL');
+                this.onSessionExpired(error.reason);
             } else {
-                logConnEvent('reconnect_failed', String((error as Error)?.message ?? error));
                 should_retry = true;
             }
         } finally {
@@ -634,7 +596,7 @@ class APIBase {
 
     /** Tab visible again, window focused, or back online: reconnect quietly if needed. */
     onResume = (reason: string) => {
-        if (this.checkSessionExpiry(reason)) return;
+        if (this.checkSessionExpiry()) return;
         const ready_state = this.api?.connection?.readyState;
         if (!this.api || ready_state === undefined || ready_state > 1) {
             this.scheduleReconnect(reason, true);
@@ -644,7 +606,6 @@ class APIBase {
         // before it could see one - e.g. prerendered from the address bar):
         // log in on a fresh socket, as a page load would.
         if (!this.api.ct_is_authenticated && getAccountId() && this.hasSession() && !this.is_reconnecting_now) {
-            logConnEvent('session_found', `${reason} - logging in on a new socket`);
             this.scheduleReconnect('session found', true);
         }
     };
@@ -664,7 +625,6 @@ class APIBase {
         this.had_session = true;
         this.reconnect_step = 0;
         session_status.setReconnecting(false);
-        logConnEvent('authorized', `connection ${generation}`);
         keep_alive.start(() => this.sendKeepAlive());
         if (this.first_authorized_generation === -1) this.first_authorized_generation = generation;
         else if (generation !== this.first_authorized_generation) {
@@ -683,8 +643,7 @@ class APIBase {
     }
 
     /** An error answering a socket's own balance handshake: retried, never a logout. */
-    private onHandshakeError(error: unknown, source: string) {
-        logConnEvent('auth_error_ignored', `${getErrorCode(error) ?? 'exception'} during handshake (${source})`);
+    private onHandshakeError() {
         this.scheduleReconnect('handshake error');
     }
 
@@ -693,21 +652,19 @@ class APIBase {
      * it came from. Counts only from the current, fully logged-in socket, and
      * only if it repeats after one fresh reconnect.
      */
-    reportAuthError = (code: string, source: string, api: TApiBaseApi | null = this.api) => {
+    reportAuthError = (code: string, api: TApiBaseApi | null = this.api) => {
         if (this.is_session_expired) return;
         if (!this.isFullyLoggedIn(api)) {
-            logConnEvent('auth_error_ignored', `${code} from ${source} - socket swap/handshake/old socket`);
             return;
         }
         const check = this.auth_error_check;
         if (check && check.generation === this.connection_generation) return; // already being checked
         const is_repeat = !!check && (check.confirm_until === null || Date.now() < check.confirm_until);
         if (is_repeat) {
-            this.onSessionExpired(`${code} repeated after a fresh reconnect`, source);
+            this.onSessionExpired(`${code} repeated after a fresh reconnect`);
             return;
         }
         this.auth_error_check = { generation: this.connection_generation, confirm_until: null };
-        logConnEvent('auth_error', `${code} from ${source} - confirming with a fresh reconnect`);
         this.authorized_generation = -1;
         this.scheduleReconnect('auth error check', true);
     };
@@ -720,7 +677,7 @@ class APIBase {
         if (!expires_at) return;
         // setTimeout caps at ~24.8 days.
         const delay = Math.min(Math.max(0, expires_at - Date.now()), 2147483647);
-        this.expiry_timer = setTimeout(() => this.checkSessionExpiry('expires_at timer'), delay);
+        this.expiry_timer = setTimeout(() => this.checkSessionExpiry(), delay);
     }
 
     /**
@@ -728,16 +685,16 @@ class APIBase {
      * had - by the timer's copy, or by the stored auth_info itself (which
      * getAuthInfo removes once expired, so a vanished one counts too).
      */
-    checkSessionExpiry(source: string) {
+    checkSessionExpiry() {
         if (this.is_session_expired || !this.had_session) return false;
         if (!localStorage.getItem('active_loginid')) return false; // logged out on purpose
         const is_past_expiry = !!this.session_expires_at && Date.now() >= this.session_expires_at;
         if (!is_past_expiry && this.hasSession()) return false;
-        this.onSessionExpired(is_past_expiry ? 'expires_at passed' : 'auth_info expired or gone', source);
+        this.onSessionExpired(is_past_expiry ? 'expires_at passed' : 'auth_info expired or gone');
         return true;
     }
 
-    onSessionExpired = (reason: string, source: string) => {
+    onSessionExpired = (reason: string) => {
         if (this.is_session_expired) return;
         this.is_session_expired = true;
         if (this.reconnect_timer) clearTimeout(this.reconnect_timer);
@@ -747,13 +704,12 @@ class APIBase {
         this.auth_error_check = null;
         keep_alive.stop();
         session_status.setReconnecting(false);
-        logConnEvent('session_expired', `${reason} (${source})`);
 
         // Stop first (run-panel-store, ai-scanner-store), then log out.
         globalObserver.emit('session.expired', { reason });
         session_status.setNotice('session_expired');
         const client_store = globalObserver.getState('client.store');
-        client_store?.logout?.(`session expired: ${reason}`, 'api-base.ts onSessionExpired');
+        client_store?.logout?.();
     };
 
     toggleRunButton = (toggle: boolean) => {
@@ -779,16 +735,6 @@ class APIBase {
             Promise.resolve(api.send({ ping: 1 })).catch(() => {});
         } catch {
             // The close handler deals with a dead socket.
-        }
-    }
-
-    /** A buy succeeded (Purchase.js): the first one on a reconnected socket goes in the connection log. */
-    noteBuy(trade?: string) {
-        const generation = this.connection_generation;
-        if (this.buy_logged_generation === generation) return;
-        this.buy_logged_generation = generation;
-        if (this.first_authorized_generation !== -1 && generation !== this.first_authorized_generation) {
-            logConnEvent('first_buy_after_reconnect', `connection ${generation}${trade ? ` - ${trade}` : ''}`);
         }
     }
 

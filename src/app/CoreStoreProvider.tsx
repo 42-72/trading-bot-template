@@ -125,7 +125,7 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
             ) {
                 // api_base decides - only a repeated error on the current, fully
                 // logged-in socket ends the session.
-                api_base.reportAuthError(error.code, `CoreStoreProvider ${msg_type ?? ''}`.trim(), source_api);
+                api_base.reportAuthError(error.code, source_api);
                 return;
             }
 

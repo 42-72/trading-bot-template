@@ -11,7 +11,7 @@ class ChartAPI {
 
     init = async (force_create_connection = false) => {
         if (!this.api || force_create_connection) {
-            this.api = await generateDerivApiInstance(false, 'chart');
+            this.api = await generateDerivApiInstance();
         }
         this.getTime();
     };

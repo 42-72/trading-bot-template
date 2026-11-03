@@ -1,4 +1,3 @@
-import { CONN_LOG_KEY, logConnEvent, readConnLog } from '@/utils/connection-log';
 import ClientStore from '../client-store';
 import RootStore from '../root-store';
 
@@ -17,26 +16,20 @@ jest.mock('@/services/oauth-token-exchange.service', () => ({
     OAuthTokenExchangeService: { clearAuthInfo: jest.fn() },
 }));
 
-describe('ClientStore.logout and the connection log', () => {
+describe('ClientStore.logout', () => {
     beforeEach(() => {
         localStorage.clear();
         sessionStorage.clear();
     });
 
-    it('logout clears the session but never the connection log - and logs why, and from where', async () => {
-        logConnEvent('socket_close', 'code 1006');
+    it('clears the stored login and the session', async () => {
         localStorage.setItem('active_loginid', 'VRTC1');
         sessionStorage.setItem('auth_info', '{}');
         const client = new ClientStore({} as RootStore);
 
-        await client.logout('InvalidToken on balance', 'CoreStoreProvider.tsx handleMessages');
+        await client.logout();
 
         expect(localStorage.getItem('active_loginid')).toBeNull();
         expect(sessionStorage.getItem('auth_info')).toBeNull();
-        expect(localStorage.getItem(CONN_LOG_KEY)).not.toBeNull();
-        const [before, logout] = readConnLog();
-        expect(before.e).toBe('socket_close');
-        expect(logout.e).toBe('logout');
-        expect(logout.d).toBe('InvalidToken on balance (CoreStoreProvider.tsx handleMessages)');
     });
 });

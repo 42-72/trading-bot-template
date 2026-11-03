@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { AuthWrapper } from './app/AuthWrapper';
 // Removed AnalyticsInitializer import - analytics dependency removed
 // See migrate-docs/ANALYTICS_IMPLEMENTATION_GUIDE.md for re-implementation
-import { startSessionDiagnostics } from './utils/session-flags';
+import { removeRetiredStorageKeys } from './utils/page-start';
 import { performVersionCheck } from './utils/version-check';
 import './styles/index.scss';
 
@@ -16,8 +16,8 @@ console.info(`[Build] ${process.env.BUILD_COMMIT} @ ${process.env.BUILD_TIME}`);
 // Perform version check FIRST - before any other operations
 performVersionCheck();
 
-// ?ctdebug= switch, and the connection log (page load, visibility, online)
-startSessionDiagnostics();
+// Storage keys of removed features (connection log, old session switch)
+removeRetiredStorageKeys();
 
 // Removed AnalyticsInitializer() call - analytics dependency removed
 

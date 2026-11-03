@@ -1,5 +1,3 @@
-import { logConnEvent } from './connection-log';
-
 /**
  * Keep-alive for the app's socket (api_base starts it once a
  * socket is logged in).
@@ -15,12 +13,8 @@ import { logConnEvent } from './connection-log';
  * - A ping is also sent the moment the page is hidden.
  * - While a bot or the AI Scanner is busy, a Web Lock is held: Chrome does not
  *   freeze a page that holds one, so its timers and socket keep running.
- * - A beat that arrives late (the timer was held back anyway) is logged as
- *   keepalive_late, so it can be seen in ct_conn_log.
  */
 export const KEEP_ALIVE_INTERVAL_MS = 20000;
-/** A gap this long between beats means the timer was held back. */
-export const KEEP_ALIVE_LATE_MS = 45000;
 const RUN_LOCK_NAME = 'ct-bot-running';
 
 type TTimer = { stop: () => void };
@@ -52,7 +46,6 @@ const startIntervalTimer = (interval_ms: number, on_beat: () => void): TTimer =>
 class SocketKeepAlive {
     private timer: TTimer | null = null;
     private ping: (() => void) | null = null;
-    private last_beat_at = 0;
     private busy = new Set<string>();
     private release_lock: (() => void) | null = null;
     private is_page_listener_on = false;
@@ -70,7 +63,6 @@ class SocketKeepAlive {
         this.ping = ping;
         this.watchPage();
         if (this.timer) return;
-        this.last_beat_at = Date.now();
         this.timer =
             startWorkerTimer(KEEP_ALIVE_INTERVAL_MS, this.beat) ??
             startIntervalTimer(KEEP_ALIVE_INTERVAL_MS, this.beat);
@@ -83,13 +75,6 @@ class SocketKeepAlive {
     }
 
     beat = () => {
-        const now = Date.now();
-        const gap = now - this.last_beat_at;
-        this.last_beat_at = now;
-        if (gap >= KEEP_ALIVE_LATE_MS) {
-            const page = typeof document !== 'undefined' ? document.visibilityState : '?';
-            logConnEvent('keepalive_late', `${Math.round(gap / 1000)}s since the last ping (page ${page})`);
-        }
         this.ping?.();
     };
 

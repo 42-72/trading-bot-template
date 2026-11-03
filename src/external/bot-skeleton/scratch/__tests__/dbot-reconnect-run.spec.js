@@ -5,7 +5,6 @@
  * (its promise neither resolves nor rejects), and onMessage() only ever
  * carries that socket's own messages.
  */
-import { readConnLog } from '@/utils/connection-log';
 import { observer as globalObserver } from '../../utils/observer';
 import { api_base } from '../../services/api/api-base';
 import { EXECUTION_MODES, setExecutionMode } from '../../services/tradeEngine/utils/execution-mode';
@@ -37,7 +36,6 @@ jest.mock('../../services/api/api-base', () => {
             base.subscriptions.forEach(s => s.unsubscribe());
             base.subscriptions = [];
         },
-        noteBuy: jest.fn(),
     };
     return { api_base: base };
 });
@@ -217,8 +215,7 @@ describe('Run after a reconnect', () => {
         expect(b.buys()).toHaveLength(1);
         // Ticks and the buy went out on the new socket only.
         expect(b.sent.some(request => request.ticks_history === 'R_100')).toBe(true);
-        expect(readConnLog().some(entry => entry.e === 'engine_refreshed')).toBe(true);
-        expect(api_base.noteBuy).toHaveBeenCalled();
+        expect(dbot.interpreter.isBoundTo(b)).toBe(true);
 
         // Contract updates arrive on the new socket and reach the engine.
         const engine = dbot.interpreter.bot.tradeEngine;

@@ -1,10 +1,9 @@
-import { logConnEvent } from './connection-log';
 import { isAiEngineStrategyId } from './library-strategies';
 
 /**
- * Connection-log lines for the bot engine's trades (ct_conn_log). Only the
- * trade itself is described - contract type, barrier / prediction, symbol,
- * stake - never a token, an OTP or an account id.
+ * Describes a bot-engine trade for the AI Scanner's locked-trade guard: only
+ * the trade itself - contract type, barrier / prediction, symbol, stake -
+ * never a token, an OTP or an account id.
  */
 
 type TBuyRequest = {
@@ -29,8 +28,6 @@ type TProposalRequest = {
     barrier2?: number | string;
 };
 
-type TApiError = { error?: { code?: string; message?: string }; code?: string; message?: string };
-
 /** True while the workspace holds the AI Scanner's engine bot. */
 export const isAiEngineRun = () => {
     const workspace = (window as unknown as { Blockly?: { derivWorkspace?: { current_strategy_id?: string } } }).Blockly
@@ -52,19 +49,4 @@ export const describeTrade = (request?: TBuyRequest | TProposalRequest | null) =
         p.duration !== undefined ? `${p.duration}${p.duration_unit ?? ''}` : '',
     ];
     return parts.filter(Boolean).join(' ');
-};
-
-const describeError = (error: unknown) => {
-    const e = error as TApiError | undefined;
-    const code = e?.error?.code ?? e?.code ?? 'error';
-    const message = e?.error?.message ?? e?.message ?? '';
-    return `${code}${message ? ` "${message}"` : ''}`;
-};
-
-/** A buy or proposal the engine sent was refused. */
-export const logTradeError = (kind: 'buy' | 'proposal', error: unknown, request?: TBuyRequest | TProposalRequest) => {
-    logConnEvent(
-        'trade_error',
-        `${isAiEngineRun() ? 'AI Scanner' : 'bot'} ${kind}: ${describeError(error)} - ${describeTrade(request)}`
-    );
 };

@@ -1,6 +1,5 @@
 import { DerivWSAccountsService } from '@/services/derivws-accounts.service';
 import { OAuthTokenExchangeService } from '@/services/oauth-token-exchange.service';
-import { logConnEvent } from '@/utils/connection-log';
 import { SessionExpiredError } from '@/utils/session-status';
 import brandConfig from '../../../../../brand.config.json';
 
@@ -98,7 +97,6 @@ export const getSocketURL = async (): Promise<string> => {
         // retries with backoff; a 401 means the token itself was refused, i.e.
         // the session really expired.
         if ((error as { status?: number })?.status === 401) throw new SessionExpiredError('otp_401');
-        logConnEvent('socket_url_failed', 'no public fallback - will retry');
         throw error;
     }
 };

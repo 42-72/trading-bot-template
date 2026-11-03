@@ -1,6 +1,5 @@
 import { DerivWSAccountsService, DerivWSRequestError } from '@/services/derivws-accounts.service';
 import { OAuthTokenExchangeService } from '@/services/oauth-token-exchange.service';
-import { readConnLog } from '@/utils/connection-log';
 import { SessionExpiredError } from '@/utils/session-status';
 import { getSocketURL } from '../config';
 
@@ -46,7 +45,6 @@ describe('getSocketURL', () => {
     it('OTP request fails: no fallback to the public socket - the error goes to the retry', async () => {
         mockGetURL.mockRejectedValue(new TypeError('Failed to fetch'));
         await expect(getSocketURL()).rejects.toThrow('Failed to fetch');
-        expect(readConnLog().map(entry => entry.e)).toContain('socket_url_failed');
     });
 
     it('OTP request answered 401: a genuine expiry', async () => {

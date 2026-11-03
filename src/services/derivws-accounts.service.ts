@@ -1,5 +1,4 @@
 import { isProduction, useProductionHostsLocally } from '@/components/shared';
-import { logConnEvent } from '@/utils/connection-log';
 import brandConfig from '../../brand.config.json';
 
 /**
@@ -180,12 +179,6 @@ export class DerivWSAccountsService {
                 return accounts;
             } catch (error) {
                 console.error('[DerivWS] Error fetching accounts:', error);
-                logConnEvent(
-                    'accounts_failed',
-                    error instanceof DerivWSRequestError
-                        ? `HTTP ${error.status}`
-                        : String((error as Error)?.message ?? error)
-                );
                 // Clear the cached promise on error so retry is possible
                 this.accountsFetchPromise = null;
                 throw error;
@@ -245,14 +238,9 @@ export class DerivWSAccountsService {
                 if (!websocketURL) {
                     throw new Error('WebSocket URL not found in OTP response');
                 }
-                logConnEvent('otp_ok', accountId);
                 return websocketURL;
             } catch (error) {
                 console.error('[DerivWS] Error fetching OTP:', error);
-                logConnEvent(
-                    'otp_failed',
-                    `${accountId} ${error instanceof DerivWSRequestError ? `HTTP ${error.status}` : String((error as Error)?.message ?? error)}`
-                );
                 // Clear the cached promise on error so retry is possible
                 this.otpFetchPromises.delete(cacheKey);
                 throw error;

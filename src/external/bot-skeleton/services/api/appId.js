@@ -1,7 +1,9 @@
 import { getSocketURL } from '@/components/shared';
-import { describeSocketURL, isAuthenticatedSocketURL, logConnEvent } from '@/utils/connection-log';
 import DerivAPIBasic from '@deriv/deriv-api/dist/DerivAPIBasic';
 import APIMiddleware from './api-middleware';
+
+/** A socket URL carrying a one-time login code (otp) is a logged-in socket; any other is the public one. */
+export const isAuthenticatedSocketURL = url => /[?&]otp=/i.test(String(url));
 
 /**
  * Singleton instance management for DerivAPI
@@ -31,10 +33,9 @@ export const clearDerivApiInstance = () => {
  * Prevents multiple WebSocket connections by reusing existing instance
  * Now supports async WebSocket URL fetching with authenticated flow
  * @param {boolean} forceNew - Force creation of new instance (default: false)
- * @param {string} caller - Who asks (connection log only)
  * @returns Promise with DerivAPIBasic instance
  */
-export const generateDerivApiInstance = async (forceNew = false, caller = 'api_base') => {
+export const generateDerivApiInstance = async (forceNew = false) => {
     // If forcing new instance, clear existing one
     if (forceNew) {
         console.log('[DerivAPI] Forcing new instance creation');
@@ -47,13 +48,6 @@ export const generateDerivApiInstance = async (forceNew = false, caller = 'api_b
         // Return existing instance if it's connecting or open
         if (readyState === WebSocket.CONNECTING || readyState === WebSocket.OPEN) {
             console.log('[DerivAPI] Reusing existing instance (state:', readyState, ')');
-            // No socket_create / otp_ok follow: this socket was made (and logged) earlier.
-            logConnEvent(
-                'socket_reused',
-                `${caller} - ${readyState === WebSocket.OPEN ? 'open' : 'connecting'} ${
-                    derivApiInstance.ct_is_authenticated ? 'authenticated' : 'public'
-                } socket`
-            );
             return derivApiInstance;
         } else {
             // Connection is closed or closing, clear it
@@ -65,7 +59,6 @@ export const generateDerivApiInstance = async (forceNew = false, caller = 'api_b
     // If there's already a creation in progress, return that promise
     if (derivApiPromise) {
         console.log('[DerivAPI] Reusing existing creation promise');
-        logConnEvent('socket_create_shared', `${caller} - joins a socket creation already under way`);
         return derivApiPromise;
     }
 
@@ -95,18 +88,13 @@ export const generateDerivApiInstance = async (forceNew = false, caller = 'api_b
             });
             // Logged-in (otp) or public socket - api_base only authorizes on the former.
             deriv_api.ct_is_authenticated = isAuthenticatedSocketURL(wsURL);
-            logConnEvent('socket_create', describeSocketURL(wsURL));
 
             // Store the instance immediately (don't wait for connection)
             derivApiInstance = deriv_api;
 
             // Set up close handler to clear instance
-            deriv_socket.addEventListener('close', event => {
+            deriv_socket.addEventListener('close', () => {
                 console.log('[DerivAPI] WebSocket connection closed');
-                logConnEvent(
-                    'socket_close',
-                    `code ${event?.code ?? '?'}${event?.reason ? ` ${event.reason}` : ''}${event?.wasClean === false ? ' (not clean)' : ''} ${deriv_api.ct_is_authenticated ? 'authenticated' : 'public'}`
-                );
                 if (derivApiInstance === deriv_api) {
                     derivApiInstance = null;
                     currentWebSocketURL = null;
@@ -116,7 +104,6 @@ export const generateDerivApiInstance = async (forceNew = false, caller = 'api_b
             // Log when connection opens
             deriv_socket.addEventListener('open', () => {
                 console.log('[DerivAPI] WebSocket connection established');
-                logConnEvent('socket_open', deriv_api.ct_is_authenticated ? 'authenticated' : 'public');
             });
 
             deriv_socket.addEventListener('error', error => {
@@ -126,7 +113,6 @@ export const generateDerivApiInstance = async (forceNew = false, caller = 'api_b
             return deriv_api;
         } catch (error) {
             console.error('[DerivAPI] Error creating instance:', error);
-            logConnEvent('socket_create_failed', String(error?.message ?? error));
             derivApiPromise = null;
             derivApiInstance = null;
             throw error;

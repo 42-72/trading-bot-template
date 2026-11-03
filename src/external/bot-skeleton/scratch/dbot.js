@@ -1,4 +1,3 @@
-import { logConnEvent } from '@/utils/connection-log';
 import { isAiEngineStrategyId, isLibraryStrategyId } from '@/utils/library-strategies';
 import { save_types } from '../constants';
 import { config } from '../constants/config';
@@ -25,7 +24,7 @@ class DBot {
 
         // a new socket is logged in (reconnect) - an idle engine moves onto it.
         globalObserver.register('session.reconnected', () => {
-            this.refreshEngineForNewConnection('reconnected').catch(() => {});
+            this.refreshEngineForNewConnection().catch(() => {});
         });
     }
 
@@ -44,16 +43,12 @@ class DBot {
      * fresh one on the current socket - as a page load would build it.
      * Never touches a running bot.
      */
-    refreshEngineForNewConnection(reason) {
+    refreshEngineForNewConnection() {
         if (this.is_bot_running || !this.isEngineOnOldConnection()) return this.engine_refresh ?? Promise.resolve();
         if (this.engine_refresh) return this.engine_refresh;
 
         const stale = this.interpreter;
         this.engine_refresh = (async () => {
-            logConnEvent(
-                'engine_refreshed',
-                `${reason} - the bot engine moved to connection ${api_base.connection_generation}`
-            );
             // Its listeners were on the old socket: drop them (nothing else is in this list).
             api_base.dropSubscriptions?.();
             // A tick stream it may have opened on the current socket would make the new
@@ -329,7 +324,6 @@ class DBot {
      */
     runBot() {
         if (api_base.is_stopping) {
-            logConnEvent('run_ignored', 'the previous stop has not finished');
             return;
         }
 
@@ -340,7 +334,7 @@ class DBot {
             // after a reconnect the engine must run on the new socket,
             // exactly as after a page load (a refresh may already be under way).
             if (this.engine_refresh || this.isEngineOnOldConnection()) {
-                const refresh = this.refreshEngineForNewConnection('Run pressed');
+                const refresh = this.refreshEngineForNewConnection();
                 this.is_bot_running = true;
                 api_base.setIsRunning(true);
                 refresh

@@ -58,10 +58,6 @@ describe('CoreStoreProvider - an auth error on a message', () => {
         const client = setup();
         await mockMessageListener?.(authError);
         expect(client.logout).not.toHaveBeenCalled();
-        expect(api_base.reportAuthError).toHaveBeenCalledWith(
-            'AuthorizationRequired',
-            'CoreStoreProvider balance',
-            mockApi
-        );
+        expect(api_base.reportAuthError).toHaveBeenCalledWith('AuthorizationRequired', mockApi);
     });
 });

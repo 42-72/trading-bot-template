@@ -8,7 +8,6 @@
  */
 import fs from 'fs';
 import path from 'path';
-import { readConnLog } from '@/utils/connection-log';
 import { writeEngineValues } from '@/utils/ai-engine-xml';
 import { setAiScannerTrade } from '@/utils/ai-scanner-trade-guard';
 import { observer as globalObserver } from '../../utils/observer';
@@ -52,7 +51,6 @@ jest.mock('../../services/api/api-base', () => {
             base.subscriptions.forEach(s => s.unsubscribe());
             base.subscriptions = [];
         },
-        noteBuy: jest.fn(),
     };
     return { api_base: base };
 });
@@ -290,7 +288,7 @@ describe('AI Scanner engine after a reconnect', () => {
         expect(buy.barrier).toBeUndefined();
     });
 
-    it('a buy that is not the locked trade is never sent, and the log says what differed', async () => {
+    it('a buy that is not the locked trade is never sent: the bot is stopped and the console says what differed', async () => {
         const b = await reconnectAfterRun();
         await loadEngine(OVER_UNDER_XML, {
             ...COMMON,
@@ -301,38 +299,19 @@ describe('AI Scanner engine after a reconnect', () => {
         });
         const stopped = jest.fn();
         globalObserver.register('bot.click_stop', stopped);
+        const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
         setAiScannerTrade({ symbol: 'R_50', contract_types: ['DIGITUNDER'], barriers: [7, 6] });
         const before = b.buys().length;
         dbot.runBot();
         await tickUntil(b, 'R_50', () => stopped.mock.calls.length > 0);
         expect(b.buys()).toHaveLength(before);
         expect(stopped).toHaveBeenCalled();
-        const [mismatch] = readConnLog().filter(entry => entry.e === 'ai_trade_mismatch');
-        expect(mismatch.d).toContain('contract DIGITOVER (locked DIGITUNDER)');
-        expect(mismatch.d).toContain('barrier 2 (locked 7/6)');
+        const [mismatch] = warn.mock.calls
+            .map(([message]) => String(message))
+            .filter(m => m.includes('trade mismatch'));
+        expect(mismatch).toContain('contract DIGITOVER (locked DIGITUNDER)');
+        expect(mismatch).toContain('barrier 2 (locked 7/6)');
+        warn.mockRestore();
         globalObserver.unregisterAll('bot.click_stop');
-    });
-
-    it('a refused buy is logged with its code, message, contract, barrier and market - no account or token', async () => {
-        await reconnectAfterRun();
-        const c = makeSocket('C', { buy_error: { code: 'NoReturn', message: 'This contract offers no return.' } });
-        api_base.api = c;
-        api_base.connection_generation += 1;
-        globalObserver.emit('session.reconnected', {});
-        await flush();
-        await loadEngine(OVER_UNDER_XML, {
-            ...COMMON,
-            symbol: 'R_50',
-            ai_direction: 1,
-            first_barrier: 2,
-            recovery_barrier: 3,
-        });
-        dbot.runBot();
-        await tickUntil(c, 'R_50', () => readConnLog().some(entry => entry.e === 'trade_error'));
-        const [entry] = readConnLog().filter(item => item.e === 'trade_error');
-        expect(entry.d).toBe(
-            'AI Scanner buy: NoReturn "This contract offers no return." - DIGITOVER barrier 2 R_50 stake 1 1t'
-        );
-        expect(entry.d).not.toMatch(/VRTC|token|otp/i);
     });
 });

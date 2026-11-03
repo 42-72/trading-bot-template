@@ -1,5 +1,4 @@
 import { clearCodeVerifier, getCodeVerifier, isProduction, useProductionHostsLocally } from '@/components/shared';
-import { logConnEvent } from '@/utils/connection-log';
 import { ErrorLogger } from '@/utils/error-logger';
 import brandConfig from '../../brand.config.json';
 
@@ -61,7 +60,6 @@ export class OAuthTokenExchangeService {
 
             // Check if token is expired
             if (authInfo.expires_at && Date.now() >= authInfo.expires_at) {
-                logConnEvent('auth_wipe', 'auth_info expires_at passed - removed (oauth-token-exchange.service.ts)');
                 this.clearAuthInfo();
                 return null;
             }
@@ -238,10 +236,6 @@ export class OAuthTokenExchangeService {
                         // No accounts returned - this is an error condition
                         ErrorLogger.error('OAuth', 'No accounts returned after token exchange');
                         // Clear auth info when no accounts are available to prevent invalid state
-                        logConnEvent(
-                            'auth_wipe',
-                            'no accounts after login - auth_info removed (oauth-token-exchange.service.ts)'
-                        );
                         this.clearAuthInfo();
                         return {
                             error: 'no_accounts',
@@ -252,10 +246,6 @@ export class OAuthTokenExchangeService {
                     ErrorLogger.error('OAuth', 'Error fetching accounts after token exchange', error);
                     // Clear stored auth info to prevent user from being stuck in invalid auth state
                     // This allows retry without manual sessionStorage clearing
-                    logConnEvent(
-                        'auth_wipe',
-                        'accounts fetch failed after login - auth_info removed (oauth-token-exchange.service.ts)'
-                    );
                     this.clearAuthInfo();
                     // Return error status to caller for UI feedback
                     return {

@@ -7,7 +7,6 @@ import { isMultipliersOnly, isOptionsBlocked } from '@/components/shared/common/
 import { removeCookies } from '@/components/shared/utils/storage/storage';
 import { observer as globalObserver, observer } from '@/external/bot-skeleton';
 import { api_base } from '@/external/bot-skeleton/services/api/api-base';
-import { logConnEvent } from '@/utils/connection-log';
 import { ErrorLogger } from '@/utils/error-logger';
 import type { Balance } from '@deriv/api-types';
 import {
@@ -242,15 +241,7 @@ export default class ClientStore {
      * @returns Promise with logout response
      */
 
-    /**
-     * @param reason why (for the connection log), e.g. "logout button"
-     * @param source the file / function that asked for it
-     */
-    logout = async (reason = 'logout requested', source = 'client-store.ts logout') => {
-        logConnEvent(
-            'logout',
-            `${reason} (${source})${localStorage.getItem('active_loginid') ? '' : ' - already logged out'}`
-        );
+    logout = async () => {
         if (localStorage.getItem('active_loginid')) {
             // Clear DerivAPI singleton instance and close WebSocket
             const { clearDerivApiInstance } = await import('@/external/bot-skeleton/services/api/appId');
@@ -378,10 +369,6 @@ export default class ClientStore {
             const active_login_id = getAccountId();
 
             if (active_login_id) {
-                logConnEvent(
-                    'auth_wipe',
-                    'account switch - account data cleared, reconnecting (client-store.ts regenerateWebSocket)'
-                );
                 // Clear DerivAPI singleton instance to force new connection
                 const { clearDerivApiInstance } = await import('@/external/bot-skeleton/services/api/appId');
                 clearDerivApiInstance();

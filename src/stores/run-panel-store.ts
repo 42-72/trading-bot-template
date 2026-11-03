@@ -6,9 +6,7 @@ import { contract_stages, TContractStage } from '@/constants/contract-stage';
 import { run_panel } from '@/constants/run-panel';
 import { ErrorTypes, MessageTypes, observer, unrecoverable_errors } from '@/external/bot-skeleton';
 import { getSelectedTradeType } from '@/external/bot-skeleton/scratch/utils';
-import { api_base } from '@/external/bot-skeleton/services/api/api-base';
 import { setExecutionMode as setEngineExecutionMode } from '@/external/bot-skeleton/services/tradeEngine/utils/execution-mode';
-import { logConnEvent } from '@/utils/connection-log';
 import { handleBackendError, isBackendError } from '@/utils/error-handler';
 import {
     isExecutionModeLocked,
@@ -247,12 +245,6 @@ export default class RunPanelStore {
             this.root_store.journal.pushMessage(
                 this.execution_mode === 'fast' ? localize('Execution: Fast') : localize('Execution: Normal'),
                 MessageTypes.NOTIFY
-            );
-            logConnEvent(
-                'run_pressed',
-                `${this.execution_mode}${this.root_store.ai_scanner?.is_active ? ' (AI Scanner)' : ''}; connection ${
-                    api_base.connection_generation
-                } ${api_base.getConnectionStatus()}`
             );
             this.dbot.runBot();
         });

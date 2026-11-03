@@ -1,5 +1,4 @@
 import { getLocalizedErrorMessage } from '@/constants/backend-error-messages';
-import { logTradeError } from '@/utils/trade-log';
 import { api_base } from '../../api/api-base';
 import { doUntilDone, tradeOptionToProposal } from '../utils/helpers';
 import { clearProposals, proposalsReady } from './state/actions';
@@ -70,7 +69,6 @@ export default Engine =>
             Promise.all(
                 this.proposal_templates.map(proposal => {
                     doUntilDone(() => api_base.api.send(proposal)).catch(error => {
-                        logTradeError('proposal', error, proposal);
                         // We intercept ContractBuyValidationError as user may have specified
                         // e.g. a DIGITUNDER 0 or DIGITOVER 9, while one proposal may be invalid
                         // the other is valid. We will error on Purchase rather than here.

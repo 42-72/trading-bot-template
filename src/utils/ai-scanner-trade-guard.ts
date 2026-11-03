@@ -1,5 +1,4 @@
 import { observer as globalObserver } from '@/external/bot-skeleton/utils/observer';
-import { logConnEvent } from './connection-log';
 import { describeTrade, isAiEngineRun } from './trade-log';
 
 /**
@@ -46,6 +45,7 @@ export const checkAiScannerBuy = (buy: TBuy): string | null => {
         );
     }
     if (problems.length === 0) return null;
-    logConnEvent('ai_trade_mismatch', `${problems.join(', ')} - not bought: ${describeTrade(buy)}`);
+    // eslint-disable-next-line no-console
+    console.warn(`[AI Scanner] trade mismatch: ${problems.join(', ')} - not bought: ${describeTrade(buy)}`);
     return `The AI Scanner did not buy: the engine's trade does not match the locked one (${problems.join(', ')}).`;
 };

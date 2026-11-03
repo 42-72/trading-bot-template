@@ -1,13 +1,12 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { observer } from 'mobx-react-lite';
-import ConnectionLog from '@/components/connection-log/connection-log';
 import ErrorBoundary from '@/components/error-component/error-boundary';
 import ErrorComponent from '@/components/error-component/error-component';
 import ChunkLoader from '@/components/loader/chunk-loader';
 import SessionNotice from '@/components/session-notice/session-notice';
 import { api_base } from '@/external/bot-skeleton';
 import { useStore } from '@/hooks/useStore';
-import { whenPageActivated } from '@/utils/session-flags';
+import { whenPageActivated } from '@/utils/page-start';
 import { localize } from '@deriv-com/translations';
 import './app-root.scss';
 
@@ -72,14 +71,7 @@ const AppRoot = () => {
         return () => clearTimeout(timeoutId);
     }, []);
 
-    // The hidden connection log is reachable even while the app is still loading.
-    if (!store || !is_api_initialized)
-        return (
-            <>
-                <AppRootLoader />
-                <ConnectionLog />
-            </>
-        );
+    if (!store || !is_api_initialized) return <AppRootLoader />;
 
     return (
         <>
@@ -90,7 +82,6 @@ const AppRoot = () => {
                 </ErrorBoundary>
             </Suspense>
             <SessionNotice />
-            <ConnectionLog />
         </>
     );
 };
