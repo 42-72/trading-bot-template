@@ -11,13 +11,37 @@ import { applyUrlFlags, isConnDebugEnabled, isSessionV2Enabled, startSessionDiag
 describe('connection log', () => {
     beforeEach(() => localStorage.clear());
 
-    it('keeps the last 50 events with timestamps, oldest first', () => {
-        for (let i = 1; i <= 55; i++) logConnEvent('event', String(i));
+    it('keeps the last 200 events with timestamps, oldest first', () => {
+        for (let i = 1; i <= 205; i++) logConnEvent('event', String(i));
         const entries = readConnLog();
-        expect(entries).toHaveLength(50);
+        expect(entries).toHaveLength(200);
         expect(entries[0].d).toBe('6');
-        expect(entries[49].d).toBe('55');
+        expect(entries[199].d).toBe('205');
         expect(new Date(entries[0].t).toString()).not.toBe('Invalid Date');
+    });
+
+    it('collapses repeated identical events into one line with a count', () => {
+        logConnEvent('reconnect_wait', 'socket closed - waiting until online');
+        logConnEvent('reconnect_wait', 'socket closed - waiting until online');
+        logConnEvent('reconnect_wait', 'socket closed - waiting until online');
+        logConnEvent('online');
+        logConnEvent('reconnect_wait', 'socket closed - waiting until online');
+        const entries = readConnLog();
+        expect(entries.map(entry => [entry.e, entry.n])).toEqual([
+            ['reconnect_wait', 3],
+            ['online', undefined],
+            ['reconnect_wait', undefined],
+        ]);
+        expect(entries[0].tl).toBeDefined();
+        expect(formatConnLog(entries).split('\n')[0]).toMatch(
+            /reconnect_wait {2}socket closed - waiting until online {2}\(x3, last .+\)$/
+        );
+    });
+
+    it('a different detail is a different event', () => {
+        logConnEvent('authorized', 'connection 1');
+        logConnEvent('authorized', 'connection 2');
+        expect(readConnLog()).toHaveLength(2);
     });
 
     it('never stores an OTP or a token, even if a caller passes one', () => {

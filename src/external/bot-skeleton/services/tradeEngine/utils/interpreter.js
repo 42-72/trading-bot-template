@@ -35,6 +35,8 @@ const timeMachineEnabled = bot => botInitialized(bot) && bot.tradeEngine.options
 
 // TODO chek beforState & duringState & startState
 const Interpreter = () => {
+    // The socket this engine's listeners (ticks, proposals, contract updates) are attached to.
+    let bound_api = api_base.api;
     let $scope = createScope();
     let bot = Interface($scope);
     let interpreter = {};
@@ -45,6 +47,7 @@ const Interpreter = () => {
     );
 
     function init() {
+        bound_api = api_base.api;
         $scope = createScope();
         bot = Interface($scope);
         interpreter = {};
@@ -277,7 +280,10 @@ const Interpreter = () => {
         });
     }
 
-    return { stop, run, terminateSession, bot, unsubscribeFromTicksService };
+    /** ct_session_v2: false once the app has moved to a new socket - this engine would hear nothing. */
+    const isBoundTo = api => bound_api === api;
+
+    return { stop, run, terminateSession, bot, unsubscribeFromTicksService, isBoundTo };
 };
 export default Interpreter;
 

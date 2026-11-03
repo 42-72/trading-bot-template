@@ -1,4 +1,6 @@
+import { logConnEvent } from '@/utils/connection-log';
 import { isAiEngineStrategyId, isLibraryStrategyId } from '@/utils/library-strategies';
+import { isSessionV2Enabled } from '@/utils/session-flags';
 import { save_types } from '../constants';
 import { config } from '../constants/config';
 import { api_base } from '../services/api/api-base';
@@ -20,6 +22,56 @@ class DBot {
         this.before_run_funcs = [];
         this.symbol = null;
         this.is_bot_running = false;
+        this.engine_refresh = null;
+
+        // ct_session_v2: a new socket is logged in (reconnect) - an idle engine moves onto it.
+        globalObserver.register('session.reconnected', () => {
+            this.refreshEngineForNewConnection('reconnected').catch(() => {});
+        });
+    }
+
+    /**
+     * ct_session_v2: true when the engine's listeners (ticks, proposals,
+     * contract updates) sit on a socket the app no longer uses. Such an
+     * engine never hears another message: Run would wait forever.
+     */
+    isEngineOnOldConnection() {
+        if (!isSessionV2Enabled() || !this.interpreter?.isBoundTo || !api_base.api) return false;
+        return !this.interpreter.isBoundTo(api_base.api);
+    }
+
+    /**
+     * ct_session_v2: replace an idle engine left on an old socket with a
+     * fresh one on the current socket - as a page load would build it.
+     * Never touches a running bot.
+     */
+    refreshEngineForNewConnection(reason) {
+        if (this.is_bot_running || !this.isEngineOnOldConnection()) return this.engine_refresh ?? Promise.resolve();
+        if (this.engine_refresh) return this.engine_refresh;
+
+        const stale = this.interpreter;
+        this.engine_refresh = (async () => {
+            logConnEvent(
+                'engine_refreshed',
+                `${reason} - the bot engine moved to connection ${api_base.connection_generation}`
+            );
+            // Its listeners were on the old socket: drop them (nothing else is in this list).
+            api_base.dropSubscriptions?.();
+            // A tick stream it may have opened on the current socket would make the new
+            // one's request fail as AlreadySubscribed - forget it first (bounded wait).
+            if (stale?.bot?.tradeEngine?.checkTicksPromiseExists?.()) {
+                await Promise.race([
+                    stale.unsubscribeFromTicksService().catch(() => {}),
+                    new Promise(resolve => setTimeout(resolve, 3000)),
+                ]);
+            }
+            if (this.is_bot_running) return;
+            this.interpreter = Interpreter();
+            if (this.symbol) this.interpreter.bot.tradeEngine.watchTicks(this.symbol).catch?.(() => {});
+        })().finally(() => {
+            this.engine_refresh = null;
+        });
+        return this.engine_refresh;
     }
 
     /**
@@ -277,26 +329,55 @@ class DBot {
      * JavaScript code that's fed to the interpreter.
      */
     runBot() {
-        if (api_base.is_stopping) return;
+        if (api_base.is_stopping) {
+            logConnEvent('run_ignored', 'the previous stop has not finished');
+            return;
+        }
 
         try {
             api_base.is_stopping = false;
             const code = this.generateCode();
+
+            // ct_session_v2: after a reconnect the engine must run on the new socket,
+            // exactly as after a page load (a refresh may already be under way).
+            if (this.engine_refresh || this.isEngineOnOldConnection()) {
+                const refresh = this.refreshEngineForNewConnection('Run pressed');
+                this.is_bot_running = true;
+                api_base.setIsRunning(true);
+                refresh
+                    .catch(() => {})
+                    .then(() => {
+                        if (!this.is_bot_running || !api_base.is_running) return;
+                        if (this.isEngineOnOldConnection()) this.interpreter = Interpreter();
+                        this.startInterpreter(code);
+                    });
+                return;
+            }
+
             if (!this.interpreter.bot.tradeEngine.checkTicksPromiseExists()) this.interpreter = Interpreter();
 
             this.is_bot_running = true;
 
             api_base.setIsRunning(true);
-            this.interpreter.run(code).catch(error => {
-                globalObserver.emit('Error', error);
-                this.stopBot();
-            });
+            this.startInterpreter(code);
         } catch (error) {
             globalObserver.emit('Error', error);
 
             if (this.interpreter) {
                 this.stopBot();
             }
+        }
+    }
+
+    startInterpreter(code) {
+        try {
+            this.interpreter.run(code).catch(error => {
+                globalObserver.emit('Error', error);
+                this.stopBot();
+            });
+        } catch (error) {
+            globalObserver.emit('Error', error);
+            if (this.interpreter) this.stopBot();
         }
     }
 

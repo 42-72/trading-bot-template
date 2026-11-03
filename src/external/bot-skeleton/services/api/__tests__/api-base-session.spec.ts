@@ -1,6 +1,7 @@
 import { OAuthTokenExchangeService } from '@/services/oauth-token-exchange.service';
 import { readConnLog } from '@/utils/connection-log';
 import { session_status, SessionExpiredError } from '@/utils/session-status';
+import { keep_alive, KEEP_ALIVE_INTERVAL_MS } from '@/utils/socket-keep-alive';
 import { observer as globalObserver } from '../../../utils/observer';
 import { api_base, RECONNECT_BACKOFF_MS } from '../api-base';
 import { generateDerivApiInstance } from '../appId';
@@ -126,6 +127,7 @@ describe('api_base session handling (ct_session_v2 on)', () => {
             if (instance.expiry_timer) clearTimeout(instance.expiry_timer);
         });
         instances = [];
+        keep_alive.stop();
         globalObserver.unregisterAll('session.connection_lost');
         globalObserver.unregisterAll('session.expired');
         jest.useRealTimers();
@@ -360,6 +362,138 @@ describe('api_base session handling (ct_session_v2 on)', () => {
             expect(emitted).toEqual([]);
         });
     });
+
+    describe('after a reconnect (Run must work as after a page load)', () => {
+        const reconnectTo = async (base: typeof api_base, next_api: TFakeApi) => {
+            mockGenerate.mockResolvedValueOnce(next_api);
+            (base.api as unknown as TFakeApi).close();
+            await flush();
+            next_api.open();
+            await flush();
+        };
+
+        it('tells the bot engine about a reconnected socket - but not about the first one', async () => {
+            const reconnected = jest.fn();
+            globalObserver.register('session.reconnected', reconnected);
+            const base = await loggedIn();
+            expect(reconnected).not.toHaveBeenCalled();
+
+            await reconnectTo(base, makeApi());
+            expect(reconnected).toHaveBeenCalledTimes(1);
+            expect(reconnected).toHaveBeenCalledWith({ generation: base.connection_generation });
+            globalObserver.unregisterAll('session.reconnected');
+        });
+
+        it('logs the first buy after a reconnect, once per connection, and not before any reconnect', async () => {
+            const base = await loggedIn();
+            base.noteBuy();
+            expect(events('first_buy_after_reconnect')).toHaveLength(0);
+
+            await reconnectTo(base, makeApi());
+            base.noteBuy();
+            base.noteBuy();
+            expect(events('first_buy_after_reconnect')).toHaveLength(1);
+            expect(events('first_buy_after_reconnect')[0].d).toBe(`connection ${base.connection_generation}`);
+        });
+
+        it('"waiting until visible" records what the page actually reported', async () => {
+            const base = await loggedIn();
+            setVisibility('hidden');
+            (base.api as unknown as TFakeApi).close();
+            await flush();
+            expect(events('reconnect_wait')[0].d).toMatch(
+                /waiting until visible \(visibility=hidden online=(true|false) focus=(true|false)\)/
+            );
+        });
+
+        it('listeners attached while the flag was off are removed, so only one reconnect runs', async () => {
+            const base = createApiBase();
+            localStorage.removeItem('ct_session_v2');
+            base.initEventListeners(); // legacy: online / focus -> reconnectIfNotConnected
+            localStorage.setItem('ct_session_v2', '1');
+            const spy = jest.spyOn(base, 'scheduleReconnect');
+            mockGenerate.mockResolvedValueOnce(makeApi());
+            await base.init();
+            base.api = makeApi() as never;
+            (base.api as unknown as TFakeApi).connection.readyState = 3;
+            window.dispatchEvent(new Event('online'));
+            await flush();
+            expect(spy.mock.calls.map(([reason]) => reason)).toEqual(['online']);
+            window.removeEventListener('online', base.reconnectIfNotConnected);
+            window.removeEventListener('focus', base.reconnectIfNotConnected);
+        });
+    });
+
+    describe('keep-alive', () => {
+        afterEach(() => {
+            keep_alive.stop();
+            keep_alive.setBusy('bot', false);
+            keep_alive.setBusy('ai_scanner', false);
+        });
+
+        const pings = (api: TFakeApi) => api.send.mock.calls.filter(([request]) => 'ping' in request).length;
+
+        it('pings the current socket every 20 s once logged in', async () => {
+            const api = makeApi();
+            await loggedIn(api);
+            await jest.advanceTimersByTimeAsync(KEEP_ALIVE_INTERVAL_MS * 3);
+            expect(pings(api)).toBe(3);
+        });
+
+        it('keeps pinging while the tab is hidden and a bot is running, and pings at once on hide', async () => {
+            const api = makeApi();
+            const base = await loggedIn(api);
+            base.setIsRunning(true);
+            setVisibility('hidden');
+            document.dispatchEvent(new Event('visibilitychange'));
+            expect(pings(api)).toBe(1);
+            await jest.advanceTimersByTimeAsync(5 * 60 * 1000);
+            expect(pings(api)).toBe(1 + 15);
+            expect(api.disconnect).not.toHaveBeenCalled();
+            expect(emitted).toEqual([]);
+            base.setIsRunning(false);
+        });
+
+        it('moves to the new socket after a reconnect and never pings a closed one', async () => {
+            const old_api = makeApi();
+            const base = await loggedIn(old_api);
+            const next_api = makeApi();
+            mockGenerate.mockResolvedValueOnce(next_api);
+            old_api.close();
+            await flush();
+            next_api.open();
+            await flush();
+            const old_pings = pings(old_api);
+            await jest.advanceTimersByTimeAsync(KEEP_ALIVE_INTERVAL_MS * 2);
+            expect(pings(old_api)).toBe(old_pings);
+            expect(pings(next_api)).toBe(2);
+            expect(base.api).toBe(next_api);
+        });
+
+        it('holds a Web Lock (no tab freezing) while a bot runs, and lets it go when it stops', async () => {
+            const release = jest.fn();
+            const request = jest.fn((_name: string, _options: unknown, callback: () => Promise<void>) =>
+                callback().then(release)
+            );
+            Object.defineProperty(navigator, 'locks', { configurable: true, value: { request } });
+            const base = await loggedIn();
+            base.setIsRunning(true);
+            expect(request).toHaveBeenCalledWith('ct-bot-running', { mode: 'shared' }, expect.any(Function));
+            expect(keep_alive.is_lock_held).toBe(true);
+            base.setIsRunning(false);
+            await flush();
+            expect(keep_alive.is_lock_held).toBe(false);
+            expect(release).toHaveBeenCalled();
+            delete (navigator as unknown as { locks?: unknown }).locks;
+        });
+
+        it('a late beat (the timer was held back) is logged', () => {
+            keep_alive.start(jest.fn());
+            jest.setSystemTime(Date.now() + 70000);
+            keep_alive.beat();
+            expect(events('keepalive_late')[0].d).toMatch(/^70s since the last ping/);
+        });
+    });
 });
 
 describe('api_base with ct_session_v2 off (behaviour as before)', () => {
@@ -400,6 +534,26 @@ describe('api_base with ct_session_v2 off (behaviour as before)', () => {
         for (let i = 0; i < 5; i++) base.reconnectIfNotConnected();
         expect(localStorage.getItem('active_loginid')).toBeNull();
         expect(base.init).toHaveBeenCalledTimes(5);
+    });
+
+    it('no keep-alive pings, no reconnect event and no Web Lock with the flag off', async () => {
+        jest.useFakeTimers();
+        const reconnected = jest.fn();
+        globalObserver.register('session.reconnected', reconnected);
+        const base = createApiBase();
+        const api = makeApi();
+        mockGenerate.mockResolvedValueOnce(api);
+        await base.init();
+        api.open();
+        await jest.advanceTimersByTimeAsync(KEEP_ALIVE_INTERVAL_MS * 3);
+        base.setIsRunning(true);
+        expect(api.send.mock.calls.filter(([request]) => 'ping' in request)).toHaveLength(0);
+        expect(keep_alive.is_running).toBe(false);
+        expect(keep_alive.is_lock_held).toBe(false);
+        expect(reconnected).not.toHaveBeenCalled();
+        base.setIsRunning(false);
+        globalObserver.unregisterAll('session.reconnected');
+        jest.useRealTimers();
     });
 
     it('the chart is re-initialised with the connection, as before', async () => {

@@ -20,6 +20,8 @@ import { filterOfferedMarkets } from '@/utils/ai-scanner-offered';
 import { getScannerStrategy, TConditionResult, TSide } from '@/utils/ai-strategies';
 import { createAiEngineStrategyId } from '@/utils/library-strategies';
 import { loadBotIntoBuilder } from '@/utils/load-bot-into-builder';
+import { isSessionV2Enabled } from '@/utils/session-flags';
+import { keep_alive } from '@/utils/socket-keep-alive';
 import RootStore from './root-store';
 
 // The AI Scanner pipeline (components/ai-scanner):
@@ -280,6 +282,15 @@ export default class AiScannerStore {
                 } else if (!is_live && ['running', 'stopping'].includes(this.stage)) {
                     this.onBotStopped();
                 }
+            }
+        );
+
+        // ct_session_v2: while the scanner is busy the tab must not be frozen (socket-keep-alive.ts).
+        reaction(
+            () => this.is_active,
+            is_active => {
+                if (isSessionV2Enabled()) keep_alive.setBusy('ai_scanner', is_active);
+                else keep_alive.setBusy('ai_scanner', false);
             }
         );
 

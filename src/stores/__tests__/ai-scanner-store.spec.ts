@@ -5,6 +5,7 @@ import { observer as globalObserver } from '@/external/bot-skeleton/utils/observ
 import { readEngineValues } from '@/utils/ai-engine-xml';
 import { setTestStrategy } from '@/utils/ai-strategies/__mocks__/test-strategy';
 import { loadBotIntoBuilder } from '@/utils/load-bot-into-builder';
+import { keep_alive } from '@/utils/socket-keep-alive';
 import AiScannerStore, {
     CONDITIONS_NOT_MET_MESSAGE,
     DEFAULT_FORM,
@@ -1356,6 +1357,23 @@ describe('AiScannerStore', () => {
             store.stopForSession('Connection lost – AI Scanner stopped');
             expect(store.stage).toBe('idle');
             expect(root.run_panel.onStopBotClick).not.toHaveBeenCalled();
+        });
+
+        it('keeps the tab from being frozen while scanning (Web Lock), and lets go when the scan ends', async () => {
+            localStorage.setItem('ct_session_v2', '1');
+            const setBusy = jest.spyOn(keep_alive, 'setBusy');
+            const { store } = await startScan();
+            expect(setBusy).toHaveBeenLastCalledWith('ai_scanner', true);
+            store.stopForSession('Connection lost – AI Scanner stopped');
+            expect(setBusy).toHaveBeenLastCalledWith('ai_scanner', false);
+            setBusy.mockRestore();
+        });
+
+        it('flag off: never holds the lock', async () => {
+            const setBusy = jest.spyOn(keep_alive, 'setBusy');
+            await startScan();
+            expect(setBusy).not.toHaveBeenCalledWith('ai_scanner', true);
+            setBusy.mockRestore();
         });
     });
 });

@@ -1,4 +1,5 @@
 import { localize } from '@deriv-com/translations';
+import { logConnEvent } from './connection-log';
 
 export type TSessionStopReason = 'connection_lost' | 'session_expired';
 
@@ -29,6 +30,11 @@ export const stopRunsForSession = (
         reason === 'connection_lost'
             ? `${localize('Connection lost')} – ${what}`
             : `${localize('Session expired')} – ${what}`;
+
+    logConnEvent(
+        'run_stopped',
+        `${is_scanner_active ? 'AI Scanner' : 'bot'} stopped - ${reason === 'connection_lost' ? 'connection lost' : 'session expired'}`
+    );
 
     // The scanner stops its own bot through the same Stop path.
     if (is_scanner_active) ai_scanner?.stopForSession(message);

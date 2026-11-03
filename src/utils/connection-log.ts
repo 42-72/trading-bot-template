@@ -1,15 +1,18 @@
 /**
- * Hidden connection log for phones: the last 50 connection / auth events,
+ * Hidden connection log for phones: the last 200 connection / auth events,
  * with timestamps, kept in localStorage under ct_conn_log so it survives a
  * logout, a reload and a closed tab. Recorded whether or not ct_session_v2
  * is on, so the old behaviour can be captured too. The "Connection log"
  * button that shows it appears only when ctdebug is on (session-flags.ts).
  *
+ * An event identical to the one before it (same name and detail) is not
+ * added again: that line's count goes up and its last time is updated.
+ *
  * Never pass a token, an OTP or a full socket URL in `detail`: use
  * describeSocketURL() for URLs.
  */
 export const CONN_LOG_KEY = 'ct_conn_log';
-export const CONN_LOG_MAX_ENTRIES = 50;
+export const CONN_LOG_MAX_ENTRIES = 200;
 
 export type TConnLogEntry = {
     /** ISO time */
@@ -18,6 +21,10 @@ export type TConnLogEntry = {
     e: string;
     /** Short, credential-free detail */
     d?: string;
+    /** How many times in a row this exact event happened (absent = once) */
+    n?: number;
+    /** ISO time of the last repeat (only when n > 1) */
+    tl?: string;
 };
 
 type TListener = (entries: TConnLogEntry[]) => void;
@@ -39,9 +46,17 @@ export const readConnLog = (): TConnLogEntry[] => {
 
 export const logConnEvent = (event: string, detail?: string) => {
     try {
-        const entry: TConnLogEntry = { t: new Date().toISOString(), e: event };
+        const now = new Date().toISOString();
+        const entry: TConnLogEntry = { t: now, e: event };
         if (detail) entry.d = scrub(detail);
-        const entries = [...readConnLog(), entry].slice(-CONN_LOG_MAX_ENTRIES);
+        const previous_entries = readConnLog();
+        const last = previous_entries[previous_entries.length - 1];
+        let entries: TConnLogEntry[];
+        if (last && last.e === entry.e && (last.d ?? '') === (entry.d ?? '')) {
+            entries = [...previous_entries.slice(0, -1), { ...last, n: (last.n ?? 1) + 1, tl: now }];
+        } else {
+            entries = [...previous_entries, entry].slice(-CONN_LOG_MAX_ENTRIES);
+        }
         localStorage.setItem(CONN_LOG_KEY, JSON.stringify(entries));
         listeners.forEach(listener => listener(entries));
     } catch {
@@ -80,7 +95,9 @@ export const isAuthenticatedSocketURL = (url: string) => /[?&]otp=/i.test(String
 
 /** The log as plain text, oldest first - what the panel shows and Copy copies. */
 export const formatConnLog = (entries: TConnLogEntry[]) =>
-    entries.map(({ t, e, d }) => `${t}  ${e}${d ? `  ${d}` : ''}`).join('\n');
+    entries
+        .map(({ t, e, d, n, tl }) => `${t}  ${e}${d ? `  ${d}` : ''}${n && n > 1 ? `  (x${n}, last ${tl})` : ''}`)
+        .join('\n');
 
 /** localStorage.clear() that keeps the log (and the ct_session_v2 / ctdebug switches). */
 export const clearLocalStorageKeepingConnLog = (keep_keys: string[] = []) => {

@@ -10,6 +10,7 @@ import { logConnEvent } from '@/utils/connection-log';
 import { handleBackendError, isBackendError } from '@/utils/error-handler';
 import { isSessionV2Enabled } from '@/utils/session-flags';
 import { session_status, SessionExpiredError } from '@/utils/session-status';
+import { keep_alive } from '@/utils/socket-keep-alive';
 import { activeSymbolsProcessorService } from '../../../../services/active-symbols-processor.service';
 import { observer as globalObserver } from '../../utils/observer';
 import { doUntilDone, socket_state } from '../tradeEngine/utils/helpers';
@@ -46,6 +47,14 @@ const getErrorCode = (error: unknown): string | undefined => {
 
 const isPageHidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden';
 const isOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false;
+/** The raw page state behind a reconnect_wait, so the log shows what was actually read. */
+const describePageState = () => {
+    const visibility = typeof document !== 'undefined' ? document.visibilityState : '?';
+    const online = typeof navigator !== 'undefined' ? String(navigator.onLine) : '?';
+    const focus =
+        typeof document !== 'undefined' && typeof document.hasFocus === 'function' ? String(document.hasFocus()) : '?';
+    return `visibility=${visibility} online=${online} focus=${focus}`;
+};
 
 type TApiBaseApi = {
     /** Set by appId.js: true for a socket opened with a one-time login code, false for the public one. */
@@ -96,6 +105,10 @@ class APIBase {
     session_expires_at: number | null = null;
     expiry_timer: ReturnType<typeof setTimeout> | null = null;
     auth_error_check: { generation: number; confirm_until: number | null } | null = null;
+    /** The connection whose first buy has been logged (first_buy_after_reconnect). */
+    private buy_logged_generation = -1;
+    /** The first connection this page authorized: later ones are reconnects. */
+    private first_authorized_generation = -1;
     private retired_apis = new WeakSet<object>();
     private listened_apis = new WeakSet<object>();
     private are_session_listeners_on = false;
@@ -287,6 +300,9 @@ class APIBase {
             if (isSessionV2Enabled()) {
                 if (this.are_session_listeners_on) return;
                 this.are_session_listeners_on = true;
+                // Listeners from a time the flag was off would start a second, parallel reconnect.
+                window.removeEventListener('online', this.reconnectIfNotConnected);
+                window.removeEventListener('focus', this.reconnectIfNotConnected);
                 window.addEventListener('online', this.onWindowOnline);
                 window.addEventListener('focus', this.onWindowFocus);
                 document.addEventListener('visibilitychange', this.onVisibilityChange);
@@ -306,8 +322,9 @@ class APIBase {
     reconnectIfNotConnected = () => {
         if (this.api?.connection?.readyState && this.api?.connection?.readyState > 1) {
             // ct_session_v2: one reconnect path, with backoff, that never wipes auth.
+            // (Only reached through listeners attached while the flag was off.)
             if (isSessionV2Enabled()) {
-                this.scheduleReconnect('not connected');
+                this.scheduleReconnect('not connected (legacy listener)');
                 return;
             }
             this.reconnection_attempts += 1;
@@ -604,7 +621,10 @@ class APIBase {
         if (isOffline() || isPageHidden()) {
             if (this.reconnect_timer) clearTimeout(this.reconnect_timer);
             this.reconnect_timer = null;
-            logConnEvent('reconnect_wait', `${reason} - waiting until ${isOffline() ? 'online' : 'visible'}`);
+            logConnEvent(
+                'reconnect_wait',
+                `${reason} - waiting until ${isOffline() ? 'online' : 'visible'} (${describePageState()})`
+            );
             return;
         }
 
@@ -673,6 +693,12 @@ class APIBase {
         this.reconnect_step = 0;
         session_status.setReconnecting(false);
         logConnEvent('authorized', `connection ${generation}`);
+        keep_alive.start(() => this.sendKeepAlive());
+        if (this.first_authorized_generation === -1) this.first_authorized_generation = generation;
+        else if (generation !== this.first_authorized_generation) {
+            // An idle bot engine moves onto the new socket (dbot.js), so the next Run works as after a page load.
+            globalObserver.emit('session.reconnected', { generation });
+        }
         // The fresh connection after a first auth error: a repeat within the window confirms it.
         if (this.auth_error_check && this.auth_error_check.generation !== generation) {
             this.auth_error_check.confirm_until = Date.now() + AUTH_ERROR_CONFIRM_WINDOW_MS;
@@ -744,6 +770,7 @@ class APIBase {
         this.reconnect_timer = null;
         this.expiry_timer = null;
         this.auth_error_check = null;
+        keep_alive.stop();
         session_status.setReconnecting(false);
         logConnEvent('session_expired', `${reason} (${source})`);
 
@@ -762,6 +789,39 @@ class APIBase {
 
     setIsRunning(toggle = false) {
         this.is_running = toggle;
+        // ct_session_v2: a running bot's tab must not be frozen (socket-keep-alive.ts).
+        if (isSessionV2Enabled()) keep_alive.setBusy('bot', toggle);
+        else if (!toggle) keep_alive.setBusy('bot', false);
+    }
+
+    /**
+     * ct_session_v2 keep-alive (utils/socket-keep-alive.ts): a ping on the
+     * current socket, so the server never closes it as idle - hidden tab or not.
+     */
+    sendKeepAlive() {
+        const api = this.api;
+        if (!api || api.connection?.readyState !== 1) return;
+        try {
+            Promise.resolve(api.send({ ping: 1 })).catch(() => {});
+        } catch {
+            // The close handler deals with a dead socket.
+        }
+    }
+
+    /** A buy succeeded (Purchase.js): the first one on a reconnected socket goes in the connection log. */
+    noteBuy() {
+        const generation = this.connection_generation;
+        if (!isSessionV2Enabled() || this.buy_logged_generation === generation) return;
+        this.buy_logged_generation = generation;
+        if (this.first_authorized_generation !== -1 && generation !== this.first_authorized_generation) {
+            logConnEvent('first_buy_after_reconnect', `connection ${generation}`);
+        }
+    }
+
+    /** Unsubscribes the bot engine's listeners without touching any timers (dbot.js engine refresh). */
+    dropSubscriptions() {
+        this.subscriptions.forEach(s => s.unsubscribe());
+        this.subscriptions = [];
     }
 
     pushSubscription(subscription: CurrentSubscription) {

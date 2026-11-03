@@ -42,6 +42,7 @@ export default Engine =>
                 });
 
                 this.contractId = buy.contract_id;
+                api_base.noteBuy?.();
                 this.store.dispatch(purchaseSuccessful());
 
                 if (this.is_proposal_subscription_required) {

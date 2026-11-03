@@ -24,7 +24,7 @@ const copyText = async (text: string) => {
 
 /**
  * Hidden "Connection log" button (only with ?ctdebug=1) and its panel: the
- * last 50 connection / auth events from utils/connection-log.ts, with Copy.
+ * last 200 connection / auth events from utils/connection-log.ts, with Copy.
  * Developer tooling - English only, not translated.
  */
 const ConnectionLog = () => {
