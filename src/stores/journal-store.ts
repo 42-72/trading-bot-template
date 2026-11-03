@@ -11,7 +11,7 @@ import { isVirtualAccount } from '@/utils/account-helpers';
 import { ct_perf } from '@/utils/ct-perf';
 import { localize } from '@deriv-com/translations';
 import { isCustomJournalMessage } from '../utils/journal-notifications';
-import { getStoredItemsByKey, getStoredItemsByUser, setStoredItemsByKey } from '../utils/session-storage';
+import { SessionListCache } from '../utils/session-list-cache';
 import { getSetting, storeSetting } from '../utils/settings';
 import { TAccountList } from './client-store';
 import RootStore from './root-store';
@@ -71,6 +71,9 @@ export interface IJournalStore {
     restoreStoredJournals: () => void;
 }
 
+/** Journal lines kept (in memory and in session storage): the newest. */
+export const JOURNAL_MAX_MESSAGES = 5000;
+
 export default class JournalStore {
     root_store: RootStore;
     core: RootStore['core'];
@@ -103,6 +106,10 @@ export default class JournalStore {
     }
 
     JOURNAL_CACHE = 'journal_cache';
+    journal_cache = new SessionListCache<TMessageItem>({
+        storage_key: this.JOURNAL_CACHE,
+        max_items: JOURNAL_MAX_MESSAGES,
+    });
 
     is_filter_dialog_visible = false;
 
@@ -118,7 +125,7 @@ export default class JournalStore {
         const client = this.core.client as RootStore['client'];
         const { loginid } = client;
         this.journal_filters = getSetting('journal_filter') ?? this.filters.map(filter => filter.id);
-        this.unfiltered_messages = getStoredItemsByUser(this.JOURNAL_CACHE, loginid, []);
+        this.unfiltered_messages = this.journal_cache.read(loginid) ?? [];
     }
 
     getServerTime() {
@@ -267,7 +274,8 @@ export default class JournalStore {
         const unique_id = uuidv4();
 
         this.unfiltered_messages.unshift({ date, time, message, message_type, className, unique_id, extra });
-        this.unfiltered_messages = this.unfiltered_messages.slice(); // force array update
+        // New array (forces the update); the oldest lines go past JOURNAL_MAX_MESSAGES.
+        this.unfiltered_messages = this.unfiltered_messages.slice(0, JOURNAL_MAX_MESSAGES);
     }
 
     // Method to update the existing stat message instead of creating a new one
@@ -334,16 +342,14 @@ export default class JournalStore {
     registerReactions() {
         const client = this.core.client as RootStore['client'];
 
-        // Write journal messages to session storage on each change in unfiltered messages.
+        // Journal messages are saved to session storage a little later, off the trade path
+        // (SessionListCache) - never inside the change that added them.
         const disposeWriteJournalMessageListener = reaction(
             () => this.unfiltered_messages,
-            unfiltered_messages =>
-                ct_perf.time('Journal saved to sessionStorage', () => {
-                    ct_perf.gauge('journal_in_memory', unfiltered_messages?.length ?? 0);
-                    const stored_journals = getStoredItemsByKey(this.JOURNAL_CACHE, {});
-                    stored_journals[client.loginid as string] = unfiltered_messages?.slice(0, 5000);
-                    setStoredItemsByKey(this.JOURNAL_CACHE, stored_journals);
-                })
+            unfiltered_messages => {
+                ct_perf.gauge('journal_in_memory', unfiltered_messages?.length ?? 0);
+                this.journal_cache.write(client.loginid, unfiltered_messages);
+            }
         );
 
         // Attempt to load cached journal messages on client loginid change.
@@ -356,7 +362,7 @@ export default class JournalStore {
                     );
                     return !!has_account;
                 });
-                this.unfiltered_messages = getStoredItemsByUser(this.JOURNAL_CACHE, loginid, []);
+                this.unfiltered_messages = this.journal_cache.read(loginid) ?? [];
                 if (this.unfiltered_messages.length === 0) {
                     this.pushMessage(LogTypes.WELCOME, MessageTypes.SUCCESS, 'journal__text');
                 } else if (this.unfiltered_messages.length > 0) {

@@ -18,10 +18,17 @@ body {
 // inner horizontal scroll/pan, and clamping overflow-x anywhere inside
 // them would break that; this only stops the OUTER page/viewport from
 // ever scrolling sideways.
+//
+// clip, not hidden (hidden stays only as the fallback for old browsers):
+// overflow-x: hidden on both html and body makes body a scroll container of
+// its own (overflow-y computes to auto), so a pull at the top of the page
+// never reaches the viewport and the phone's pull-to-refresh never starts.
+// clip stops the sideways scroll the same way without creating a scroller.
 @media (max-width: 760px) {
     html,
     body {
         overflow-x: hidden;
+        overflow-x: clip;
     }
 }
 

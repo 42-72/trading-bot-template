@@ -500,7 +500,8 @@ describe('useSmartChartAdaptor', () => {
             // should be cleaned up automatically.
             // Since we already used mockReturnValueOnce twice, subsequent calls will return undefined
             // Let's just verify the global cleanup methods were called
-            expect(chart_api.api?.forgetAll).toHaveBeenCalledWith('ticks');
+            // Never forget_all 'ticks': the socket is shared with a running bot.
+            expect(chart_api.api?.forgetAll).not.toHaveBeenCalled();
             expect(mockAdapter.transport.unsubscribeAll).toHaveBeenCalledWith('ticks');
         });
 

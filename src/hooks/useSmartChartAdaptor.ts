@@ -292,14 +292,7 @@ export const useSmartChartAdaptor = (): UseSmartChartAdaptorReturn => {
             });
             cleanupFunctionsRef.current = [];
 
-            // Unsubscribe from all ticks
-            try {
-                chart_api.api?.forgetAll('ticks');
-            } catch (err) {
-                logger.error('Error forgetting ticks:', err);
-            }
-
-            // Clean up adapter subscriptions
+            // Only this chart's own subscriptions (never forget_all 'ticks' - see transport.ts)
             if (adapter?.transport) {
                 try {
                     adapter.transport.unsubscribeAll('ticks');

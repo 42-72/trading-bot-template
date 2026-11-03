@@ -244,20 +244,71 @@ describe('Transport Layer', () => {
     });
 
     describe('unsubscribeAll', () => {
-        it('should unsubscribe from all ticks by default', () => {
+        it("forgets only this chart's own subscriptions - never forget_all on the shared socket", async () => {
+            const message_subscription = { unsubscribe: jest.fn() };
+            mockApi.onMessage.mockReturnValue({ subscribe: jest.fn().mockReturnValue(message_subscription) });
+            mockApi.send.mockResolvedValue({ subscription: { id: 'chart-sub' } });
+            mockApi.forget = jest.fn();
+
             const transport = createTransport();
+            transport.subscribe({ ticks_history: 'R_50' }, jest.fn());
+            await Promise.resolve();
+            await Promise.resolve();
 
             transport.unsubscribeAll();
-
-            expect(mockApi.forgetAll).toHaveBeenCalledWith('ticks');
-        });
-
-        it('should unsubscribe from specific message type', () => {
-            const transport = createTransport();
-
             transport.unsubscribeAll('candles');
 
-            expect(mockApi.forgetAll).toHaveBeenCalledWith('candles');
+            expect(mockApi.forgetAll).not.toHaveBeenCalled();
+            expect(mockApi.forget).toHaveBeenCalledTimes(1);
+            expect(mockApi.forget).toHaveBeenCalledWith('chart-sub');
+            expect(message_subscription.unsubscribe).toHaveBeenCalled();
+        });
+
+        it("never takes another stream's messages (e.g. a running bot's ticks) as its own", async () => {
+            let emit: (message: { data: Record<string, unknown> }) => void = () => undefined;
+            mockApi.onMessage.mockReturnValue({
+                subscribe: jest.fn((cb: typeof emit) => {
+                    emit = cb;
+                    return { unsubscribe: jest.fn() };
+                }),
+            });
+            let reply: (value: unknown) => void = () => undefined;
+            mockApi.send.mockReturnValue(new Promise(resolve => (reply = resolve)));
+            mockApi.forget = jest.fn();
+
+            const transport = createTransport();
+            const callback = jest.fn();
+            transport.subscribe({ ticks_history: 'R_50' }, callback);
+
+            // The bot's tick stream on the same socket, before the chart's own reply.
+            emit({ data: { msg_type: 'tick', subscription: { id: 'bot-sub' } } });
+            expect(callback).not.toHaveBeenCalled();
+
+            reply({ subscription: { id: 'chart-sub' } });
+            await Promise.resolve();
+            await Promise.resolve();
+            emit({ data: { msg_type: 'tick', subscription: { id: 'chart-sub' } } });
+            emit({ data: { msg_type: 'tick', subscription: { id: 'bot-sub' } } });
+            expect(callback).toHaveBeenCalledTimes(2); // its reply + its own tick
+
+            transport.unsubscribeAll();
+            expect(mockApi.forget).toHaveBeenCalledWith('chart-sub');
+            expect(mockApi.forget).not.toHaveBeenCalledWith('bot-sub');
+        });
+
+        it('forgets a subscription whose reply arrives after it was unsubscribed', async () => {
+            mockApi.onMessage.mockReturnValue({ subscribe: jest.fn().mockReturnValue({ unsubscribe: jest.fn() }) });
+            let reply: (value: unknown) => void = () => undefined;
+            mockApi.send.mockReturnValue(new Promise(resolve => (reply = resolve)));
+            mockApi.forget = jest.fn();
+
+            const transport = createTransport();
+            const id = transport.subscribe({ ticks_history: 'R_50' }, jest.fn());
+            transport.unsubscribe(id);
+            reply({ subscription: { id: 'late-sub' } });
+            await Promise.resolve();
+            await Promise.resolve();
+            expect(mockApi.forget).toHaveBeenCalledWith('late-sub');
         });
 
         it('should handle unsubscribeAll when API not available', () => {

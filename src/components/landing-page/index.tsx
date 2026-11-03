@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { observer } from 'mobx-react-lite';
 import { useApiBase } from '@/hooks/useApiBase';
 import { useAuthActions } from '@/hooks/useAuthActions';
+import { useStore } from '@/hooks/useStore';
+import { hideBootSplash } from '@/utils/boot-splash';
 import { Localize, localize } from '@deriv-com/translations';
 import DigitRain from './DigitRain';
 import './landing-page.scss';
@@ -21,8 +23,7 @@ const HEADLINE_PAIRS = [
     },
     {
         title: 'Run bots, not spreadsheets',
-        description:
-            'Import a strategy or build one block by block, then let it run while you get on with your day.',
+        description: 'Import a strategy or build one block by block, then let it run while you get on with your day.',
     },
     {
         title: 'Everything in one workspace',
@@ -46,8 +47,8 @@ const hasStoredAuthToken = () => {
     try {
         return Boolean(
             localStorage.getItem('authToken') ||
-                localStorage.getItem('active_loginid') ||
-                sessionStorage.getItem('auth_info')
+            localStorage.getItem('active_loginid') ||
+            sessionStorage.getItem('auth_info')
         );
     } catch {
         // Storage inaccessible (private browsing, etc.) — nothing to validate either way.
@@ -58,6 +59,9 @@ const hasStoredAuthToken = () => {
 const LandingPage = observer(() => {
     const { isAuthorizing, activeLoginid } = useApiBase();
     const { handleLogin, handleSignup } = useAuthActions();
+    // Demo <-> real switch: the old account is cleared before the new one logs in.
+    // That gap is not "logged out" - showing this full-screen page in it looked like a reload.
+    const is_switching_account = !!useStore()?.client?.is_account_regenerating;
 
     const [isDismissed, setIsDismissed] = useState(() => {
         try {
@@ -100,10 +104,16 @@ const LandingPage = observer(() => {
     // (no token, or validation resolved to no active login) are different states —
     // only the first is a reason to wait.
     const hasStoredToken = hasStoredAuthToken();
-    const isStillChecking = hasStoredToken && isAuthorizing;
+    const isStillChecking = hasStoredToken && (isAuthorizing || is_switching_account);
     const isConfirmedLoggedIn = hasStoredToken && !isAuthorizing && Boolean(activeLoginid);
+    const is_hidden = isDismissed || isStillChecking || isConfirmedLoggedIn;
 
-    if (isDismissed || isStillChecking || isConfirmedLoggedIn) return null;
+    // This page is a full screen of its own: the start-up splash makes way for it.
+    useEffect(() => {
+        if (!is_hidden) hideBootSplash('landing page');
+    }, [is_hidden]);
+
+    if (is_hidden) return null;
 
     const activePair = HEADLINE_PAIRS[pairIndex];
 
@@ -129,7 +139,8 @@ const LandingPage = observer(() => {
                 </span>
 
                 <div className='landing-page__wordmark brand-wordmark'>
-                    <span className='brand-wordmark__charles'>Charles</span><span className='brand-wordmark__traders'>Traders</span>
+                    <span className='brand-wordmark__charles'>Charles</span>
+                    <span className='brand-wordmark__traders'>Traders</span>
                 </div>
 
                 <div className='landing-page__headline' aria-hidden='true'>

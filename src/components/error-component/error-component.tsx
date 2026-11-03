@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import PropTypes from 'prop-types';
+import { hideBootSplash } from '@/utils/boot-splash';
 import { localize } from '@deriv-com/translations';
 import PageErrorContainer from '../page-error-container';
 import { standalone_routes } from '../shared';
@@ -25,6 +27,7 @@ const ErrorComponent = ({
     redirect_to = standalone_routes.trade,
     should_redirect = true,
 }: Partial<TErrorComponent>) => {
+    useEffect(() => hideBootSplash('error screen'), []);
     return (
         <PageErrorContainer
             error_header={header ?? ''}

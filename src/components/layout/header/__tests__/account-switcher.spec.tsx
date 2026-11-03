@@ -22,6 +22,10 @@ jest.mock('@/hooks/useStore', () => ({
     })),
 }));
 
+jest.mock('@/components/bot-notification/bot-notification', () => ({
+    botNotification: jest.fn(),
+}));
+
 jest.mock('@/hooks/useLogout', () => ({
     useLogout: jest.fn(() => jest.fn()),
 }));
@@ -113,6 +117,48 @@ describe('AccountSwitcher', () => {
         render(<AccountSwitcher activeAccount={mockActiveAccount} />);
         fireEvent.click(screen.getByTestId('dt_acc_info'));
         expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    });
+
+    it('says to stop the bot when the switch is blocked by a running bot', () => {
+        const { botNotification } = require('@/components/bot-notification/bot-notification');
+        const { useStore } = require('@/hooks/useStore');
+        useStore.mockReturnValue({
+            client: { checkAndRegenerateWebSocket: mockCheckAndRegenerateWebSocket },
+            run_panel: { is_running: true },
+        });
+        render(<AccountSwitcher activeAccount={mockActiveAccount} />);
+        fireEvent.click(screen.getByTestId('dt_acc_info'));
+        expect(botNotification).toHaveBeenCalledWith('Stop the bot before switching account');
+        expect(mockCheckAndRegenerateWebSocket).not.toHaveBeenCalled();
+    });
+
+    it.each(['checking', 'scanning', 'starting', 'running', 'stopping'])(
+        'blocks the switch while the AI Scanner is %s, and says why',
+        stage => {
+            const { botNotification } = require('@/components/bot-notification/bot-notification');
+            const { useStore } = require('@/hooks/useStore');
+            useStore.mockReturnValue({
+                client: { checkAndRegenerateWebSocket: mockCheckAndRegenerateWebSocket },
+                run_panel: { is_running: false },
+                ai_scanner: { stage },
+            });
+            render(<AccountSwitcher activeAccount={mockActiveAccount} />);
+            fireEvent.click(screen.getByTestId('dt_acc_info'));
+            expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+            expect(botNotification).toHaveBeenCalledWith('Stop the AI Scanner before switching account');
+        }
+    );
+
+    it('lets the trader switch when the AI Scanner is idle or stopped', () => {
+        const { useStore } = require('@/hooks/useStore');
+        useStore.mockReturnValue({
+            client: { checkAndRegenerateWebSocket: mockCheckAndRegenerateWebSocket },
+            run_panel: { is_running: false },
+            ai_scanner: { stage: 'stopped' },
+        });
+        render(<AccountSwitcher activeAccount={mockActiveAccount} />);
+        fireEvent.click(screen.getByTestId('dt_acc_info'));
+        expect(screen.getByRole('listbox')).toBeInTheDocument();
     });
 
     it('does not open dropdown with a single account', () => {

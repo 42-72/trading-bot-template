@@ -12,8 +12,14 @@ export const getStoredItemsByUser = (storage_key: string, loginid?: string, defa
 export const getStoredItemsByKey = (storage_key: string, default_value: any) => {
     try {
         const session_storage_item = sessionStorage.getItem(storage_key);
-        const decompressed_item = LZString.decompress(session_storage_item);
-        const stored_items = JSON.parse(decompressed_item);
+        if (!session_storage_item) return default_value;
+        // Plain JSON (SessionListCache), or the older LZString-compressed format.
+        let stored_items;
+        try {
+            stored_items = JSON.parse(session_storage_item);
+        } catch {
+            stored_items = JSON.parse(LZString.decompress(session_storage_item));
+        }
 
         if (stored_items) {
             return stored_items;

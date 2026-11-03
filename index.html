@@ -53,10 +53,10 @@
             }
         </style>
         <style>
+            /* No overflow: hidden here - it would block the phone's pull-to-refresh while the splash shows. */
             html.mw-boot,
             html.mw-boot body {
                 background: #0e0e0e !important;
-                overflow: hidden;
             }
             html.mw-boot #root,
             html.mw-boot #modal_root,
@@ -76,7 +76,12 @@
                 justify-content: center;
                 gap: 1.6rem;
                 background: #0e0e0e;
-                font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+                font-family:
+                    system-ui,
+                    -apple-system,
+                    'Segoe UI',
+                    Roboto,
+                    sans-serif;
             }
 
             #mw-boot-splash .wm {

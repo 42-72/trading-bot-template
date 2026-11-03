@@ -13,6 +13,7 @@ import { useApiBase } from '@/hooks/useApiBase';
 import { useStartupWatchdog } from '@/hooks/useStartupWatchdog';
 import { useStore } from '@/hooks/useStore';
 import useThemeSwitcher from '@/hooks/useThemeSwitcher';
+import { hideBootSplash } from '@/utils/boot-splash';
 import { ct_perf } from '@/utils/ct-perf';
 import { startLog } from '@/utils/start-log';
 import { ThemeProvider } from '@deriv-com/quill-ui';
@@ -184,6 +185,12 @@ const AppContent = observer(() => {
         if (api_base?.api) changeActiveSymbolLoadingState();
     };
     const { has_failed: has_startup_failed } = useStartupWatchdog(is_loading, retryStartup);
+
+    // The start-up splash goes once the app can be used (or start-up failed).
+    useEffect(() => {
+        if (!is_loading) hideBootSplash('app ready');
+        else if (has_startup_failed) hideBootSplash('start-up failed');
+    }, [is_loading, has_startup_failed]);
 
     if (common?.error) return null;
 

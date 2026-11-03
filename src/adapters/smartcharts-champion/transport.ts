@@ -47,23 +47,15 @@ export function createTransport(): TTransport {
             // Send initial subscription request
             const subscribeRequest = { ...request, subscribe: 1 };
 
-            // Set up global message listener first (before sending request)
+            // Set up global message listener first (before sending request). The socket is
+            // shared with a running bot, the Market Tool and the AI Scanner: only messages of
+            // THIS subscription (its id comes from the reply to its own request, below) are
+            // forwarded - never adopt another stream's id, or leaving the chart would forget it.
             const messageSubscription = chart_api.api.onMessage()?.subscribe(({ data }: { data: any }) => {
                 const subscriptionId = data?.subscription?.id;
-
-                // Check if this message belongs to our subscription
                 const storedSub = subscriptions.get(tempId);
-                if (storedSub && subscriptionId) {
-                    // Update the subscription with the real ID
-                    if (!storedSub.realSubscriptionId) {
-                        storedSub.realSubscriptionId = subscriptionId;
-                        subscriptions.set(tempId, storedSub);
-                    }
-
-                    // Forward the message if it matches our subscription
-                    if (subscriptionId === storedSub.realSubscriptionId) {
-                        callback(data);
-                    }
+                if (storedSub?.realSubscriptionId && subscriptionId === storedSub.realSubscriptionId) {
+                    callback(data);
                 }
             });
 
@@ -82,6 +74,11 @@ export function createTransport(): TTransport {
                     const subscriptionId = response?.subscription?.id;
 
                     if (subscriptionId) {
+                        // Unsubscribed while the request was on its way: forget it now.
+                        if (!subscriptions.has(tempId)) {
+                            chart_api.api?.forget(subscriptionId);
+                            return;
+                        }
                         // Update stored subscription with real ID
                         const storedSub = subscriptions.get(tempId);
                         if (storedSub) {
@@ -134,21 +131,19 @@ export function createTransport(): TTransport {
         },
 
         /**
-         * Unsubscribe from all streaming data of a specific type
-         * @param msgType - Message type to unsubscribe from (optional)
+         * Unsubscribe from all of THIS chart's streaming data. Never forget_all: the socket
+         * is shared, and forget_all would also end a running bot's tick stream and the
+         * Market Tool's / AI Scanner's.
+         * (A message type passed by older callers is ignored: only this chart's own go.)
          */
-        unsubscribeAll(msgType?: string): void {
-            if (chart_api.api) {
-                if (msgType) {
-                    chart_api.api.forgetAll(msgType);
-                } else {
-                    // Forget all ticks by default
-                    chart_api.api.forgetAll('ticks');
+        unsubscribeAll(): void {
+            subscriptions.forEach((subscription, tempId) => {
+                subscription.messageSubscription?.unsubscribe?.();
+                if (chart_api.api && subscription.realSubscriptionId) {
+                    chart_api.api.forget(subscription.realSubscriptionId);
                 }
-            }
-
-            // Clean up local subscriptions
-            subscriptions.clear();
+                subscriptions.delete(tempId);
+            });
         },
     };
 }

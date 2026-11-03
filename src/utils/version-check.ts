@@ -1,55 +1,67 @@
-import Cookies from 'js-cookie';
 import { BOT_VERSION_CONFIG } from '@/constants/bot-version';
 
 /**
- * Clears all localStorage data except for the bot_version
+ * Keys a version change never clears: the login (so a trader stays logged
+ * in) and the trader's own settings - execution mode, theme, language, the
+ * selected account, the Market Tool symbol, Bot Builder settings, saved
+ * strategies (localforage's localStorage fallback), chart settings and so on.
  */
-const clearLocalStorage = (): void => {
+export const KEPT_STORAGE_KEYS = [
+    BOT_VERSION_CONFIG.STORAGE_KEY,
+    // Login state
+    'active_loginid',
+    'account_type',
+    'accountsList',
+    'clientAccounts',
+    'authToken',
+    'client_account_details',
+    'client.country',
+    'google_access_token',
+    'google_access_token_expiry',
+    // User settings
+    'ct_execution_mode',
+    'market_tool_symbol',
+    'dbot_settings',
+    'active_tab',
+    'ct-theme',
+    'i18n_language',
+    'qs-fields',
+    'bot-announcements',
+    'library_strategy_ids',
+    'tracking_status',
+    'bot.chart_props',
+    'cq-favorites',
+];
+
+/** Key prefixes kept too (several keys of one kind). */
+export const KEPT_STORAGE_PREFIXES = ['ct_', 'ai_scanner_button_position', 'localforage', 'smartcharts'];
+
+const isKept = (key: string) =>
+    KEPT_STORAGE_KEYS.includes(key) || KEPT_STORAGE_PREFIXES.some(prefix => key.startsWith(prefix));
+
+/**
+ * A new bot version (BOT_VERSION_CONFIG.REQUIRED_VERSION): clears what an
+ * older version may have left behind, but never the login or the trader's
+ * settings (KEPT_STORAGE_KEYS). It used to wipe ALL of localStorage and every
+ * cookie, which logged traders out and reset their settings.
+ */
+const clearStaleLocalStorage = (): string[] => {
+    const removed: string[] = [];
     try {
-        // Get the current bot_version before clearing
-        const currentBotVersion = localStorage.getItem(BOT_VERSION_CONFIG.STORAGE_KEY);
-
-        // Clear all localStorage
-        localStorage.clear();
-
-        // Restore the bot_version if it existed
-        if (currentBotVersion) {
-            localStorage.setItem(BOT_VERSION_CONFIG.STORAGE_KEY, currentBotVersion);
+        const keys: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key !== null) keys.push(key);
         }
+        keys.forEach(key => {
+            if (isKept(key)) return;
+            localStorage.removeItem(key);
+            removed.push(key);
+        });
     } catch (error) {
         console.error('Error clearing localStorage:', error);
     }
-};
-
-/**
- * Clears all cookies for the current domain and parent domains
- */
-const clearCookies = (): void => {
-    try {
-        // Get all cookies
-        const cookies = document.cookie.split(';');
-
-        // Clear each cookie for different domain variations
-        const domains = [`.${document.domain.split('.').slice(-2).join('.')}`, `.${document.domain}`, document.domain];
-
-        const paths = ['/', window.location.pathname.split('/', 2)[1] || ''];
-
-        cookies.forEach(cookie => {
-            const cookieName = cookie.split('=')[0].trim();
-            if (cookieName) {
-                // Remove cookie for different domain and path combinations
-                domains.forEach(domain => {
-                    paths.forEach(path => {
-                        Cookies.remove(cookieName, { domain, path });
-                    });
-                });
-                // Also try removing without domain/path
-                Cookies.remove(cookieName);
-            }
-        });
-    } catch (error) {
-        console.error('Error clearing cookies:', error);
-    }
+    return removed;
 };
 
 /**
@@ -65,20 +77,13 @@ const setBotVersion = (): void => {
 
 /**
  * Checks if the current bot version matches the required version
- * @returns true if version matches or is not set, false if version is different
+ * @returns true if version matches, false if it is different or not set
  */
 const isVersionValid = (): boolean => {
     try {
         const currentVersion = localStorage.getItem(BOT_VERSION_CONFIG.STORAGE_KEY);
-
-        // If no version is set, consider it invalid (needs clearing)
-        if (currentVersion === null) {
-            return false;
-        }
-
-        // Parse the version and check if it matches
-        const versionNumber = parseInt(currentVersion, 10);
-        return versionNumber === BOT_VERSION_CONFIG.REQUIRED_VERSION;
+        if (currentVersion === null) return false;
+        return parseInt(currentVersion, 10) === BOT_VERSION_CONFIG.REQUIRED_VERSION;
     } catch (error) {
         console.error('Error checking bot version:', error);
         return false;
@@ -86,25 +91,16 @@ const isVersionValid = (): boolean => {
 };
 
 /**
- * Performs version check and clears storage if necessary
- * This function should be called at the very beginning of app initialization
- * before any other localStorage or cookie operations
+ * Performs version check and clears stale storage if necessary.
+ * Called at the very beginning of app initialization, before any other
+ * localStorage operations.
  */
 export const performVersionCheck = (): void => {
-    console.log('Performing bot version check...');
-
-    if (!isVersionValid()) {
-        console.log('Bot version mismatch or not set. Clearing localStorage and cookies...');
-
-        // Clear all storage
-        clearLocalStorage();
-        clearCookies();
-
-        // Set the correct version to prevent infinite clearing
-        setBotVersion();
-
-        console.log('Storage cleared and bot version set to:', BOT_VERSION_CONFIG.REQUIRED_VERSION);
-    } else {
-        console.log('Bot version is valid:', BOT_VERSION_CONFIG.REQUIRED_VERSION);
-    }
+    if (isVersionValid()) return;
+    const removed = clearStaleLocalStorage();
+    setBotVersion();
+    // eslint-disable-next-line no-console
+    console.info(
+        `Bot version set to ${BOT_VERSION_CONFIG.REQUIRED_VERSION}; cleared ${removed.length} stale storage key(s), kept the login and settings.`
+    );
 };

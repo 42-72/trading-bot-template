@@ -130,19 +130,9 @@ const DrawerHeader = ({ is_clear_stat_disabled, is_mobile, is_drawer_open, onCle
 
 const DrawerContent = ({ active_index, is_drawer_open, active_tour, setActiveTabIndex, ...props }: TDrawerContent) => {
     const { isDesktop } = useDevice();
-    // Use the useBlockScroll hook to prevent body scrolling when drawer is open on mobile
-
-    React.useEffect(() => {
-        if (!isDesktop && is_drawer_open) {
-            document.body.style.overflow = 'hidden';
-        } else {
-            document.body.style.overflow = '';
-        }
-
-        return () => {
-            document.body.style.overflow = '';
-        };
-    }, [is_drawer_open, isDesktop]);
+    // No body overflow lock while the drawer is open on mobile: the page itself never
+    // scrolls (.layout is exactly 100svh), and body overflow: hidden switched off the
+    // phone's pull-to-refresh whenever the drawer was open (its default state).
 
     const tabs = (
         <Tabs active_index={active_index} onTabItemClick={setActiveTabIndex} top>
