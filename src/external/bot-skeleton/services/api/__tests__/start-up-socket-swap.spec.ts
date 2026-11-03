@@ -54,8 +54,18 @@ const startBotArea = () => {
     return () => settled;
 };
 
-describe('bot area start-up across the login-return socket swap', () => {
-    beforeEach(() => jest.useFakeTimers());
+// The built-in market hours close indices at 22:00 UTC. After that, today has no
+// session left, so the first open/close pass asks for tomorrow's hours - which
+// must not hold up start-up. Every case runs on both sides of 22:00 UTC (this
+// file used to pass or fail depending on the time of day it ran).
+describe.each([
+    ['12:00 UTC', '2026-11-04T12:00:00Z'],
+    ['23:00 UTC (no session left today)', '2026-11-04T23:00:00Z'],
+])('bot area start-up across the login-return socket swap, at %s', (_label, now) => {
+    beforeEach(() => {
+        jest.useFakeTimers();
+        jest.setSystemTime(new Date(now));
+    });
     afterEach(() => jest.useRealTimers());
 
     it('finishes when the request goes out on the socket that answers (normal same-tab load)', async () => {
@@ -63,6 +73,15 @@ describe('bot area start-up across the login-return socket swap', () => {
         const isSettled = startBotArea();
         await jest.advanceTimersByTimeAsync(100);
         expect(isSettled()).toBe(true);
+    });
+
+    it('start-up asks for market hours once - a refresh for tomorrow happens after it, not before', async () => {
+        const socket = makeSocket(true);
+        (api_base as unknown as { api: TSocket }).api = socket;
+        const isSettled = startBotArea();
+        await jest.advanceTimersByTimeAsync(100);
+        expect(isSettled()).toBe(true);
+        expect(socket.send.mock.calls[0][0]).toEqual({ trading_times: expect.any(String) });
     });
 
     it('login return in a fresh tab: the public socket is swapped out mid-request - start-up must still finish', async () => {

@@ -70,7 +70,13 @@ export default class TradingTimes {
                 this.update_timer = setTimeout(periodicUpdate, wait_period);
             };
 
-            await periodicUpdate();
+            // Not awaited: start-up only needs the synchronous part (today's
+            // open/closed marks, set before periodicUpdate's first await).
+            // When today has no session left (after 22:00 UTC with the
+            // built-in hours) it goes on to fetch tomorrow's hours - awaiting
+            // that put a second request, and on a socket that never answers a
+            // second 8 s wait, in front of every start-up.
+            periodicUpdate();
         }
 
         return this.init_promise;
