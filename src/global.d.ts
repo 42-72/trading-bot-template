@@ -114,9 +114,6 @@ declare global {
                 callback: (data: { state: { availability: string; visibility: string } }) => void
             ) => void;
         };
-        dataLayer: {
-            push: (event: { [key: string]: boolean | number | string; event: string }) => void;
-        };
         DerivInterCom: {
             initialize: (config: IntercomConfig) => void;
         };
