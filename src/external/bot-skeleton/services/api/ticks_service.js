@@ -58,6 +58,10 @@ export default class TicksService {
         this.ticks_history_promise = null;
         this.active_symbols_promise = null;
         this.candles_promise = null;
+        // Symbols whose tick stream belongs to another part of the app (Market Tool, AI
+        // Scanner, chart) on this same socket: Deriv allows one stream per symbol per
+        // socket, so the bot reads that one instead of its own (see shareTickStream).
+        this.shared_symbols = new Set();
 
         this.observe();
     }
@@ -216,6 +220,14 @@ export default class TicksService {
                     }
                 }
 
+                // The stream the bot was sharing was forgotten by its owner (e.g. the
+                // Market Tool closed): the bot subscribes in its own right, so its ticks
+                // never stop. Only a single `forget` - the bot's own forget_all on stop
+                // must not bring the stream back.
+                if (data.msg_type === 'forget' && data.forget === 1 && data.echo_req?.forget) {
+                    this.onSharedStreamForgotten(String(data.echo_req.forget));
+                }
+
                 if (data.msg_type === 'ohlc') {
                     const { ohlc } = data;
                     const { symbol, granularity, id } = ohlc;
@@ -276,9 +288,12 @@ export default class TicksService {
         };
         return new Promise((resolve, reject) => {
             if (!api_base.api) resolve([]);
-            doUntilDone(() => api_base.api.send(request_object), ['AlreadySubscribed'], api_base)
+            // AlreadySubscribed is not retried (it used to be, forever, while a bot ran):
+            // the stream already exists, so the bot shares it (catch below).
+            doUntilDone(() => api_base.api.send(request_object), [], api_base)
                 .then(r => {
                     if (style === 'ticks') {
+                        this.shared_symbols.delete(symbol);
                         const ticks = historyToTicks(r.history);
 
                         this.updateTicksAndCallListeners(symbol, ticks);
@@ -294,6 +309,12 @@ export default class TicksService {
                 .catch(error => {
                     // Handle AlreadySubscribed errors gracefully - they're not fatal
                     if (error?.error?.code === 'AlreadySubscribed') {
+                        // Another part of the app already streams this symbol's ticks on this
+                        // socket: share that stream - never ignore its ticks.
+                        if (style === 'ticks') {
+                            this.shareTickStream(symbol, request_object.ticks_history).then(resolve, reject);
+                            return;
+                        }
                         // For AlreadySubscribed errors, we can still resolve with existing data
                         if (style === 'ticks' && this.ticks.has(symbol)) {
                             resolve(this.ticks.get(symbol));
@@ -308,6 +329,34 @@ export default class TicksService {
                     // InvalidSymbol errors can occur for various reasons and don't necessarily mean the user is unauthorized
                     reject(error);
                 });
+        });
+    }
+
+    /**
+     * The symbol's tick stream is already open on this socket (the Market Tool, the
+     * AI Scanner or a chart opened it first), and Deriv refuses a second one. The bot
+     * takes the history from a plain ticks_history and then reads that stream's ticks
+     * like its own (observe() accepts every tick of a symbol it has ticks for).
+     */
+    shareTickStream(symbol, underlying = symbol) {
+        const request = { ticks_history: underlying, end: 'latest', count: 1000, style: 'ticks' };
+        return doUntilDone(() => api_base.api.send(request), [], api_base).then(r => {
+            const ticks = historyToTicks(r.history);
+            this.shared_symbols.add(symbol);
+            ct_perf.log(`bot shares the ${underlying} tick stream (already streamed by another part of the app)`);
+            this.updateTicksAndCallListeners(symbol, ticks);
+            return ticks;
+        });
+    }
+
+    /** A forgotten stream id: if it was the one the bot shares and the bot still needs it, subscribe in its own right. */
+    onSharedStreamForgotten(forgotten_id) {
+        this.shared_symbols.forEach(symbol => {
+            if (this.subscriptions.getIn(['tick', symbol]) !== forgotten_id) return;
+            if (!this.tickListeners.get(symbol)?.size) return;
+            this.shared_symbols.delete(symbol);
+            ct_perf.log(`the shared ${symbol} tick stream ended - the bot subscribes in its own right`);
+            this.requestTicks({ symbol, style: 'ticks' }).catch(error => globalObserver.emit('Error', error));
         });
     }
 
