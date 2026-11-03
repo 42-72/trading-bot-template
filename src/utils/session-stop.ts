@@ -1,5 +1,7 @@
 import { localize } from '@deriv-com/translations';
 import { logConnEvent } from './connection-log';
+import { isSessionV2Enabled } from './session-flags';
+import { session_status } from './session-status';
 
 export type TSessionStopReason = 'connection_lost' | 'session_expired';
 
@@ -10,6 +12,15 @@ type TSessionStopTargets = {
     /** The Stop button's own path (run-panel-store.stopBot). */
     stopBot: () => void;
     error_message_type: string;
+};
+
+/**
+ * ct_session_v2: the trader pressed Run or started the AI Scanner again -
+ * the "Connection lost" notice has been answered and goes away. "Session
+ * expired" stays (session-status.ts). Flag off: nothing.
+ */
+export const dismissNoticeOnRunAgain = () => {
+    if (isSessionV2Enabled()) session_status.dismissNotice();
 };
 
 /**

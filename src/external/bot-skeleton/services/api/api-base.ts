@@ -47,6 +47,18 @@ const getErrorCode = (error: unknown): string | undefined => {
 
 const isPageHidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden';
 const isOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false;
+const hasFocus = () =>
+    typeof document !== 'undefined' && typeof document.hasFocus === 'function' && document.hasFocus();
+/**
+ * ct_session_v2: why a reconnect must wait, or null. A focused page counts as
+ * visible: the trader is looking at it even if the browser briefly reports it
+ * hidden (Windows marks a window hidden while another covers it).
+ */
+const whatToWaitFor = (): 'online' | 'visible' | null => {
+    if (isOffline()) return 'online';
+    if (isPageHidden() && !hasFocus()) return 'visible';
+    return null;
+};
 /** The raw page state behind a reconnect_wait, so the log shows what was actually read. */
 const describePageState = () => {
     const visibility = typeof document !== 'undefined' ? document.visibilityState : '?';
@@ -204,6 +216,8 @@ class APIBase {
     }
 
     onsocketclose() {
+        // ct_session_v2: closes are handled by attachSessionSocketListeners (onSessionSocketClose).
+        if (isSessionV2Enabled()) return;
         setConnectionStatus(CONNECTION_STATUS.CLOSED);
         this.reconnectIfNotConnected();
     }
@@ -225,7 +239,11 @@ class APIBase {
             if (this.api?.connection) {
                 // ct_session_v2: the old socket's close is a swap, not a lost connection.
                 if (is_session_v2) this.retired_apis.add(this.api);
-                ApiHelpers.disposeInstance();
+                // ct_session_v2: the market-data helpers (contracts_for, active_symbols,
+                // trading_times) always use the current socket, so they are kept. Disposed,
+                // nothing rebuilt them until a page reload - the Bot Builder's and the AI
+                // Scanner's market data stayed gone after a reconnect.
+                if (!is_session_v2) ApiHelpers.disposeInstance();
                 setConnectionStatus(CONNECTION_STATUS.CLOSED);
                 this.api.disconnect();
                 this.api.connection.removeEventListener('open', this.onsocketopen.bind(this));
@@ -298,11 +316,11 @@ class APIBase {
     initEventListeners() {
         if (window) {
             if (isSessionV2Enabled()) {
-                if (this.are_session_listeners_on) return;
-                this.are_session_listeners_on = true;
                 // Listeners from a time the flag was off would start a second, parallel reconnect.
                 window.removeEventListener('online', this.reconnectIfNotConnected);
                 window.removeEventListener('focus', this.reconnectIfNotConnected);
+                if (this.are_session_listeners_on) return;
+                this.are_session_listeners_on = true;
                 window.addEventListener('online', this.onWindowOnline);
                 window.addEventListener('focus', this.onWindowFocus);
                 document.addEventListener('visibilitychange', this.onVisibilityChange);
@@ -319,14 +337,20 @@ class APIBase {
         }
     }
 
-    reconnectIfNotConnected = () => {
+    reconnectIfNotConnected = (event?: Event) => {
+        // ct_session_v2: this old path is only reached through a listener attached
+        // while the flag was off (window online / focus, or a socket's close). It is
+        // removed and handed to the one v2 path, which reconnects at once when the
+        // page can - instead of logging a second, misleading "waiting" line.
+        if (isSessionV2Enabled()) {
+            const source = event?.type ?? 'call';
+            window.removeEventListener('online', this.reconnectIfNotConnected);
+            window.removeEventListener('focus', this.reconnectIfNotConnected);
+            logConnEvent('legacy_listener', `old ${source} listener removed (api-base.ts reconnectIfNotConnected)`);
+            this.onResume(`not connected (old ${source} listener)`);
+            return;
+        }
         if (this.api?.connection?.readyState && this.api?.connection?.readyState > 1) {
-            // ct_session_v2: one reconnect path, with backoff, that never wipes auth.
-            // (Only reached through listeners attached while the flag was off.)
-            if (isSessionV2Enabled()) {
-                this.scheduleReconnect('not connected (legacy listener)');
-                return;
-            }
             this.reconnection_attempts += 1;
 
             if (this.reconnection_attempts >= this.MAX_RECONNECTION_ATTEMPTS) {
@@ -618,13 +642,12 @@ class APIBase {
         if (this.hasSession()) session_status.setReconnecting(true);
         if (this.is_reconnecting_now) return;
 
-        if (isOffline() || isPageHidden()) {
+        // Read once, so the reason logged is the one that decided.
+        const wait_for = whatToWaitFor();
+        if (wait_for) {
             if (this.reconnect_timer) clearTimeout(this.reconnect_timer);
             this.reconnect_timer = null;
-            logConnEvent(
-                'reconnect_wait',
-                `${reason} - waiting until ${isOffline() ? 'online' : 'visible'} (${describePageState()})`
-            );
+            logConnEvent('reconnect_wait', `${reason} - waiting until ${wait_for} (${describePageState()})`);
             return;
         }
 
@@ -647,7 +670,7 @@ class APIBase {
 
     reconnectNow = async (reason: string) => {
         if (this.is_reconnecting_now) return;
-        if (isOffline() || isPageHidden()) {
+        if (whatToWaitFor()) {
             this.scheduleReconnect(reason);
             return;
         }
@@ -696,6 +719,10 @@ class APIBase {
         keep_alive.start(() => this.sendKeepAlive());
         if (this.first_authorized_generation === -1) this.first_authorized_generation = generation;
         else if (generation !== this.first_authorized_generation) {
+            // Offerings may have changed while offline: asked again, as after a page load.
+            (
+                ApiHelpers.instance as { contracts_for?: { disposeCache?: () => void } } | null
+            )?.contracts_for?.disposeCache?.();
             // An idle bot engine moves onto the new socket (dbot.js), so the next Run works as after a page load.
             globalObserver.emit('session.reconnected', { generation });
         }
@@ -809,12 +836,12 @@ class APIBase {
     }
 
     /** A buy succeeded (Purchase.js): the first one on a reconnected socket goes in the connection log. */
-    noteBuy() {
+    noteBuy(trade?: string) {
         const generation = this.connection_generation;
         if (!isSessionV2Enabled() || this.buy_logged_generation === generation) return;
         this.buy_logged_generation = generation;
         if (this.first_authorized_generation !== -1 && generation !== this.first_authorized_generation) {
-            logConnEvent('first_buy_after_reconnect', `connection ${generation}`);
+            logConnEvent('first_buy_after_reconnect', `connection ${generation}${trade ? ` - ${trade}` : ''}`);
         }
     }
 

@@ -5,6 +5,8 @@ import { observer as globalObserver } from '@/external/bot-skeleton/utils/observ
 import { readEngineValues } from '@/utils/ai-engine-xml';
 import { setTestStrategy } from '@/utils/ai-strategies/__mocks__/test-strategy';
 import { loadBotIntoBuilder } from '@/utils/load-bot-into-builder';
+import { getAiScannerTrade } from '@/utils/ai-scanner-trade-guard';
+import { session_status } from '@/utils/session-status';
 import { keep_alive } from '@/utils/socket-keep-alive';
 import AiScannerStore, {
     CONDITIONS_NOT_MET_MESSAGE,
@@ -1367,6 +1369,38 @@ describe('AiScannerStore', () => {
             store.stopForSession('Connection lost – AI Scanner stopped');
             expect(setBusy).toHaveBeenLastCalledWith('ai_scanner', false);
             setBusy.mockRestore();
+        });
+
+        it('starting a scan again hides the "Connection lost" notice', async () => {
+            localStorage.setItem('ct_session_v2', '1');
+            session_status.setNotice('connection_lost');
+            await startScan();
+            expect(session_status.notice).toBeNull();
+        });
+
+        it('flag off: starting a scan leaves the notice alone', async () => {
+            session_status.notice = 'connection_lost';
+            await startScan();
+            expect(session_status.notice).toBe('connection_lost');
+            session_status.notice = null;
+        });
+
+        it('locks the winning trade for the engine before Run, and clears it when the run ends', async () => {
+            const { root, store } = await startScan();
+            let locked_at_run: unknown = 'not called';
+            (root.run_panel.onRunButtonClick as jest.Mock).mockImplementationOnce(async () => {
+                locked_at_run = getAiScannerTrade();
+            });
+            store.onMarketTick('JD25', entering, 1, true);
+            await flush();
+            store.onMarketTick('JD25', entering, 1);
+            await flush();
+            expect(locked_at_run).toEqual({ symbol: 'JD25', contract_types: ['DIGITOVER'], barriers: [2, 3] });
+            store.cancel();
+            globalObserver.unregisterAll('Error');
+            runInAction(() => (root.run_panel.is_running = false));
+            await flush();
+            expect(getAiScannerTrade()).toBeNull();
         });
 
         it('flag off: never holds the lock', async () => {

@@ -5,6 +5,7 @@ import { keep_alive, KEEP_ALIVE_INTERVAL_MS } from '@/utils/socket-keep-alive';
 import { observer as globalObserver } from '../../../utils/observer';
 import { api_base, RECONNECT_BACKOFF_MS } from '../api-base';
 import { generateDerivApiInstance } from '../appId';
+import ApiHelpers from '../api-helpers';
 import chart_api from '../chart-api';
 
 jest.mock('../appId', () => ({
@@ -12,7 +13,10 @@ jest.mock('../appId', () => ({
     V2GetActiveAccountId: jest.fn(() => 'VRTC1'),
 }));
 jest.mock('../chart-api', () => ({ __esModule: true, default: { init: jest.fn() } }));
-jest.mock('../api-helpers', () => ({ __esModule: true, default: { disposeInstance: jest.fn() } }));
+jest.mock('../api-helpers', () => ({
+    __esModule: true,
+    default: { disposeInstance: jest.fn(), instance: { contracts_for: { disposeCache: jest.fn() } } },
+}));
 jest.mock('../../tradeEngine/utils/helpers', () => ({
     doUntilDone: (fn: () => unknown) => Promise.resolve(fn()),
     socket_state: { 0: 'Connecting', 1: 'Connected', 2: 'Closing', 3: 'Closed' },
@@ -406,6 +410,43 @@ describe('api_base session handling (ct_session_v2 on)', () => {
             );
         });
 
+        it('keeps the market-data helpers through a reconnect (rebuilt only by a reload before) and refreshes offerings', async () => {
+            const base = await loggedIn();
+            await reconnectTo(base, makeApi());
+            expect(ApiHelpers.disposeInstance).not.toHaveBeenCalled();
+            expect(ApiHelpers.instance).not.toBeNull();
+            expect(
+                (ApiHelpers.instance as unknown as { contracts_for: { disposeCache: jest.Mock } }).contracts_for
+                    .disposeCache
+            ).toHaveBeenCalledTimes(1);
+        });
+
+        it('a page reported hidden but focused (Windows covering the window) still reconnects at once', async () => {
+            const base = await loggedIn();
+            setVisibility('hidden');
+            const has_focus = jest.spyOn(document, 'hasFocus').mockReturnValue(true);
+            mockGenerate.mockResolvedValueOnce(makeApi());
+            (base.api as unknown as TFakeApi).close();
+            await flush();
+            expect(events('reconnect_wait')).toHaveLength(0);
+            expect(mockGenerate).toHaveBeenCalledTimes(2);
+            has_focus.mockRestore();
+        });
+
+        it('an old-path listener left from flag-off is removed and handed to the v2 path - no "not connected" wait', async () => {
+            const base = await loggedIn();
+            base.api = makeApi() as never;
+            (base.api as unknown as TFakeApi).connection.readyState = 3;
+            mockGenerate.mockResolvedValueOnce(makeApi());
+            base.reconnectIfNotConnected(new Event('online'));
+            await flush();
+            expect(events('legacy_listener')[0].d).toBe(
+                'old online listener removed (api-base.ts reconnectIfNotConnected)'
+            );
+            expect(events('reconnect_wait')).toHaveLength(0);
+            expect(events('reconnect_scheduled')[0].d).toMatch(/^not connected \(old online listener\)/);
+        });
+
         it('listeners attached while the flag was off are removed, so only one reconnect runs', async () => {
             const base = createApiBase();
             localStorage.removeItem('ct_session_v2');
@@ -554,6 +595,17 @@ describe('api_base with ct_session_v2 off (behaviour as before)', () => {
         base.setIsRunning(false);
         globalObserver.unregisterAll('session.reconnected');
         jest.useRealTimers();
+    });
+
+    it('the market-data helpers are still disposed when the socket is replaced, as before', async () => {
+        const base = createApiBase();
+        const api = makeApi();
+        mockGenerate.mockResolvedValueOnce(api);
+        await base.init();
+        api.connection.readyState = 1;
+        mockGenerate.mockResolvedValueOnce(makeApi());
+        await base.init(true);
+        expect(ApiHelpers.disposeInstance).toHaveBeenCalledTimes(1);
     });
 
     it('the chart is re-initialised with the connection, as before', async () => {

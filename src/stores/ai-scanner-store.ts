@@ -17,10 +17,12 @@ import { api_base } from '@/external/bot-skeleton/services/api/api-base';
 import { observer as globalObserver } from '@/external/bot-skeleton/utils/observer';
 import { readEngineValues, TEngineValues, writeEngineValues } from '@/utils/ai-engine-xml';
 import { filterOfferedMarkets } from '@/utils/ai-scanner-offered';
+import { setAiScannerTrade, TAiScannerTrade } from '@/utils/ai-scanner-trade-guard';
 import { getScannerStrategy, TConditionResult, TSide } from '@/utils/ai-strategies';
 import { createAiEngineStrategyId } from '@/utils/library-strategies';
 import { loadBotIntoBuilder } from '@/utils/load-bot-into-builder';
 import { isSessionV2Enabled } from '@/utils/session-flags';
+import { dismissNoticeOnRunAgain } from '@/utils/session-stop';
 import { keep_alive } from '@/utils/socket-keep-alive';
 import RootStore from './root-store';
 
@@ -440,6 +442,7 @@ export default class AiScannerStore {
     /** Scan: lock the form, check which markets offer the trade, then scan those. */
     start = () => {
         if (!this.can_start) return;
+        dismissNoticeOnRunAgain();
         this.run_token += 1;
         this.locked = {
             tab: this.active_tab,
@@ -800,6 +803,7 @@ export default class AiScannerStore {
 
     private finish(stage: 'idle' | 'stopped', message: string) {
         this.run_token += 1;
+        setAiScannerTrade(null);
         this.clearScanTimer();
         const stopRunErrorListeners = this.stopRunErrorListeners;
         this.stopRunErrorListeners = null;
@@ -809,6 +813,25 @@ export default class AiScannerStore {
         this.message = message;
         this.clearArmed();
         if (stage === 'idle') this.target = null;
+    }
+
+    /** The one trade the engine may buy for `target` (utils/ai-scanner-trade-guard.ts). */
+    private lockedTradeFor(target: TAiScannerTarget): TAiScannerTrade {
+        const values = this.engineValuesFor(target);
+        if ((this.locked as TAiScannerLocked).tab === 'even_odd') {
+            return {
+                symbol: values.symbol,
+                contract_types: [values.ai_direction === 1 ? 'DIGITEVEN' : 'DIGITODD'],
+                barriers: [],
+            };
+        }
+        return {
+            symbol: values.symbol,
+            contract_types: [values.ai_direction === 1 ? 'DIGITOVER' : 'DIGITUNDER'],
+            barriers: [values.first_barrier, values.recovery_barrier].filter(
+                (barrier): barrier is number => barrier !== undefined
+            ),
+        };
     }
 
     private engineValuesFor(target: TAiScannerTarget): TEngineValues {
@@ -932,6 +955,7 @@ export default class AiScannerStore {
         //    clearStat resets it.
         run_panel.clearStat();
         this.listenForRunErrors(winner);
+        setAiScannerTrade(this.lockedTradeFor(winner));
         await run_panel.onRunButtonClick();
         if (token !== this.run_token) return;
 

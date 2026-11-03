@@ -1,4 +1,7 @@
+import { checkAiScannerBuy } from '@/utils/ai-scanner-trade-guard';
+import { describeTrade, logTradeError } from '@/utils/trade-log';
 import { LogTypes } from '../../../constants/messages';
+import { createError } from '../../../utils/error';
 import { api_base } from '../../api/api-base';
 import { contractStatus, info, log } from '../utils/broadcast';
 import { getBuyGapDelayMs, isFastExecution } from '../utils/execution-mode';
@@ -42,7 +45,7 @@ export default Engine =>
                 });
 
                 this.contractId = buy.contract_id;
-                api_base.noteBuy?.();
+                api_base.noteBuy?.(describeTrade(this.last_buy_request));
                 this.store.dispatch(purchaseSuccessful());
 
                 if (this.is_proposal_subscription_required) {
@@ -62,6 +65,12 @@ export default Engine =>
 
             if (this.is_proposal_subscription_required) {
                 const { id, askPrice } = this.selectProposal(contract_type);
+                const template = this.proposal_templates?.find(proposal => proposal.contract_type === contract_type);
+                this.last_buy_request = template ?? { contract_type };
+                const logFailure = error => {
+                    logTradeError('buy', error, this.last_buy_request);
+                    throw error;
+                };
 
                 const action = () => api_base.api.send({ buy: id, price: askPrice });
 
@@ -73,7 +82,7 @@ export default Engine =>
                 });
 
                 if (!this.options.timeMachineEnabled) {
-                    return doUntilDone(action).then(onSuccess);
+                    return doUntilDone(action).then(onSuccess, logFailure);
                 }
 
                 return recoverFromError(
@@ -96,9 +105,17 @@ export default Engine =>
                     },
                     ['PriceMoved', 'InvalidContractProposal'],
                     delayIndex++
-                ).then(onSuccess);
+                ).then(onSuccess, logFailure);
             }
             const trade_option = tradeOptionToBuy(contract_type, this.tradeOptions);
+            this.last_buy_request = trade_option;
+            // ct_session_v2: the AI Scanner never buys anything but its locked trade.
+            const mismatch = checkAiScannerBuy(trade_option);
+            if (mismatch) return Promise.reject(createError('AiTradeMismatch', mismatch));
+            const logFailure = error => {
+                logTradeError('buy', error, trade_option);
+                throw error;
+            };
             const action = () => api_base.api.send(trade_option);
 
             this.isSold = false;
@@ -109,7 +126,7 @@ export default Engine =>
             });
 
             if (!this.options.timeMachineEnabled) {
-                return doUntilDone(action).then(onSuccess);
+                return doUntilDone(action).then(onSuccess, logFailure);
             }
 
             return recoverFromError(
@@ -128,7 +145,7 @@ export default Engine =>
                 },
                 ['PriceMoved', 'InvalidContractProposal'],
                 delayIndex++
-            ).then(onSuccess);
+            ).then(onSuccess, logFailure);
         }
         getPurchaseReference = () => purchase_reference;
         regeneratePurchaseReference = () => {

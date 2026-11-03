@@ -19,7 +19,7 @@ import {
 // import { journalError, switch_account_notification } from '@/utils/bot-notifications';
 import GTM from '@/utils/gtm';
 import { session_status } from '@/utils/session-status';
-import { stopRunsForSession, TSessionStopReason } from '@/utils/session-stop';
+import { dismissNoticeOnRunAgain, stopRunsForSession, TSessionStopReason } from '@/utils/session-stop';
 import { helpers } from '@/utils/store-helpers';
 import { generateUrlWithRedirect } from '@/utils/url-redirect-utils';
 import { Buy, ProposalOpenContract } from '@deriv/api-types';
@@ -227,6 +227,8 @@ export default class RunPanelStore {
             this.unregisterBotListeners();
             return;
         }
+
+        dismissNoticeOnRunAgain();
 
         ui?.setAccountSwitcherDisabledMessage(
             localize(

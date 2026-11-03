@@ -1,4 +1,5 @@
-import { stopRunsForSession } from '../session-stop';
+import { dismissNoticeOnRunAgain, stopRunsForSession } from '../session-stop';
+import { session_status } from '../session-status';
 
 jest.mock('@deriv-com/translations', () => ({ localize: (text: string) => text }));
 
@@ -46,5 +47,32 @@ describe('stopRunsForSession (ct_session_v2)', () => {
         expect(stopRunsForSession(targets, 'connection_lost')).toBe(false);
         expect(targets.stopBot).not.toHaveBeenCalled();
         expect(targets.journal.pushMessage).not.toHaveBeenCalled();
+    });
+});
+
+describe('dismissNoticeOnRunAgain (Run / Scan pressed again)', () => {
+    beforeEach(() => {
+        localStorage.clear();
+        session_status.notice = null;
+    });
+
+    it('flag on: hides "Connection lost"', () => {
+        localStorage.setItem('ct_session_v2', '1');
+        session_status.setNotice('connection_lost');
+        dismissNoticeOnRunAgain();
+        expect(session_status.notice).toBeNull();
+    });
+
+    it('flag on: "Session expired" stays until the trader logs in', () => {
+        localStorage.setItem('ct_session_v2', '1');
+        session_status.setNotice('session_expired');
+        dismissNoticeOnRunAgain();
+        expect(session_status.notice).toBe('session_expired');
+    });
+
+    it('flag off: nothing changes', () => {
+        session_status.notice = 'connection_lost';
+        dismissNoticeOnRunAgain();
+        expect(session_status.notice).toBe('connection_lost');
     });
 });
