@@ -1,5 +1,5 @@
 /**
- * Run after a reconnect (ct_session_v2). The real DBot, interpreter, trade
+ * Run after a reconnect. The real DBot, interpreter, trade
  * engine and ticks service run against fake sockets that behave like
  * @deriv/deriv-api: a request sent on a closed socket is never answered
  * (its promise neither resolves nor rejects), and onMessage() only ever
@@ -163,7 +163,7 @@ const reconnect = async socket => {
     await flush();
 };
 
-describe('Run after a reconnect (ct_session_v2 on)', () => {
+describe('Run after a reconnect', () => {
     beforeAll(() => {
         window.Blockly = {
             derivWorkspace: { getAllBlocks: () => [] },
@@ -173,7 +173,6 @@ describe('Run after a reconnect (ct_session_v2 on)', () => {
 
     beforeEach(() => {
         localStorage.clear();
-        localStorage.setItem('ct_session_v2', '1');
         setExecutionMode(EXECUTION_MODES.FAST);
         api_base.is_running = false;
         api_base.is_stopping = false;
@@ -283,41 +282,5 @@ describe('Run after a reconnect (ct_session_v2 on)', () => {
         await tickUntil(b, () => b.buys().length > 0, 'R_50');
         expect(b.buys()).toHaveLength(1);
         expect(b.buys()[0].parameters.underlying_symbol).toBe('R_50');
-    });
-});
-
-describe('Run after a reconnect (ct_session_v2 off) - unchanged', () => {
-    beforeAll(() => {
-        window.Blockly = { derivWorkspace: { getAllBlocks: () => [] }, accumulators_request: {} };
-    });
-
-    beforeEach(() => {
-        localStorage.clear();
-        api_base.is_running = false;
-        api_base.is_stopping = false;
-        api_base.subscriptions = [];
-        dbot.is_bot_running = false;
-        jest.spyOn(dbot, 'generateCode').mockReturnValue(BOT_CODE);
-    });
-
-    afterEach(() => jest.restoreAllMocks());
-
-    it('session.reconnected does not replace the engine when the flag is off', async () => {
-        const a = makeSocket('A');
-        await loadPage(a);
-        const before = dbot.interpreter;
-        await reconnect(makeSocket('B'));
-        expect(dbot.interpreter).toBe(before);
-    });
-
-    it('Run keeps the existing engine (no rebuild) when the flag is off', async () => {
-        const a = makeSocket('A');
-        await loadPage(a);
-        const before = dbot.interpreter;
-        api_base.api = makeSocket('B');
-        pressRun();
-        expect(dbot.interpreter).toBe(before);
-        api_base.setIsRunning(false);
-        await before.terminateSession();
     });
 });

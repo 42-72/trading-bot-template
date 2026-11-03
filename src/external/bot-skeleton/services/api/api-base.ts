@@ -5,10 +5,8 @@ import CommonStore from '@/stores/common-store';
 import { DerivWSAccountsService } from '@/services/derivws-accounts.service';
 import { OAuthTokenExchangeService } from '@/services/oauth-token-exchange.service';
 import { TAuthData } from '@/types/api-types';
-import { clearAuthData } from '@/utils/auth-utils';
 import { logConnEvent } from '@/utils/connection-log';
 import { handleBackendError, isBackendError } from '@/utils/error-handler';
-import { isSessionV2Enabled } from '@/utils/session-flags';
 import { session_status, SessionExpiredError } from '@/utils/session-status';
 import { keep_alive } from '@/utils/socket-keep-alive';
 import { activeSymbolsProcessorService } from '../../../../services/active-symbols-processor.service';
@@ -35,9 +33,9 @@ type SubscriptionPromise = Promise<{
     subscription: CurrentSubscription;
 }>;
 
-/** ct_session_v2: gaps between reconnect attempts while online and visible (the last one repeats). */
+/** gaps between reconnect attempts while online and visible (the last one repeats). */
 export const RECONNECT_BACKOFF_MS = [1000, 2000, 5000, 10000, 30000];
-/** ct_session_v2: how long after a fresh reconnect a repeated auth error still confirms the first one. */
+/** how long after a fresh reconnect a repeated auth error still confirms the first one. */
 export const AUTH_ERROR_CONFIRM_WINDOW_MS = 60000;
 
 const getErrorCode = (error: unknown): string | undefined => {
@@ -50,7 +48,7 @@ const isOffline = () => typeof navigator !== 'undefined' && navigator.onLine ===
 const hasFocus = () =>
     typeof document !== 'undefined' && typeof document.hasFocus === 'function' && document.hasFocus();
 /**
- * ct_session_v2: why a reconnect must wait, or null. A focused page counts as
+ * why a reconnect must wait, or null. A focused page counts as
  * visible: the trader is looking at it even if the browser briefly reports it
  * hidden (Windows marks a window hidden while another covers it).
  */
@@ -103,9 +101,8 @@ class APIBase {
     is_authorized = false;
     active_symbols_promise: Promise<any[] | undefined> | null = null;
     common_store: CommonStore | undefined;
-    reconnection_attempts: number = 0;
 
-    // ct_session_v2 - see the "Session (ct_session_v2)" section below.
+    // - see the "Session " section below.
     connection_generation = 0;
     authorized_generation = -1;
     reconnect_step = 0;
@@ -128,7 +125,6 @@ class APIBase {
     // Constants for timeouts - extracted magic numbers for better maintainability
     private readonly ACTIVE_SYMBOLS_TIMEOUT_MS = 10000; // 10 seconds
     private readonly ENRICHMENT_TIMEOUT_MS = 10000; // 10 seconds
-    private readonly MAX_RECONNECTION_ATTEMPTS = 5; // Maximum number of reconnection attempts before session reset
 
     unsubscribeAllSubscriptions = () => {
         this.current_auth_subscriptions?.forEach(subscription_promise => {
@@ -145,9 +141,6 @@ class APIBase {
 
     onsocketopen() {
         setConnectionStatus(CONNECTION_STATUS.OPENED);
-
-        // Reset reconnection attempts on successful connection
-        this.reconnection_attempts = 0;
 
         const currentClientStore = globalObserver.getState('client.store');
         if (currentClientStore) {
@@ -200,13 +193,16 @@ class APIBase {
 
         // Now proceed with normal authorization if we have an account_id
         if (activeAccountId) {
-            // ct_session_v2: the public socket can't authorize anyone - asking it
-            // for a balance is what used to return AuthorizationRequired and log
-            // the user out. A user whose session ended gets the expiry flow.
-            if (isSessionV2Enabled() && !this.api?.ct_is_authenticated) {
+            // The public socket can't authorize anyone - asking it for a balance
+            // is what used to return AuthorizationRequired and log the user out.
+            // A user whose session ended gets the expiry flow; a tab without one
+            // (e.g. a new tab) shows the logged-out app, and logs in as soon as a
+            // session appears (onResume) or the trader logs in.
+            if (!this.api?.ct_is_authenticated) {
                 setIsAuthorizing(false);
                 if (!this.checkSessionExpiry('public socket open')) {
                     logConnEvent('authorize_skipped', 'public socket - no session to authorize');
+                    this.loadLoggedOutApp();
                 }
                 return;
             }
@@ -215,65 +211,66 @@ class APIBase {
         }
     }
 
-    onsocketclose() {
-        // ct_session_v2: closes are handled by attachSessionSocketListeners (onSessionSocketClose).
-        if (isSessionV2Enabled()) return;
-        setConnectionStatus(CONNECTION_STATUS.CLOSED);
-        this.reconnectIfNotConnected();
+    /** No session on this socket: what a logged-out page needs to finish loading (the market list). */
+    private loadLoggedOutApp() {
+        setIsAuthorized(false);
+        if (!this.has_active_symbols && !this.active_symbols_promise) this.fetchActiveSymbols();
+    }
+
+    /** The market list; a failure is logged and asked again later (never an unhandled rejection). */
+    private fetchActiveSymbols() {
+        this.active_symbols_promise = this.getActiveSymbols().catch(error => {
+            logConnEvent('active_symbols_failed', String((error as Error)?.message ?? error));
+            this.active_symbols_promise = null;
+            return undefined;
+        });
     }
 
     async init(force_create_connection = false) {
         this.toggleRunButton(true);
+        logConnEvent(
+            'connect',
+            `${force_create_connection ? 'new socket' : 'socket if none open'}${
+                this.is_reconnecting_now ? ' (reconnect)' : ''
+            }`
+        );
 
         if (this.api) {
             this.unsubscribeAllSubscriptions();
         }
 
-        // Reset reconnection attempts counter on successful connection initialization
-        if (!force_create_connection) {
-            this.reconnection_attempts = 0;
-        }
-
         if (!this.api || this.api?.connection.readyState !== 1 || force_create_connection) {
-            const is_session_v2 = isSessionV2Enabled();
             if (this.api?.connection) {
-                // ct_session_v2: the old socket's close is a swap, not a lost connection.
-                if (is_session_v2) this.retired_apis.add(this.api);
-                // ct_session_v2: the market-data helpers (contracts_for, active_symbols,
-                // trading_times) always use the current socket, so they are kept. Disposed,
-                // nothing rebuilt them until a page reload - the Bot Builder's and the AI
-                // Scanner's market data stayed gone after a reconnect.
-                if (!is_session_v2) ApiHelpers.disposeInstance();
+                // The old socket's close is a swap, not a lost connection. The market-data
+                // helpers (contracts_for, active_symbols, trading_times) always use the
+                // current socket, so they are kept.
+                this.retired_apis.add(this.api);
                 setConnectionStatus(CONNECTION_STATUS.CLOSED);
                 this.api.disconnect();
-                this.api.connection.removeEventListener('open', this.onsocketopen.bind(this));
-                this.api.connection.removeEventListener('close', this.onsocketclose.bind(this));
             }
 
-            if (is_session_v2) {
-                this.is_swapping = true;
-                try {
-                    this.api = await generateDerivApiInstance();
-                } catch (error) {
-                    // Page load / login / account switch: retried here. Reconnects handle their own (reconnectNow).
-                    if (!this.is_reconnecting_now) {
-                        this.initEventListeners();
-                        if (error instanceof SessionExpiredError)
-                            this.onSessionExpired(error.reason, 'api-base.ts init');
-                        else this.scheduleReconnect('connection failed');
-                    }
-                    throw error;
-                } finally {
-                    this.is_swapping = false;
-                }
-                this.connection_generation += 1;
-                this.attachSessionSocketListeners(this.api);
-            } else {
+            this.is_swapping = true;
+            try {
                 this.api = await generateDerivApiInstance();
-
-                this.api?.connection.addEventListener('open', this.onsocketopen.bind(this));
-                this.api?.connection.addEventListener('close', this.onsocketclose.bind(this));
+            } catch (error) {
+                // Page load / login / account switch: retried here. Reconnects handle their own (reconnectNow).
+                if (!this.is_reconnecting_now) {
+                    this.initEventListeners();
+                    if (error instanceof SessionExpiredError) this.onSessionExpired(error.reason, 'api-base.ts init');
+                    else this.scheduleReconnect('connection failed');
+                }
+                throw error;
+            } finally {
+                this.is_swapping = false;
             }
+            this.connection_generation += 1;
+            logConnEvent(
+                'connection',
+                `${this.connection_generation} - ${this.api?.ct_is_authenticated ? 'authenticated' : 'public'} socket, ${
+                    socket_state[this.api?.connection?.readyState as keyof typeof socket_state] ?? 'unknown'
+                }`
+            );
+            this.attachSessionSocketListeners(this.api);
 
             // Store the current account ID used for this WebSocket connection
             // This will be used to check if we need to regenerate the connection when the tab becomes active
@@ -288,9 +285,7 @@ class APIBase {
 
         const hasAccountID = V2GetActiveAccountId();
 
-        if (!this.has_active_symbols && !hasAccountID) {
-            this.active_symbols_promise = this.getActiveSymbols().then(() => undefined);
-        }
+        if (!this.has_active_symbols && !hasAccountID) this.fetchActiveSymbols();
 
         this.initEventListeners();
 
@@ -314,21 +309,12 @@ class APIBase {
     }
 
     initEventListeners() {
-        if (window) {
-            if (isSessionV2Enabled()) {
-                // Listeners from a time the flag was off would start a second, parallel reconnect.
-                window.removeEventListener('online', this.reconnectIfNotConnected);
-                window.removeEventListener('focus', this.reconnectIfNotConnected);
-                if (this.are_session_listeners_on) return;
-                this.are_session_listeners_on = true;
-                window.addEventListener('online', this.onWindowOnline);
-                window.addEventListener('focus', this.onWindowFocus);
-                document.addEventListener('visibilitychange', this.onVisibilityChange);
-                return;
-            }
-            window.addEventListener('online', this.reconnectIfNotConnected);
-            window.addEventListener('focus', this.reconnectIfNotConnected);
-        }
+        if (typeof window === 'undefined' || this.are_session_listeners_on) return;
+        this.are_session_listeners_on = true;
+        window.addEventListener('online', this.onWindowOnline);
+        window.addEventListener('focus', this.onWindowFocus);
+        window.addEventListener('pageshow', this.onPageShow);
+        document.addEventListener('visibilitychange', this.onVisibilityChange);
     }
 
     async createNewInstance(account_id: string) {
@@ -336,46 +322,6 @@ class APIBase {
             await this.init();
         }
     }
-
-    reconnectIfNotConnected = (event?: Event) => {
-        // ct_session_v2: this old path is only reached through a listener attached
-        // while the flag was off (window online / focus, or a socket's close). It is
-        // removed and handed to the one v2 path, which reconnects at once when the
-        // page can - instead of logging a second, misleading "waiting" line.
-        if (isSessionV2Enabled()) {
-            const source = event?.type ?? 'call';
-            window.removeEventListener('online', this.reconnectIfNotConnected);
-            window.removeEventListener('focus', this.reconnectIfNotConnected);
-            logConnEvent('legacy_listener', `old ${source} listener removed (api-base.ts reconnectIfNotConnected)`);
-            this.onResume(`not connected (old ${source} listener)`);
-            return;
-        }
-        if (this.api?.connection?.readyState && this.api?.connection?.readyState > 1) {
-            this.reconnection_attempts += 1;
-
-            if (this.reconnection_attempts >= this.MAX_RECONNECTION_ATTEMPTS) {
-                // Reset reconnection counter
-                this.reconnection_attempts = 0;
-                logConnEvent(
-                    'auth_wipe',
-                    `${this.MAX_RECONNECTION_ATTEMPTS} reconnects without opening - active_loginid cleared (api-base.ts reconnectIfNotConnected)`
-                );
-
-                // Properly handle logout through the API
-                setIsAuthorized(false);
-                setAccountList([]);
-                setAuthData(null);
-
-                // Clear necessary storage items
-                localStorage.removeItem('active_loginid');
-                localStorage.removeItem('account_type');
-                localStorage.removeItem('accountsList');
-                localStorage.removeItem('clientAccounts');
-            }
-
-            this.init(true);
-        }
-    };
 
     async authorizeAndSubscribe() {
         if (!this.api) return;
@@ -472,8 +418,7 @@ class APIBase {
 
             setIsAuthorized(true);
             this.is_authorized = true;
-            if (!isSessionV2Enabled()) logConnEvent('authorized', balance?.loginid);
-            else if (generation === this.connection_generation) this.onSessionAuthorized(generation);
+            if (generation === this.connection_generation) this.onSessionAuthorized(generation);
             localStorage.setItem('client_account_details', JSON.stringify(accountList));
             localStorage.setItem('client.country', balance?.country);
 
@@ -484,24 +429,13 @@ class APIBase {
             if (this.has_active_symbols) {
                 this.toggleRunButton(false);
             } else {
-                this.active_symbols_promise = this.getActiveSymbols();
+                this.fetchActiveSymbols();
             }
             this.subscribe();
         } catch (e) {
-            // ct_session_v2: an error during the handshake never wipes auth -
-            // the connection is retried instead (see onHandshakeError).
-            if (isSessionV2Enabled()) {
-                this.onHandshakeError(e, 'api-base.ts authorizeAndSubscribe (catch)');
-                return;
-            }
-            logConnEvent(
-                'auth_error',
-                `${getErrorCode(e) ?? 'exception'} during authorize (api-base.ts authorizeAndSubscribe catch)`
-            );
-            this.is_authorized = false;
-            clearAuthData('api-base.ts authorizeAndSubscribe catch');
-            setIsAuthorized(false);
-            globalObserver.emit('Error', e);
+            // An error during the handshake never wipes auth - the connection
+            // is retried instead (see onHandshakeError).
+            this.onHandshakeError(e, 'api-base.ts authorizeAndSubscribe (catch)');
         } finally {
             setIsAuthorizing(false);
         }
@@ -585,10 +519,9 @@ class APIBase {
     };
 
     // ---------------------------------------------------------------------
-    // Session (ct_session_v2). Flag off = none of this runs and the code
-    // above behaves as it always did.
+    // Session.
     //
-    // - api_base alone reconnects (chart-api.js no longer does), one attempt
+    // - api_base alone reconnects (chart-api.js does not), one attempt
     //   at a time, with backoff, only while online and visible.
     // - A close counts only for the current socket - closes of sockets being
     //   swapped out are ignored.
@@ -640,7 +573,10 @@ class APIBase {
     scheduleReconnect = (reason: string, immediate = false) => {
         if (this.is_session_expired && this.hasSession()) return;
         if (this.hasSession()) session_status.setReconnecting(true);
-        if (this.is_reconnecting_now) return;
+        if (this.is_reconnecting_now) {
+            logConnEvent('reconnect_skipped', `${reason} - a reconnect is already under way`);
+            return;
+        }
 
         // Read once, so the reason logged is the one that decided.
         const wait_for = whatToWaitFor();
@@ -669,13 +605,17 @@ class APIBase {
     };
 
     reconnectNow = async (reason: string) => {
-        if (this.is_reconnecting_now) return;
+        if (this.is_reconnecting_now) {
+            logConnEvent('reconnect_skipped', `${reason} - a reconnect is already under way`);
+            return;
+        }
         if (whatToWaitFor()) {
             this.scheduleReconnect(reason);
             return;
         }
         this.is_reconnecting_now = true;
         this.reconnect_step += 1;
+        logConnEvent('reconnect_start', `${reason} - attempt ${this.reconnect_step}`);
         let should_retry = false;
         try {
             await this.init(true);
@@ -694,11 +634,18 @@ class APIBase {
 
     /** Tab visible again, window focused, or back online: reconnect quietly if needed. */
     onResume = (reason: string) => {
-        if (!isSessionV2Enabled()) return;
         if (this.checkSessionExpiry(reason)) return;
         const ready_state = this.api?.connection?.readyState;
         if (!this.api || ready_state === undefined || ready_state > 1) {
             this.scheduleReconnect(reason, true);
+            return;
+        }
+        // On the public socket while a session now exists (the page started
+        // before it could see one - e.g. prerendered from the address bar):
+        // log in on a fresh socket, as a page load would.
+        if (!this.api.ct_is_authenticated && getAccountId() && this.hasSession() && !this.is_reconnecting_now) {
+            logConnEvent('session_found', `${reason} - logging in on a new socket`);
+            this.scheduleReconnect('session found', true);
         }
     };
 
@@ -709,6 +656,8 @@ class APIBase {
     onVisibilityChange = () => {
         if (!isPageHidden()) this.onResume('visible');
     };
+
+    onPageShow = () => this.onResume('pageshow');
 
     private onSessionAuthorized(generation: number) {
         this.authorized_generation = generation;
@@ -735,7 +684,6 @@ class APIBase {
 
     /** An error answering a socket's own balance handshake: retried, never a logout. */
     private onHandshakeError(error: unknown, source: string) {
-        if (!isSessionV2Enabled()) return;
         logConnEvent('auth_error_ignored', `${getErrorCode(error) ?? 'exception'} during handshake (${source})`);
         this.scheduleReconnect('handshake error');
     }
@@ -746,7 +694,7 @@ class APIBase {
      * only if it repeats after one fresh reconnect.
      */
     reportAuthError = (code: string, source: string, api: TApiBaseApi | null = this.api) => {
-        if (!isSessionV2Enabled() || this.is_session_expired) return;
+        if (this.is_session_expired) return;
         if (!this.isFullyLoggedIn(api)) {
             logConnEvent('auth_error_ignored', `${code} from ${source} - socket swap/handshake/old socket`);
             return;
@@ -781,7 +729,7 @@ class APIBase {
      * getAuthInfo removes once expired, so a vanished one counts too).
      */
     checkSessionExpiry(source: string) {
-        if (!isSessionV2Enabled() || this.is_session_expired || !this.had_session) return false;
+        if (this.is_session_expired || !this.had_session) return false;
         if (!localStorage.getItem('active_loginid')) return false; // logged out on purpose
         const is_past_expiry = !!this.session_expires_at && Date.now() >= this.session_expires_at;
         if (!is_past_expiry && this.hasSession()) return false;
@@ -816,13 +764,12 @@ class APIBase {
 
     setIsRunning(toggle = false) {
         this.is_running = toggle;
-        // ct_session_v2: a running bot's tab must not be frozen (socket-keep-alive.ts).
-        if (isSessionV2Enabled()) keep_alive.setBusy('bot', toggle);
-        else if (!toggle) keep_alive.setBusy('bot', false);
+        // A running bot's tab must not be frozen (socket-keep-alive.ts).
+        keep_alive.setBusy('bot', toggle);
     }
 
     /**
-     * ct_session_v2 keep-alive (utils/socket-keep-alive.ts): a ping on the
+     * keep-alive (utils/socket-keep-alive.ts): a ping on the
      * current socket, so the server never closes it as idle - hidden tab or not.
      */
     sendKeepAlive() {
@@ -838,7 +785,7 @@ class APIBase {
     /** A buy succeeded (Purchase.js): the first one on a reconnected socket goes in the connection log. */
     noteBuy(trade?: string) {
         const generation = this.connection_generation;
-        if (!isSessionV2Enabled() || this.buy_logged_generation === generation) return;
+        if (this.buy_logged_generation === generation) return;
         this.buy_logged_generation = generation;
         if (this.first_authorized_generation !== -1 && generation !== this.first_authorized_generation) {
             logConnEvent('first_buy_after_reconnect', `connection ${generation}${trade ? ` - ${trade}` : ''}`);

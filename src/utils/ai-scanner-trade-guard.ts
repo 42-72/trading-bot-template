@@ -1,10 +1,9 @@
 import { observer as globalObserver } from '@/external/bot-skeleton/utils/observer';
 import { logConnEvent } from './connection-log';
-import { isSessionV2Enabled } from './session-flags';
 import { describeTrade, isAiEngineRun } from './trade-log';
 
 /**
- * ct_session_v2: the AI Scanner's locked trade, checked against every buy its
+ * The AI Scanner's locked trade, checked against every buy its
  * engine sends. The scanner sets it just before pressing Run and clears it when
  * the run ends; the engine (Purchase.js) refuses a buy that doesn't match, so
  * the scanner can never buy a contract other than the one it locked - whatever
@@ -30,7 +29,7 @@ type TBuy = {
 
 /** Why `buy` is not the scanner's locked trade, or null when it is (or no check applies). */
 export const checkAiScannerBuy = (buy: TBuy): string | null => {
-    if (!isSessionV2Enabled() || !isAiEngineRun()) return null;
+    if (!isAiEngineRun()) return null;
     const expected = getAiScannerTrade();
     if (!expected) return null;
     const p = buy.parameters ?? {};

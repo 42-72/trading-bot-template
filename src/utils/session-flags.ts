@@ -1,45 +1,47 @@
 import { logConnEvent } from './connection-log';
 
 /**
- * Two per-browser switches, both settable from the address bar so they work
- * on a phone:
- *   ?ct_session_v2=1 / =0  - the new session handling (reconnect instead of
- *                            logging out). Off = the site behaves as before.
- *   ?ctdebug=1 / =0        - shows the "Connection log" button.
+ * The connection log's switch, settable from the address bar so it works on
+ * a phone:
+ *   ?ctdebug=1 / =0  - shows / hides the "Connection log" button.
  * The parameter is saved in localStorage and removed from the address bar.
+ *
+ * ct_session_v2 (the old switch for the session handling, now always on) is
+ * removed from storage and from the address bar if it is still there.
  */
-export const SESSION_V2_KEY = 'ct_session_v2';
 export const CONN_DEBUG_KEY = 'ctdebug';
+const RETIRED_KEYS = ['ct_session_v2'];
 
-const readFlag = (key: string) => {
+export const isConnDebugEnabled = () => {
     try {
-        return localStorage.getItem(key) === '1';
+        return localStorage.getItem(CONN_DEBUG_KEY) === '1';
     } catch {
         return false;
     }
 };
 
-export const isSessionV2Enabled = () => readFlag(SESSION_V2_KEY);
-export const isConnDebugEnabled = () => readFlag(CONN_DEBUG_KEY);
-
-/** Reads ?ct_session_v2= and ?ctdebug=, saves them and strips them from the URL. Call once at start-up. */
+/** Reads ?ctdebug=, saves it and strips it (and retired switches) from the URL. Call once at start-up. */
 export const applyUrlFlags = () => {
     try {
+        RETIRED_KEYS.forEach(key => localStorage.removeItem(key));
         const url = new URL(window.location.href);
         let changed = false;
-        [SESSION_V2_KEY, CONN_DEBUG_KEY].forEach(key => {
-            const value = url.searchParams.get(key);
-            if (value === null) return;
-            changed = true;
+        RETIRED_KEYS.forEach(key => {
+            if (!url.searchParams.has(key)) return;
             url.searchParams.delete(key);
-            if (value === '1') localStorage.setItem(key, '1');
-            else if (value === '0') localStorage.removeItem(key);
-            else return;
-            logConnEvent('flag', `${key}=${value}`);
+            changed = true;
         });
+        const value = url.searchParams.get(CONN_DEBUG_KEY);
+        if (value !== null) {
+            changed = true;
+            url.searchParams.delete(CONN_DEBUG_KEY);
+            if (value === '1') localStorage.setItem(CONN_DEBUG_KEY, '1');
+            else if (value === '0') localStorage.removeItem(CONN_DEBUG_KEY);
+            if (value === '1' || value === '0') logConnEvent('flag', `${CONN_DEBUG_KEY}=${value}`);
+        }
         if (changed) window.history.replaceState(window.history.state, document.title, url.toString());
     } catch {
-        // A blocked localStorage just leaves both switches off.
+        // A blocked localStorage just leaves the switch off.
     }
 };
 
@@ -56,17 +58,49 @@ const describeStoredAuth = () => {
     }
 };
 
+/** Chrome may load a page typed in the address bar before Enter is pressed (prerendering). */
+export const isPrerendering = () =>
+    typeof document !== 'undefined' && !!(document as Document & { prerendering?: boolean }).prerendering;
+
+/**
+ * Resolves once the page is really shown to the trader. A prerendered page
+ * runs without the tab's sessionStorage (so without its login): the app must
+ * not open its socket or decide who is logged in until then.
+ */
+export const whenPageActivated = (): Promise<void> =>
+    new Promise(resolve => {
+        if (!isPrerendering()) {
+            resolve();
+            return;
+        }
+        document.addEventListener(
+            'prerenderingchange',
+            () => {
+                logConnEvent(
+                    'page_activated',
+                    `prerendered page shown; ${describeStoredAuth()}; active_loginid ${
+                        localStorage.getItem('active_loginid') ? 'set' : 'none'
+                    }`
+                );
+                resolve();
+            },
+            { once: true }
+        );
+    });
+
 let are_page_events_watched = false;
 
 /**
- * Start-up (main.tsx): apply the URL switches, log the page load and keep
- * logging visibility and online/offline. Runs with ct_session_v2 on or off.
+ * Start-up (main.tsx): apply the URL switch, log the page load and keep
+ * logging visibility and online/offline.
  */
 export const startSessionDiagnostics = () => {
     applyUrlFlags();
     logConnEvent(
         'page_load',
-        `${describeStoredAuth()}; active_loginid ${localStorage.getItem('active_loginid') ? 'set' : 'none'}; ct_session_v2 ${isSessionV2Enabled() ? 'ON' : 'off'}`
+        `${describeStoredAuth()}; active_loginid ${localStorage.getItem('active_loginid') ? 'set' : 'none'}${
+            isPrerendering() ? '; prerendering - start-up waits until shown' : ''
+        }`
     );
     if (are_page_events_watched) return;
     are_page_events_watched = true;

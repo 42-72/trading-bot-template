@@ -111,7 +111,7 @@ export default class RunPanelStore {
         this.disposeReactionsFn = this.registerReactions();
         this.timer = null;
 
-        // ct_session_v2 (api-base.ts emits these only with the flag on).
+        // The connection or the session is gone (api-base.ts).
         observer.register('session.connection_lost', this.onSessionConnectionLost);
         observer.register('session.expired', this.onSessionExpired);
     }
@@ -901,7 +901,7 @@ export default class RunPanelStore {
         observer.unregisterAll('client.invalid_token');
     };
 
-    /** ct_session_v2: stop a running bot / AI Scanner when the connection or session is gone (utils/session-stop.ts). */
+    /** Stop a running bot / AI Scanner when the connection or session is gone (utils/session-stop.ts). */
     stopForSession = (reason: TSessionStopReason) =>
         stopRunsForSession(
             {

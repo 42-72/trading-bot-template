@@ -21,7 +21,6 @@ import { setAiScannerTrade, TAiScannerTrade } from '@/utils/ai-scanner-trade-gua
 import { getScannerStrategy, TConditionResult, TSide } from '@/utils/ai-strategies';
 import { createAiEngineStrategyId } from '@/utils/library-strategies';
 import { loadBotIntoBuilder } from '@/utils/load-bot-into-builder';
-import { isSessionV2Enabled } from '@/utils/session-flags';
 import { dismissNoticeOnRunAgain } from '@/utils/session-stop';
 import { keep_alive } from '@/utils/socket-keep-alive';
 import RootStore from './root-store';
@@ -287,13 +286,10 @@ export default class AiScannerStore {
             }
         );
 
-        // ct_session_v2: while the scanner is busy the tab must not be frozen (socket-keep-alive.ts).
+        // While the scanner is busy the tab must not be frozen (socket-keep-alive.ts).
         reaction(
             () => this.is_active,
-            is_active => {
-                if (isSessionV2Enabled()) keep_alive.setBusy('ai_scanner', is_active);
-                else keep_alive.setBusy('ai_scanner', false);
-            }
+            is_active => keep_alive.setBusy('ai_scanner', is_active)
         );
 
         // Account switch (only possible before Run - it's locked while a bot

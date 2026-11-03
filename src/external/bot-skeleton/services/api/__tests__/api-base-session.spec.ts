@@ -6,7 +6,6 @@ import { observer as globalObserver } from '../../../utils/observer';
 import { api_base, RECONNECT_BACKOFF_MS } from '../api-base';
 import { generateDerivApiInstance } from '../appId';
 import ApiHelpers from '../api-helpers';
-import chart_api from '../chart-api';
 
 jest.mock('../appId', () => ({
     generateDerivApiInstance: jest.fn(),
@@ -94,7 +93,7 @@ const events = (name: string) => readConnLog().filter(entry => entry.e === name)
 const setVisibility = (state: 'visible' | 'hidden') =>
     Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
 
-describe('api_base session handling (ct_session_v2 on)', () => {
+describe('api_base session handling', () => {
     let emitted: string[];
     const recordEmit = (name: string) => () => emitted.push(name);
     const onLost = recordEmit('session.connection_lost');
@@ -104,7 +103,6 @@ describe('api_base session handling (ct_session_v2 on)', () => {
         jest.useFakeTimers();
         localStorage.clear();
         sessionStorage.clear();
-        localStorage.setItem('ct_session_v2', '1');
         localStorage.setItem('active_loginid', 'VRTC1');
         mockGenerate.mockReset();
         mockGetAuthInfo.mockReturnValue({ access_token: 'token', expires_at: Date.now() + 3600 * 1000 });
@@ -194,6 +192,54 @@ describe('api_base session handling (ct_session_v2 on)', () => {
         });
     });
 
+    describe('a page that starts without a session (new tab, or prerendered from the address bar)', () => {
+        const startOnPublicSocket = async () => {
+            mockGetAuthInfo.mockReturnValue(null); // no auth_info in this tab's sessionStorage
+            const base = createApiBase();
+            base.has_active_symbols = false;
+            const api = makeApi(false);
+            mockGenerate.mockResolvedValueOnce(api);
+            await base.init();
+            api.open();
+            await flush();
+            return { base, api };
+        };
+
+        it('loads the logged-out app instead of waiting forever - the market list is asked for', async () => {
+            const { api } = await startOnPublicSocket();
+            expect(api.balance).not.toHaveBeenCalled();
+            expect(client_store.logout).not.toHaveBeenCalled();
+            expect(api.send).toHaveBeenCalledWith(expect.objectContaining({ active_symbols: 'brief' }));
+            expect(localStorage.getItem('active_loginid')).toBe('VRTC1');
+        });
+
+        it('logs in on a new socket as soon as a session appears (page shown / focused)', async () => {
+            const { base } = await startOnPublicSocket();
+            mockGetAuthInfo.mockReturnValue({ access_token: 'token', expires_at: Date.now() + 3600 * 1000 });
+            const logged_in_api = makeApi(true);
+            mockGenerate.mockResolvedValueOnce(logged_in_api);
+            base.initEventListeners();
+            window.dispatchEvent(new Event('focus'));
+            await flush();
+            logged_in_api.open();
+            await flush();
+
+            expect(events('session_found')[0].d).toBe('focus - logging in on a new socket');
+            expect(base.api).toBe(logged_in_api);
+            expect(base.isFullyLoggedIn()).toBe(true);
+            expect(events('authorized')).toHaveLength(1);
+        });
+
+        it('stays on the public socket while there is still no session', async () => {
+            const { base, api } = await startOnPublicSocket();
+            base.initEventListeners();
+            window.dispatchEvent(new Event('focus'));
+            await flush();
+            expect(base.api).toBe(api);
+            expect(events('session_found')).toHaveLength(0);
+        });
+    });
+
     describe('reconnecting', () => {
         it('OTP fails, then succeeds: still logged in, with "Reconnecting…" shown meanwhile', async () => {
             const base = await loggedIn();
@@ -265,6 +311,39 @@ describe('api_base session handling (ct_session_v2 on)', () => {
             document.dispatchEvent(new Event('visibilitychange'));
             await flush();
             expect(mockGenerate).toHaveBeenCalledTimes(2);
+        });
+
+        it('every reconnect logs its steps before "authorized" - even when the socket was not newly made', async () => {
+            const base = await loggedIn();
+            const next_api = makeApi();
+            mockGenerate.mockResolvedValueOnce(next_api);
+            (base.api as unknown as TFakeApi).close();
+            await flush();
+            next_api.open();
+            await flush();
+
+            const names = readConnLog().map(entry => entry.e);
+            const from = names.lastIndexOf('reconnect_scheduled');
+            expect(names.slice(from)).toEqual([
+                'reconnect_scheduled',
+                'reconnect_start',
+                'connect',
+                'connection',
+                'authorized',
+            ]);
+            expect(events('reconnect_start').pop()?.d).toBe('socket closed - attempt 1');
+            expect(events('connect').pop()?.d).toBe('new socket (reconnect)');
+            expect(events('connection').pop()?.d).toBe(
+                `${base.connection_generation} - authenticated socket, Connecting`
+            );
+        });
+
+        it('a reconnect asked for while one is under way is logged, not silently dropped', async () => {
+            const base = await loggedIn();
+            base.is_reconnecting_now = true;
+            base.scheduleReconnect('focus');
+            expect(events('reconnect_skipped')[0].d).toBe('focus - a reconnect is already under way');
+            base.is_reconnecting_now = false;
         });
 
         it('a closed logged-in socket reports the lost connection (so a running bot is stopped)', async () => {
@@ -432,37 +511,6 @@ describe('api_base session handling (ct_session_v2 on)', () => {
             expect(mockGenerate).toHaveBeenCalledTimes(2);
             has_focus.mockRestore();
         });
-
-        it('an old-path listener left from flag-off is removed and handed to the v2 path - no "not connected" wait', async () => {
-            const base = await loggedIn();
-            base.api = makeApi() as never;
-            (base.api as unknown as TFakeApi).connection.readyState = 3;
-            mockGenerate.mockResolvedValueOnce(makeApi());
-            base.reconnectIfNotConnected(new Event('online'));
-            await flush();
-            expect(events('legacy_listener')[0].d).toBe(
-                'old online listener removed (api-base.ts reconnectIfNotConnected)'
-            );
-            expect(events('reconnect_wait')).toHaveLength(0);
-            expect(events('reconnect_scheduled')[0].d).toMatch(/^not connected \(old online listener\)/);
-        });
-
-        it('listeners attached while the flag was off are removed, so only one reconnect runs', async () => {
-            const base = createApiBase();
-            localStorage.removeItem('ct_session_v2');
-            base.initEventListeners(); // legacy: online / focus -> reconnectIfNotConnected
-            localStorage.setItem('ct_session_v2', '1');
-            const spy = jest.spyOn(base, 'scheduleReconnect');
-            mockGenerate.mockResolvedValueOnce(makeApi());
-            await base.init();
-            base.api = makeApi() as never;
-            (base.api as unknown as TFakeApi).connection.readyState = 3;
-            window.dispatchEvent(new Event('online'));
-            await flush();
-            expect(spy.mock.calls.map(([reason]) => reason)).toEqual(['online']);
-            window.removeEventListener('online', base.reconnectIfNotConnected);
-            window.removeEventListener('focus', base.reconnectIfNotConnected);
-        });
     });
 
     describe('keep-alive', () => {
@@ -534,84 +582,5 @@ describe('api_base session handling (ct_session_v2 on)', () => {
             keep_alive.beat();
             expect(events('keepalive_late')[0].d).toMatch(/^70s since the last ping/);
         });
-    });
-});
-
-describe('api_base with ct_session_v2 off (behaviour as before)', () => {
-    beforeEach(() => {
-        localStorage.clear();
-        localStorage.setItem('active_loginid', 'VRTC1');
-        mockGenerate.mockReset();
-        globalObserver.setState({ 'client.store': null });
-    });
-
-    it('an exception during authorize still wipes the stored login, as before', async () => {
-        const base = createApiBase();
-        const api = makeApi(true, () => Promise.reject({ error: { code: 'AuthorizationRequired' } }));
-        mockGenerate.mockResolvedValueOnce(api);
-        globalObserver.register('Error', jest.fn());
-        await base.init();
-        await base.authorizeAndSubscribe();
-
-        expect(localStorage.getItem('active_loginid')).toBeNull();
-        expect(events('auth_wipe')[0].d).toContain('api-base.ts authorizeAndSubscribe catch');
-        globalObserver.unregisterAll('Error');
-    });
-
-    it('a public socket is still asked for the balance, as before', async () => {
-        const base = createApiBase();
-        const api = makeApi(false);
-        mockGenerate.mockResolvedValueOnce(api);
-        await base.init();
-        await base.authorizeAndSubscribe();
-        expect(api.balance).toHaveBeenCalled();
-    });
-
-    it('5 failed reconnects still clear active_loginid, as before', () => {
-        const base = createApiBase();
-        base.init = jest.fn() as never;
-        base.api = makeApi() as never;
-        (base.api as unknown as TFakeApi).connection.readyState = 3;
-        for (let i = 0; i < 5; i++) base.reconnectIfNotConnected();
-        expect(localStorage.getItem('active_loginid')).toBeNull();
-        expect(base.init).toHaveBeenCalledTimes(5);
-    });
-
-    it('no keep-alive pings, no reconnect event and no Web Lock with the flag off', async () => {
-        jest.useFakeTimers();
-        const reconnected = jest.fn();
-        globalObserver.register('session.reconnected', reconnected);
-        const base = createApiBase();
-        const api = makeApi();
-        mockGenerate.mockResolvedValueOnce(api);
-        await base.init();
-        api.open();
-        await jest.advanceTimersByTimeAsync(KEEP_ALIVE_INTERVAL_MS * 3);
-        base.setIsRunning(true);
-        expect(api.send.mock.calls.filter(([request]) => 'ping' in request)).toHaveLength(0);
-        expect(keep_alive.is_running).toBe(false);
-        expect(keep_alive.is_lock_held).toBe(false);
-        expect(reconnected).not.toHaveBeenCalled();
-        base.setIsRunning(false);
-        globalObserver.unregisterAll('session.reconnected');
-        jest.useRealTimers();
-    });
-
-    it('the market-data helpers are still disposed when the socket is replaced, as before', async () => {
-        const base = createApiBase();
-        const api = makeApi();
-        mockGenerate.mockResolvedValueOnce(api);
-        await base.init();
-        api.connection.readyState = 1;
-        mockGenerate.mockResolvedValueOnce(makeApi());
-        await base.init(true);
-        expect(ApiHelpers.disposeInstance).toHaveBeenCalledTimes(1);
-    });
-
-    it('the chart is re-initialised with the connection, as before', async () => {
-        const base = createApiBase();
-        mockGenerate.mockResolvedValueOnce(makeApi());
-        await base.init(true);
-        expect(chart_api.init).toHaveBeenCalledWith(true);
     });
 });

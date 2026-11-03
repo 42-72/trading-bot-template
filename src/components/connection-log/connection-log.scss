@@ -1,17 +1,29 @@
 .connection-log {
+    // A thin tab on the left edge, half way down: clear of the AI Scanner
+    // button and the run panel (bottom / right) and of the header and footer.
     &__button {
         position: fixed;
-        inset-block-end: 8rem;
-        inset-inline-end: 1.2rem;
+        inset-block-start: 50%;
+        inset-inline-start: 0;
         z-index: 9998;
-        padding: 0.4rem 1rem;
+        padding: 0.8rem 0.2rem;
         border: 1px solid var(--border-normal);
-        border-radius: 999px;
-        font-size: 1.2rem;
+        border-inline-start: 0;
+        border-start-end-radius: 6px;
+        border-end-end-radius: 6px;
+        font-size: 1rem;
+        line-height: 1.2rem;
         color: var(--text-general);
         background: var(--general-section-1);
-        opacity: 0.85;
+        opacity: 0.45;
         cursor: pointer;
+        transform: translateY(-50%);
+        writing-mode: vertical-rl;
+
+        &:hover,
+        &:focus-visible {
+            opacity: 1;
+        }
     }
 
     &__panel {

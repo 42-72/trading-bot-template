@@ -280,7 +280,7 @@ const Interpreter = () => {
         });
     }
 
-    /** ct_session_v2: false once the app has moved to a new socket - this engine would hear nothing. */
+    /** False once the app has moved to a new socket - this engine would hear nothing. */
     const isBoundTo = api => bound_api === api;
 
     return { stop, run, terminateSession, bot, unsubscribeFromTicksService, isBoundTo };

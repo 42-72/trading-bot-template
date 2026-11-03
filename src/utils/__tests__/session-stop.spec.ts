@@ -14,7 +14,7 @@ const setup = ({ is_running = false, is_scanner_active = false } = {}) => {
     return targets;
 };
 
-describe('stopRunsForSession (ct_session_v2)', () => {
+describe('stopRunsForSession', () => {
     it('connection lost with a bot running: Stop path, Journal "Connection lost – bot stopped"', () => {
         const targets = setup({ is_running: true });
         expect(stopRunsForSession(targets, 'connection_lost')).toBe(true);
@@ -56,23 +56,15 @@ describe('dismissNoticeOnRunAgain (Run / Scan pressed again)', () => {
         session_status.notice = null;
     });
 
-    it('flag on: hides "Connection lost"', () => {
-        localStorage.setItem('ct_session_v2', '1');
+    it('hides "Connection lost"', () => {
         session_status.setNotice('connection_lost');
         dismissNoticeOnRunAgain();
         expect(session_status.notice).toBeNull();
     });
 
-    it('flag on: "Session expired" stays until the trader logs in', () => {
-        localStorage.setItem('ct_session_v2', '1');
+    it('"Session expired" stays until the trader logs in', () => {
         session_status.setNotice('session_expired');
         dismissNoticeOnRunAgain();
         expect(session_status.notice).toBe('session_expired');
-    });
-
-    it('flag off: nothing changes', () => {
-        session_status.notice = 'connection_lost';
-        dismissNoticeOnRunAgain();
-        expect(session_status.notice).toBe('connection_lost');
     });
 });

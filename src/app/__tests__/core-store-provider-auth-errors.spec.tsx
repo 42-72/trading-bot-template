@@ -26,7 +26,6 @@ jest.mock('@/hooks/useApiBase', () => ({
     }),
 }));
 jest.mock('@/hooks/useStore', () => ({ useStore: jest.fn() }));
-jest.mock('@/hooks/useLogout', () => ({ useLogout: () => jest.fn() }));
 jest.mock('@deriv-com/translations', () => ({ useTranslations: () => ({ currentLang: 'EN' }) }));
 jest.mock('@/components/shared', () => ({ toMoment: jest.fn() }));
 jest.mock('@/components/shared/constants/form-error-messages', () => ({ FORM_ERROR_MESSAGES: () => ({}) }));
@@ -55,18 +54,7 @@ describe('CoreStoreProvider - an auth error on a message', () => {
         (api_base.reportAuthError as jest.Mock).mockClear();
     });
 
-    it('ct_session_v2 off: logs out at once, as before', async () => {
-        const client = setup();
-        await mockMessageListener?.(authError);
-        expect(client.logout).toHaveBeenCalledWith(
-            'AuthorizationRequired on balance',
-            'CoreStoreProvider.tsx handleMessages'
-        );
-        expect(api_base.reportAuthError).not.toHaveBeenCalled();
-    });
-
-    it('ct_session_v2 on: never logs out here - hands the error, and the socket it came from, to api_base', async () => {
-        localStorage.setItem('ct_session_v2', '1');
+    it('never logs out here - hands the error, and the socket it came from, to api_base', async () => {
         const client = setup();
         await mockMessageListener?.(authError);
         expect(client.logout).not.toHaveBeenCalled();

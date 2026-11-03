@@ -1,6 +1,5 @@
 /* eslint-disable no-confusing-arrow */
 import { Map } from 'immutable';
-import { isSessionV2Enabled } from '@/utils/session-flags';
 import { getLast, historyToTicks } from '../../utils/binary-utils';
 import { observer as globalObserver } from '../../utils/observer';
 import { doUntilDone, getUUID } from '../tradeEngine/utils/helpers';
@@ -42,11 +41,11 @@ const updateCandles = (candles, ohlc) => {
 const getType = isCandle => (isCandle ? 'candles' : 'ticks');
 
 /**
- * ct_session_v2: a request sent on a closed socket is never answered by
+ * A request sent on a closed socket is never answered by
  * deriv-api (its promise neither resolves nor rejects), so a forget on it
  * would hang the Stop path forever. Its subscriptions died with it anyway.
  */
-const isSocketGone = () => isSessionV2Enabled() && api_base.api?.connection?.readyState !== 1;
+const isSocketGone = () => api_base.api?.connection?.readyState !== 1;
 
 export default class TicksService {
     constructor() {

@@ -1325,7 +1325,7 @@ describe('AiScannerStore', () => {
         });
     });
 
-    describe('connection or session gone (ct_session_v2)', () => {
+    describe('connection or session gone', () => {
         it('while scanning: the scan ends at once with the reason, feeds closed, nothing run', async () => {
             const { root, store } = await startScan();
             store.onMarketTick('1HZ10V', qualifying, 9, true);
@@ -1362,7 +1362,6 @@ describe('AiScannerStore', () => {
         });
 
         it('keeps the tab from being frozen while scanning (Web Lock), and lets go when the scan ends', async () => {
-            localStorage.setItem('ct_session_v2', '1');
             const setBusy = jest.spyOn(keep_alive, 'setBusy');
             const { store } = await startScan();
             expect(setBusy).toHaveBeenLastCalledWith('ai_scanner', true);
@@ -1372,17 +1371,9 @@ describe('AiScannerStore', () => {
         });
 
         it('starting a scan again hides the "Connection lost" notice', async () => {
-            localStorage.setItem('ct_session_v2', '1');
             session_status.setNotice('connection_lost');
             await startScan();
             expect(session_status.notice).toBeNull();
-        });
-
-        it('flag off: starting a scan leaves the notice alone', async () => {
-            session_status.notice = 'connection_lost';
-            await startScan();
-            expect(session_status.notice).toBe('connection_lost');
-            session_status.notice = null;
         });
 
         it('locks the winning trade for the engine before Run, and clears it when the run ends', async () => {
@@ -1401,13 +1392,6 @@ describe('AiScannerStore', () => {
             runInAction(() => (root.run_panel.is_running = false));
             await flush();
             expect(getAiScannerTrade()).toBeNull();
-        });
-
-        it('flag off: never holds the lock', async () => {
-            const setBusy = jest.spyOn(keep_alive, 'setBusy');
-            await startScan();
-            expect(setBusy).not.toHaveBeenCalledWith('ai_scanner', true);
-            setBusy.mockRestore();
         });
     });
 });

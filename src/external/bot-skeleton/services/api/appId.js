@@ -31,9 +31,10 @@ export const clearDerivApiInstance = () => {
  * Prevents multiple WebSocket connections by reusing existing instance
  * Now supports async WebSocket URL fetching with authenticated flow
  * @param {boolean} forceNew - Force creation of new instance (default: false)
+ * @param {string} caller - Who asks (connection log only)
  * @returns Promise with DerivAPIBasic instance
  */
-export const generateDerivApiInstance = async (forceNew = false) => {
+export const generateDerivApiInstance = async (forceNew = false, caller = 'api_base') => {
     // If forcing new instance, clear existing one
     if (forceNew) {
         console.log('[DerivAPI] Forcing new instance creation');
@@ -46,6 +47,13 @@ export const generateDerivApiInstance = async (forceNew = false) => {
         // Return existing instance if it's connecting or open
         if (readyState === WebSocket.CONNECTING || readyState === WebSocket.OPEN) {
             console.log('[DerivAPI] Reusing existing instance (state:', readyState, ')');
+            // No socket_create / otp_ok follow: this socket was made (and logged) earlier.
+            logConnEvent(
+                'socket_reused',
+                `${caller} - ${readyState === WebSocket.OPEN ? 'open' : 'connecting'} ${
+                    derivApiInstance.ct_is_authenticated ? 'authenticated' : 'public'
+                } socket`
+            );
             return derivApiInstance;
         } else {
             // Connection is closed or closing, clear it
@@ -57,6 +65,7 @@ export const generateDerivApiInstance = async (forceNew = false) => {
     // If there's already a creation in progress, return that promise
     if (derivApiPromise) {
         console.log('[DerivAPI] Reusing existing creation promise');
+        logConnEvent('socket_create_shared', `${caller} - joins a socket creation already under way`);
         return derivApiPromise;
     }
 
@@ -84,7 +93,7 @@ export const generateDerivApiInstance = async (forceNew = false) => {
                 connection: deriv_socket,
                 middleware: new APIMiddleware({}),
             });
-            // Logged-in (otp) or public socket - api_base only authorizes on the former (ct_session_v2).
+            // Logged-in (otp) or public socket - api_base only authorizes on the former.
             deriv_api.ct_is_authenticated = isAuthenticatedSocketURL(wsURL);
             logConnEvent('socket_create', describeSocketURL(wsURL));
 

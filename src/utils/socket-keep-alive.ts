@@ -1,8 +1,8 @@
 import { logConnEvent } from './connection-log';
 
 /**
- * ct_session_v2 keep-alive for the app's socket (api_base starts it once a
- * socket is logged in; only with the flag on).
+ * Keep-alive for the app's socket (api_base starts it once a
+ * socket is logged in).
  *
  * Deriv closes a socket that sends nothing for a while. The only regular
  * request used to be chart-api's 30 s `time` call, run by a main-thread

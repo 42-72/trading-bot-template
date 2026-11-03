@@ -1,24 +1,28 @@
+import { generateDerivApiInstance } from '../appId';
 import chart_api from '../chart-api';
 
 jest.mock('../appId', () => ({ generateDerivApiInstance: jest.fn() }));
 
-describe('chart_api reconnecting', () => {
+const mockGenerate = generateDerivApiInstance as jest.Mock;
+
+describe('chart_api', () => {
     beforeEach(() => {
-        localStorage.clear();
-        chart_api.api = { connection: { readyState: 3 } };
-        jest.spyOn(chart_api, 'init').mockImplementation(async () => {});
+        mockGenerate.mockReset();
+        chart_api.api = undefined;
     });
 
-    afterEach(() => jest.restoreAllMocks());
-
-    it('ct_session_v2 on: never reconnects on its own - api_base owns reconnecting', () => {
-        localStorage.setItem('ct_session_v2', '1');
-        chart_api.onsocketclose();
-        expect(chart_api.init).not.toHaveBeenCalled();
+    it('never reconnects on its own - it has no close handling; api_base owns reconnecting', () => {
+        expect((chart_api as unknown as Record<string, unknown>).onsocketclose).toBeUndefined();
+        expect((chart_api as unknown as Record<string, unknown>).reconnectIfNotConnected).toBeUndefined();
     });
 
-    it('ct_session_v2 off: reconnects on close, as before', () => {
-        chart_api.onsocketclose();
-        expect(chart_api.init).toHaveBeenCalledWith(true);
+    it('takes the shared socket api_base hands it on each (re)connect', async () => {
+        const first = { send: jest.fn() };
+        const second = { send: jest.fn() };
+        mockGenerate.mockResolvedValueOnce(first).mockResolvedValueOnce(second);
+        await chart_api.init();
+        expect(chart_api.api).toBe(first);
+        await chart_api.init(true);
+        expect(chart_api.api).toBe(second);
     });
 });

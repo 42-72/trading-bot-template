@@ -43,29 +43,20 @@ describe('getSocketURL', () => {
         expect(await getSocketURL()).toBe('wss://example.com/ws?otp=abc');
     });
 
-    describe('ct_session_v2 on', () => {
-        beforeEach(() => localStorage.setItem('ct_session_v2', '1'));
-
-        it('OTP request fails: no fallback to the public socket - the error goes to the retry', async () => {
-            mockGetURL.mockRejectedValue(new TypeError('Failed to fetch'));
-            await expect(getSocketURL()).rejects.toThrow('Failed to fetch');
-        });
-
-        it('OTP request answered 401: a genuine expiry', async () => {
-            mockGetURL.mockRejectedValue(new DerivWSRequestError('Failed to fetch OTP: 401', 401));
-            await expect(getSocketURL()).rejects.toBeInstanceOf(SessionExpiredError);
-        });
-
-        it('any other HTTP error is retried, not an expiry', async () => {
-            mockGetURL.mockRejectedValue(new DerivWSRequestError('Failed to fetch OTP: 503', 503));
-            const error = await getSocketURL().catch(e => e);
-            expect(error).not.toBeInstanceOf(SessionExpiredError);
-        });
+    it('OTP request fails: no fallback to the public socket - the error goes to the retry', async () => {
+        mockGetURL.mockRejectedValue(new TypeError('Failed to fetch'));
+        await expect(getSocketURL()).rejects.toThrow('Failed to fetch');
+        expect(readConnLog().map(entry => entry.e)).toContain('socket_url_failed');
     });
 
-    it('ct_session_v2 off: the old fallback to the public socket, now logged', async () => {
-        mockGetURL.mockRejectedValue(new TypeError('Failed to fetch'));
-        expect(await getSocketURL()).toMatch(/\/public$/);
-        expect(readConnLog().map(entry => entry.e)).toContain('public_fallback');
+    it('OTP request answered 401: a genuine expiry', async () => {
+        mockGetURL.mockRejectedValue(new DerivWSRequestError('Failed to fetch OTP: 401', 401));
+        await expect(getSocketURL()).rejects.toBeInstanceOf(SessionExpiredError);
+    });
+
+    it('any other HTTP error is retried, not an expiry', async () => {
+        mockGetURL.mockRejectedValue(new DerivWSRequestError('Failed to fetch OTP: 503', 503));
+        const error = await getSocketURL().catch(e => e);
+        expect(error).not.toBeInstanceOf(SessionExpiredError);
     });
 });

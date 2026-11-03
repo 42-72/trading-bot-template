@@ -1,6 +1,5 @@
 import { logConnEvent } from '@/utils/connection-log';
 import { isAiEngineStrategyId, isLibraryStrategyId } from '@/utils/library-strategies';
-import { isSessionV2Enabled } from '@/utils/session-flags';
 import { save_types } from '../constants';
 import { config } from '../constants/config';
 import { api_base } from '../services/api/api-base';
@@ -24,24 +23,24 @@ class DBot {
         this.is_bot_running = false;
         this.engine_refresh = null;
 
-        // ct_session_v2: a new socket is logged in (reconnect) - an idle engine moves onto it.
+        // a new socket is logged in (reconnect) - an idle engine moves onto it.
         globalObserver.register('session.reconnected', () => {
             this.refreshEngineForNewConnection('reconnected').catch(() => {});
         });
     }
 
     /**
-     * ct_session_v2: true when the engine's listeners (ticks, proposals,
+     * True when the engine's listeners (ticks, proposals,
      * contract updates) sit on a socket the app no longer uses. Such an
      * engine never hears another message: Run would wait forever.
      */
     isEngineOnOldConnection() {
-        if (!isSessionV2Enabled() || !this.interpreter?.isBoundTo || !api_base.api) return false;
+        if (!this.interpreter?.isBoundTo || !api_base.api) return false;
         return !this.interpreter.isBoundTo(api_base.api);
     }
 
     /**
-     * ct_session_v2: replace an idle engine left on an old socket with a
+     * Replace an idle engine left on an old socket with a
      * fresh one on the current socket - as a page load would build it.
      * Never touches a running bot.
      */
@@ -338,7 +337,7 @@ class DBot {
             api_base.is_stopping = false;
             const code = this.generateCode();
 
-            // ct_session_v2: after a reconnect the engine must run on the new socket,
+            // after a reconnect the engine must run on the new socket,
             // exactly as after a page load (a refresh may already be under way).
             if (this.engine_refresh || this.isEngineOnOldConnection()) {
                 const refresh = this.refreshEngineForNewConnection('Run pressed');

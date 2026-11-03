@@ -4,7 +4,7 @@ export type TSessionNotice = 'connection_lost' | 'session_expired' | null;
 
 /**
  * What the session notice (components/session-notice) shows. Only ever set
- * with ct_session_v2 on.
+ * by the session handling in api-base.ts.
  *   is_reconnecting - a logged-in user's socket is down and being retried.
  *   notice          - connection_lost: a running bot / AI Scanner was stopped.
  *                     session_expired: persistent until the trader logs in.

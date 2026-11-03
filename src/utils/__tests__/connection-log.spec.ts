@@ -6,7 +6,7 @@ import {
     logConnEvent,
     readConnLog,
 } from '../connection-log';
-import { applyUrlFlags, isConnDebugEnabled, isSessionV2Enabled, startSessionDiagnostics } from '../session-flags';
+import { applyUrlFlags, isConnDebugEnabled, startSessionDiagnostics } from '../session-flags';
 
 describe('connection log', () => {
     beforeEach(() => localStorage.clear());
@@ -65,56 +65,52 @@ describe('connection log', () => {
         expect(formatConnLog(readConnLog())).toMatch(/^\d{4}-\d\d-\d\dT.+ {2}socket_open {2}authenticated$/);
     });
 
-    it('a full localStorage clear (version check, logout fallback) keeps the log and the switches', () => {
+    it('a full localStorage clear (version check, logout fallback) keeps the log and the ctdebug switch', () => {
         logConnEvent('page_load');
-        localStorage.setItem('ct_session_v2', '1');
         localStorage.setItem('ctdebug', '1');
         localStorage.setItem('active_loginid', 'VRTC1');
         clearLocalStorageKeepingConnLog(['bot_version']);
         expect(readConnLog()).toHaveLength(1);
-        expect(isSessionV2Enabled()).toBe(true);
         expect(isConnDebugEnabled()).toBe(true);
         expect(localStorage.getItem('active_loginid')).toBeNull();
     });
 });
 
-describe('address-bar switches', () => {
+describe('address-bar switch', () => {
     beforeEach(() => {
         localStorage.clear();
         window.history.replaceState({}, '', '/');
     });
 
-    it('?ct_session_v2=1 turns the flag on, saves it, and removes the parameter', () => {
-        window.history.replaceState({}, '', '/?ct_session_v2=1&account_id=VRTC1#x');
-        applyUrlFlags();
-        expect(isSessionV2Enabled()).toBe(true);
-        expect(localStorage.getItem('ct_session_v2')).toBe('1');
-        expect(window.location.search).toBe('?account_id=VRTC1');
-        expect(window.location.hash).toBe('#x');
-    });
-
-    it('?ct_session_v2=0 turns it off', () => {
-        localStorage.setItem('ct_session_v2', '1');
-        window.history.replaceState({}, '', '/?ct_session_v2=0');
-        applyUrlFlags();
-        expect(isSessionV2Enabled()).toBe(false);
-        expect(window.location.search).toBe('');
-    });
-
-    it('?ctdebug=1 / =0 turns the connection log button on / off', () => {
-        window.history.replaceState({}, '', '/?ctdebug=1');
+    it('?ctdebug=1 / =0 turns the connection log button on / off and removes the parameter', () => {
+        window.history.replaceState({}, '', '/?ctdebug=1&account_id=VRTC1#x');
         applyUrlFlags();
         expect(isConnDebugEnabled()).toBe(true);
+        expect(window.location.search).toBe('?account_id=VRTC1');
+        expect(window.location.hash).toBe('#x');
         window.history.replaceState({}, '', '/?ctdebug=0');
         applyUrlFlags();
         expect(isConnDebugEnabled()).toBe(false);
+        expect(window.location.search).toBe('');
     });
 
-    it('flag off by default - the site behaves as before', () => {
-        expect(isSessionV2Enabled()).toBe(false);
+    it('the retired ct_session_v2 switch is removed from storage and from the address bar', () => {
+        localStorage.setItem('ct_session_v2', '1');
+        window.history.replaceState({}, '', '/?ct_session_v2=1&ctdebug=1');
+        applyUrlFlags();
+        expect(localStorage.getItem('ct_session_v2')).toBeNull();
+        expect(window.location.search).toBe('');
+        expect(isConnDebugEnabled()).toBe(true);
     });
 
-    it('logs the page load, whether auth_info existed, and visibility changes - with the flag off', () => {
+    it('a plain URL changes nothing', () => {
+        const replace = jest.spyOn(window.history, 'replaceState');
+        applyUrlFlags();
+        expect(replace).not.toHaveBeenCalled();
+        replace.mockRestore();
+    });
+
+    it('logs the page load, whether auth_info existed, and visibility changes', () => {
         sessionStorage.setItem('auth_info', JSON.stringify({ expires_at: Date.now() + 30 * 60000 }));
         startSessionDiagnostics();
         Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
@@ -122,7 +118,7 @@ describe('address-bar switches', () => {
         const [load, hidden] = readConnLog();
         expect(load.e).toBe('page_load');
         expect(load.d).toMatch(/auth_info, expires in 30 min/);
-        expect(load.d).toMatch(/ct_session_v2 off/);
+        expect(load.d).not.toMatch(/ct_session_v2/);
         expect(hidden.e).toBe('page_hidden');
         sessionStorage.clear();
     });

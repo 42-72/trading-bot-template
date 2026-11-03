@@ -1,8 +1,7 @@
 /**
  * Hidden connection log for phones: the last 200 connection / auth events,
  * with timestamps, kept in localStorage under ct_conn_log so it survives a
- * logout, a reload and a closed tab. Recorded whether or not ct_session_v2
- * is on, so the old behaviour can be captured too. The "Connection log"
+ * logout, a reload, a closed tab and a version reset. The "Connection log"
  * button that shows it appears only when ctdebug is on (session-flags.ts).
  *
  * An event identical to the one before it (same name and detail) is not
@@ -99,9 +98,9 @@ export const formatConnLog = (entries: TConnLogEntry[]) =>
         .map(({ t, e, d, n, tl }) => `${t}  ${e}${d ? `  ${d}` : ''}${n && n > 1 ? `  (x${n}, last ${tl})` : ''}`)
         .join('\n');
 
-/** localStorage.clear() that keeps the log (and the ct_session_v2 / ctdebug switches). */
+/** localStorage.clear() that keeps the log (and the ctdebug switch). */
 export const clearLocalStorageKeepingConnLog = (keep_keys: string[] = []) => {
-    const kept = [CONN_LOG_KEY, 'ct_session_v2', 'ctdebug', ...keep_keys]
+    const kept = [CONN_LOG_KEY, 'ctdebug', ...keep_keys]
         .map(key => [key, localStorage.getItem(key)] as const)
         .filter(([, value]) => value !== null);
     localStorage.clear();

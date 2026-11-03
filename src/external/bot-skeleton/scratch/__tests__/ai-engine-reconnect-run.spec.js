@@ -1,5 +1,5 @@
 /**
- * The AI Scanner's engine after a reconnect (ct_session_v2), end to end
+ * The AI Scanner's engine after a reconnect, end to end
  * through the real pieces: real Blockly with the real blocks, the real
  * engine XML written with the scanner's values (utils/ai-engine-xml), the
  * real load() path, DBot, the interpreter and the trade engine. Only the
@@ -196,7 +196,7 @@ const reconnectAfterRun = async () => {
     return b;
 };
 
-describe('AI Scanner engine after a reconnect (ct_session_v2 on)', () => {
+describe('AI Scanner engine after a reconnect', () => {
     beforeAll(async () => {
         const DBotStore = (await import('../dbot-store')).default;
         DBotStore.setInstance({
@@ -235,7 +235,6 @@ describe('AI Scanner engine after a reconnect (ct_session_v2 on)', () => {
 
     beforeEach(() => {
         localStorage.clear();
-        localStorage.setItem('ct_session_v2', '1');
         setExecutionMode(EXECUTION_MODES.FAST);
         api_base.is_running = false;
         api_base.is_stopping = false;

@@ -7,6 +7,7 @@ import ChunkLoader from '@/components/loader/chunk-loader';
 import SessionNotice from '@/components/session-notice/session-notice';
 import { api_base } from '@/external/bot-skeleton';
 import { useStore } from '@/hooks/useStore';
+import { whenPageActivated } from '@/utils/session-flags';
 import { localize } from '@deriv-com/translations';
 import './app-root.scss';
 
@@ -42,13 +43,17 @@ const AppRoot = () => {
 
     // Initialize API
     useEffect(() => {
-        const timeoutId = setTimeout(() => {
-            if (!is_api_initialized) {
-                setIsApiInitialized(true);
-            }
-        }, 5000);
+        let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
         const initializeApi = async () => {
+            // A page prerendered from the address bar can't see the tab's login
+            // (sessionStorage) yet: opening the socket now would start it logged out.
+            await whenPageActivated();
+            timeoutId = setTimeout(() => {
+                if (!is_api_initialized) {
+                    setIsApiInitialized(true);
+                }
+            }, 5000);
             if (!api_base_initialized.current) {
                 try {
                     await api_base.init();

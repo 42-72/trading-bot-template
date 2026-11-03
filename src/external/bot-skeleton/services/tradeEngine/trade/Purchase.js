@@ -109,7 +109,7 @@ export default Engine =>
             }
             const trade_option = tradeOptionToBuy(contract_type, this.tradeOptions);
             this.last_buy_request = trade_option;
-            // ct_session_v2: the AI Scanner never buys anything but its locked trade.
+            // The AI Scanner never buys anything but its locked trade.
             const mismatch = checkAiScannerBuy(trade_option);
             if (mismatch) return Promise.reject(createError('AiTradeMismatch', mismatch));
             const logFailure = error => {

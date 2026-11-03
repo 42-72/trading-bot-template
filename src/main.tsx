@@ -16,7 +16,7 @@ console.info(`[Build] ${process.env.BUILD_COMMIT} @ ${process.env.BUILD_TIME}`);
 // Perform version check FIRST - before any other operations
 performVersionCheck();
 
-// ?ct_session_v2= / ?ctdebug= switches, and the connection log (page load, visibility, online)
+// ?ctdebug= switch, and the connection log (page load, visibility, online)
 startSessionDiagnostics();
 
 // Removed AnalyticsInitializer() call - analytics dependency removed

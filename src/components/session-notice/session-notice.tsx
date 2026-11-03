@@ -11,7 +11,7 @@ const logInAgain = async () => {
 };
 
 /**
- * ct_session_v2 notices (state in utils/session-status.ts):
+ * Session notices (state in utils/session-status.ts):
  * - "Reconnecting…" while a logged-in user's connection is being retried.
  * - "Connection lost – bot stopped" after a running bot / AI Scanner was stopped (dismissible).
  * - "Session expired – log in again", which stays until the trader logs in.

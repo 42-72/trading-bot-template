@@ -43,12 +43,14 @@ const ConnectionLog = () => {
             <button
                 type='button'
                 className='connection-log__button'
+                aria-label='Connection log'
+                title='Connection log'
                 onClick={() => {
                     setEntries(readConnLog());
                     setIsOpen(open => !open);
                 }}
             >
-                Connection log
+                Log
             </button>
             {is_open && (
                 <div className='connection-log__panel' role='dialog' aria-label='Connection log'>

@@ -1,7 +1,6 @@
 import { DerivWSAccountsService } from '@/services/derivws-accounts.service';
 import { OAuthTokenExchangeService } from '@/services/oauth-token-exchange.service';
 import { logConnEvent } from '@/utils/connection-log';
-import { isSessionV2Enabled } from '@/utils/session-flags';
 import { SessionExpiredError } from '@/utils/session-status';
 import brandConfig from '../../../../../brand.config.json';
 
@@ -95,16 +94,12 @@ export const getSocketURL = async (): Promise<string> => {
         return wsUrl;
     } catch (error) {
         console.error('[DerivWS] Error in getSocketURL:', error);
-        // ct_session_v2: a logged-in user is never quietly put on the public
-        // socket - api_base retries with backoff; a 401 means the token itself
-        // was refused, i.e. the session really expired.
-        if (isSessionV2Enabled()) {
-            if ((error as { status?: number })?.status === 401) throw new SessionExpiredError('otp_401');
-            logConnEvent('socket_url_failed', 'no public fallback (ct_session_v2) - will retry');
-            throw error;
-        }
-        logConnEvent('public_fallback', 'OTP failed - logged-in user put on the public socket (config.ts)');
-        return getDefaultServerURL();
+        // A logged-in user is never quietly put on the public socket - api_base
+        // retries with backoff; a 401 means the token itself was refused, i.e.
+        // the session really expired.
+        if ((error as { status?: number })?.status === 401) throw new SessionExpiredError('otp_401');
+        logConnEvent('socket_url_failed', 'no public fallback - will retry');
+        throw error;
     }
 };
 

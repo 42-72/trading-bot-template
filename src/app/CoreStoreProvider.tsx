@@ -6,12 +6,8 @@ import { FORM_ERROR_MESSAGES } from '@/components/shared/constants/form-error-me
 import { initFormErrorMessages } from '@/components/shared/utils/validation/declarative-validation-rules';
 import { api_base } from '@/external/bot-skeleton';
 import { useApiBase } from '@/hooks/useApiBase';
-import { useLogout } from '@/hooks/useLogout';
 import { useStore } from '@/hooks/useStore';
 import { TSocketResponseData } from '@/types/api-types';
-import { logConnEvent } from '@/utils/connection-log';
-import { isSessionV2Enabled } from '@/utils/session-flags';
-import { clearInvalidTokenParams } from '@/utils/url-utils';
 import { useTranslations } from '@deriv-com/translations';
 
 type TClientInformation = {
@@ -35,8 +31,6 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
     const { client, common } = useStore() ?? {};
 
     const { currentLang } = useTranslations();
-
-    const handleLogout = useLogout();
 
     const activeAccount = useMemo(
         () => accountList?.find(account => account.loginid === activeLoginid),
@@ -123,30 +117,16 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
             const data = (res as Record<string, unknown>).data as TSocketResponseData<'balance'>;
             const { msg_type, error } = data;
 
-            // Handle auth errors by calling client.logout() directly instead of useLogout hook
-            // This prevents redundant logout operations since useLogout internally calls client.logout()
+            // Auth errors never log out from here (api_base.reportAuthError).
             if (
                 error?.code === 'AuthorizationRequired' ||
                 error?.code === 'DisabledClient' ||
                 error?.code === 'InvalidToken'
             ) {
-                // ct_session_v2: api_base decides - only a repeated error on the
-                // current, fully logged-in socket ends the session.
-                if (isSessionV2Enabled()) {
-                    api_base.reportAuthError(error.code, `CoreStoreProvider ${msg_type ?? ''}`.trim(), source_api);
-                    return;
-                }
-                logConnEvent(
-                    'auth_error',
-                    `${error.code} on ${msg_type ?? 'message'} - logging out (CoreStoreProvider)`
-                );
-                // Clear all URL query parameters for these auth errors
-                clearInvalidTokenParams();
-                // Call client store logout directly to avoid double logout
-                await client?.logout(
-                    `${error.code} on ${msg_type ?? 'message'}`,
-                    'CoreStoreProvider.tsx handleMessages'
-                );
+                // api_base decides - only a repeated error on the current, fully
+                // logged-in socket ends the session.
+                api_base.reportAuthError(error.code, `CoreStoreProvider ${msg_type ?? ''}`.trim(), source_api);
+                return;
             }
 
             if (msg_type === 'balance' && data && !error) {

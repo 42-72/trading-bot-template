@@ -1,30 +1,17 @@
-import { isSessionV2Enabled } from '@/utils/session-flags';
 import { generateDerivApiInstance } from './appId';
 
+/**
+ * The chart's view of the app's socket (generateDerivApiInstance returns the
+ * one shared instance). It never reconnects itself: api_base owns
+ * reconnecting and calls init(true) with each new socket.
+ */
 class ChartAPI {
     api;
     chart_active_symbols = null; // Separate variable for chart-specific symbols
 
-    onsocketclose() {
-        // ct_session_v2: api_base owns reconnecting (it re-inits the chart too).
-        if (isSessionV2Enabled()) return;
-        this.reconnectIfNotConnected();
-    }
-
     init = async (force_create_connection = false) => {
         if (!this.api || force_create_connection) {
-            if (this.api?.connection) {
-                this.api.disconnect();
-                this.api.connection.removeEventListener('close', this.onsocketclose.bind(this));
-            }
-            this.api = await generateDerivApiInstance();
-            this.api?.connection.addEventListener('close', this.onsocketclose.bind(this));
-
-            // Intercept the send method to filter active_symbols responses for chart
-            // this.interceptApiCalls();
-
-            // Force inject symbols after a short delay to ensure api_base is ready
-            // this.forceInjectSymbols();
+            this.api = await generateDerivApiInstance(false, 'chart');
         }
         this.getTime();
     };
@@ -36,12 +23,6 @@ class ChartAPI {
             }, 30000);
         }
     }
-
-    reconnectIfNotConnected = () => {
-        if (this.api?.connection?.readyState && this.api?.connection?.readyState > 1) {
-            this.init(true);
-        }
-    };
 
     // /**
     //  * Intercept API calls to filter active_symbols responses specifically for chart
