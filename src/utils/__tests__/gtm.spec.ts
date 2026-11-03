@@ -1,17 +1,30 @@
+import fs from 'fs';
+import path from 'path';
 import GTM from '../gtm';
 
-describe('GTM pushes', () => {
-    it('never push inside the event (Tag Manager runs its tags synchronously): in idle time', () => {
+const files = (dir: string): string[] =>
+    fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) return entry.name === '__tests__' ? [] : files(full);
+        return /\.(ts|tsx|js|jsx|html)$/.test(entry.name) ? [full] : [];
+    });
+
+describe('Google Tag Manager GTM-NF7884S is gone', () => {
+    it('is not loaded anywhere (src, index.html)', () => {
+        const root = path.resolve(__dirname, '../../..');
+        const offenders = [...files(path.join(root, 'src')), path.join(root, 'index.html')].filter(file =>
+            fs.readFileSync(file, 'utf8').includes('GTM-NF7884S')
+        );
+        expect(offenders).toEqual([]);
+    });
+
+    it('sends nothing: the old calls are no-ops', () => {
         const pushed: unknown[] = [];
-        (window as unknown as { dataLayer: unknown[] }).dataLayer = { push: (d: unknown) => pushed.push(d) } as never;
-        const idle_callbacks: (() => void)[] = [];
-        (window as unknown as { requestIdleCallback: (cb: () => void) => number }).requestIdleCallback = cb => {
-            idle_callbacks.push(cb);
-            return 1;
-        };
-        GTM.onTransactionClosed({ contract_id: 5 } as never);
+        (window as unknown as { dataLayer: unknown }).dataLayer = { push: (d: unknown) => pushed.push(d) };
+        GTM.init();
+        GTM.pushDataLayer({ event: 'dbot_purchase' });
+        GTM.onTransactionClosed({ contract_id: 1 } as never);
         expect(pushed).toEqual([]);
-        idle_callbacks.forEach(cb => cb());
-        expect(pushed).toEqual([{ event: 'dbot_run_transaction', reference_id: 5 }]);
+        expect(document.querySelector('script[src*="GTM-NF7884S"]')).toBeNull();
     });
 });
