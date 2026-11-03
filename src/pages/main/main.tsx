@@ -42,6 +42,7 @@ import {
 import { Localize, localize } from '@deriv-com/translations';
 import { useDevice } from '@deriv-com/ui';
 import RunPanel from '../../components/run-panel';
+import ChartGate from '../chart/chart-gate';
 import ChartModal from '../chart/chart-modal';
 import ComingSoon from '../coming-soon';
 import Dashboard from '../dashboard';
@@ -488,11 +489,14 @@ const AppWrapper = observer(() => {
                                         : 'id-charts'
                                 }
                             >
-                                <Suspense
-                                    fallback={<ChunkLoader message={localize('Please wait, loading chart...')} />}
-                                >
-                                    <ChartWrapper show_digits_stats={false} />
-                                </Suspense>
+                                {/* While a bot / the AI Scanner runs, the chart (and its code) loads between trades */}
+                                <ChartGate>
+                                    <Suspense
+                                        fallback={<ChunkLoader message={localize('Please wait, loading chart...')} />}
+                                    >
+                                        <ChartWrapper show_digits_stats={false} />
+                                    </Suspense>
+                                </ChartGate>
                             </div>
                             <div
                                 label={

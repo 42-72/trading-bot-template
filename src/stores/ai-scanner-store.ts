@@ -23,6 +23,7 @@ import { createAiEngineStrategyId } from '@/utils/library-strategies';
 import { loadBotIntoBuilder } from '@/utils/load-bot-into-builder';
 import { dismissNoticeOnRunAgain } from '@/utils/session-stop';
 import { keep_alive } from '@/utils/socket-keep-alive';
+import { flushUi } from '@/utils/ui-queue';
 import RootStore from './root-store';
 
 // The AI Scanner pipeline (components/ai-scanner):
@@ -978,6 +979,8 @@ export default class AiScannerStore {
         this.stopRunErrorListeners?.();
         const onError = (data: unknown) => {
             if (this.run_failure || !['starting', 'running'].includes(this.stage)) return;
+            // Transactions are updated after the engine (utils/ui-queue.ts): catch up before reading them.
+            flushUi();
             const statistics = this.root_store.transactions.statistics as { number_of_runs?: number };
             if ((statistics.number_of_runs ?? 0) > 0) return;
 
@@ -1015,6 +1018,7 @@ export default class AiScannerStore {
     }
 
     private onBotStopped() {
+        flushUi(); // the last result's Transactions update first (utils/ui-queue.ts)
         if (this.run_failure) {
             const failure = this.run_failure;
             this.run_failure = null;

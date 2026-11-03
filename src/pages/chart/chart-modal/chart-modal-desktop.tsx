@@ -3,6 +3,7 @@ import { observer } from 'mobx-react-lite';
 import DraggableResizeWrapper from '@/components/draggable/draggable-resize-wrapper';
 import { useStore } from '@/hooks/useStore';
 import { localize } from '@deriv-com/translations';
+import ChartGate from '../chart-gate';
 import ChartWrapper from '../chart-wrapper';
 
 const ChartModalDesktop = observer(() => {
@@ -23,7 +24,9 @@ const ChartModalDesktop = observer(() => {
                     enableResizing
                 >
                     <div className='chart-modal-dialog' data-testid='chart-modal-dialog'>
-                        <ChartWrapper show_digits_stats={false} />
+                        <ChartGate>
+                            <ChartWrapper show_digits_stats={false} />
+                        </ChartGate>
                     </div>
                 </DraggableResizeWrapper>
             )}

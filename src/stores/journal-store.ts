@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { formatDate } from '@/components/shared';
 import { run_panel } from '@/constants/run-panel';
 import { LogTypes, MessageTypes } from '@/external/bot-skeleton';
-import { config } from '@/external/bot-skeleton/constants/config';
+import { SILENT_NOTIFICATION_SOUND } from '@/external/bot-skeleton/constants/config';
 import { RESET_STRATEGIES, RESET_STRATEGIES_BLOCK_IDS, STRATEGIES } from '@/pages/bot-builder/quick-strategy/config';
 /* [AI] - Analytics removed - utility functions moved to @/utils/account-helpers */
 import { isVirtualAccount } from '@/utils/account-helpers';
@@ -133,9 +133,10 @@ export default class JournalStore {
     }
 
     playAudio = (sound: string) => {
-        if (sound !== config().lists.NOTIFICATION_SOUND[0][1]) {
+        if (sound !== SILENT_NOTIFICATION_SOUND) {
             const audio = document.getElementById(sound) as HTMLAudioElement;
-            audio.play();
+            // play() is a promise: a browser refusing it (no interaction yet) is not an error of ours.
+            Promise.resolve(audio?.play?.()).catch(() => undefined);
         }
     };
 

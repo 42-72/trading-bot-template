@@ -39,6 +39,8 @@ class TradingTimesService {
     private cache_expiry: number = 0;
     private readonly CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutes
     private readonly FETCH_TIMEOUT_MS = 10000; // 10 seconds
+    /** The request on its way, shared by every caller meanwhile (start-up asks early, in parallel). */
+    private pending: Promise<CachedTradingTimes> | null = null;
 
     /**
      * Get trading times data with caching
@@ -51,7 +53,14 @@ class TradingTimesService {
         if (this.trading_times_cache && now < this.cache_expiry && this.trading_times_cache.markets) {
             return this.trading_times_cache;
         }
+        if (this.pending) return this.pending;
+        this.pending = this.load(now).finally(() => {
+            this.pending = null;
+        });
+        return this.pending;
+    }
 
+    private async load(now: number): Promise<CachedTradingTimes> {
         try {
             const trading_times = await this.fetchTradingTimes();
 

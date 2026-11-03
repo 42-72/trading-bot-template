@@ -134,14 +134,20 @@ export default class TransactionsStore {
             };
         }
 
-        const same_contract_index = this.elements[current_account]?.findIndex(c => {
-            if (typeof c.data === 'string') return false;
-            return (
-                c.type === transaction_elements.CONTRACT &&
-                c.data?.transaction_ids &&
-                c.data.transaction_ids.buy === data.transaction_ids?.buy
-            );
-        });
+        // A new contract is not looked for in the whole (observable, slow to read) list:
+        // the plain index of known buy ids says at once that it is not there.
+        const buy_id = data.transaction_ids?.buy;
+        const is_known = buy_id !== undefined && this.knownBuyIds(current_account).has(buy_id);
+        const same_contract_index = !is_known
+            ? -1
+            : this.elements[current_account]?.findIndex(c => {
+                  if (typeof c.data === 'string') return false;
+                  return (
+                      c.type === transaction_elements.CONTRACT &&
+                      c.data?.transaction_ids &&
+                      c.data.transaction_ids.buy === buy_id
+                  );
+              });
 
         if (same_contract_index === -1) {
             // Render a divider if the "run_id" for this contract is different.
@@ -165,6 +171,7 @@ export default class TransactionsStore {
                 type: transaction_elements.CONTRACT,
                 data: contract,
             });
+            if (buy_id !== undefined) this.knownBuyIds(current_account).add(buy_id);
         } else {
             // If data belongs to existing contract in memory, update it.
             this.elements[current_account]?.splice(same_contract_index, 1, {
@@ -176,7 +183,24 @@ export default class TransactionsStore {
         this.elements = { ...this.elements }; // force update
     }
 
+    /** Buy transaction ids already in an account's list (not observable; built once from the list). */
+    private known_buy_ids = new Map<string, Set<number>>();
+
+    private knownBuyIds(account: string) {
+        let ids = this.known_buy_ids.get(account);
+        if (!ids) {
+            ids = new Set();
+            (this.elements[account] ?? []).forEach(element => {
+                const buy = typeof element.data === 'object' ? element.data?.transaction_ids?.buy : undefined;
+                if (element.type === transaction_elements.CONTRACT && buy !== undefined) ids?.add(buy);
+            });
+            this.known_buy_ids.set(account, ids);
+        }
+        return ids;
+    }
+
     clear() {
+        this.known_buy_ids.delete(this.core?.client?.loginid as string);
         if (this.elements && this.elements[this.core?.client?.loginid as string]?.length > 0) {
             this.elements[this.core?.client?.loginid as string] = [];
         }

@@ -10,6 +10,7 @@ import { handleBackendError, isBackendError } from '@/utils/error-handler';
 import { session_status, SessionExpiredError } from '@/utils/session-status';
 import { keep_alive } from '@/utils/socket-keep-alive';
 import { startLog } from '@/utils/start-log';
+import { tradingTimesService } from '../../../../components/shared/services/trading-times-service';
 import { activeSymbolsProcessorService } from '../../../../services/active-symbols-processor.service';
 import { observer as globalObserver } from '../../utils/observer';
 import { doUntilDone, socket_state } from '../tradeEngine/utils/helpers';
@@ -453,6 +454,9 @@ class APIBase {
             );
 
             const activeSymbolsPromise = doUntilDone(() => this.api?.send({ active_symbols: 'brief' }), [], this);
+            // The market list is enriched with trading times: ask for them now, in parallel,
+            // not one round trip after the list arrives (the enrichment reuses this request).
+            tradingTimesService.getTradingTimes().catch(() => undefined);
 
             const apiResult = await Promise.race([activeSymbolsPromise, timeout]);
 

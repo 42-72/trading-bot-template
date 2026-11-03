@@ -30,3 +30,12 @@ removeRetiredStorageKeys();
 startBootSplash();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(<AuthWrapper />);
+
+// Start-up: the lazily loaded parts of the app (layout, the root, the bot area with
+// Blockly) are fetched now, all at once, instead of one after another - the last one
+// used to start only after the connection was up. React.lazy reuses these modules.
+// Nothing about login or the connection changes.
+const preload = (load: () => Promise<unknown>) => load().catch(() => undefined);
+preload(() => import('./components/layout'));
+preload(() => import('./app/app-root'));
+preload(() => import('./app/app-content'));

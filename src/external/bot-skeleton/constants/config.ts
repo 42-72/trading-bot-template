@@ -2,6 +2,9 @@ import { localize } from '@deriv-com/translations';
 
 const CRYPTO_CURRENCIES = ['BTC', 'ETH', 'LTC', 'BCH', 'UST'];
 
+/** The 'Silent' notification sound (NOTIFICATION_SOUND[0][1]) - without rebuilding the whole translated config. */
+export const SILENT_NOTIFICATION_SOUND = 'silent';
+
 export const config = () => ({
     lists: {
         PAYOUTTYPE: [
@@ -42,7 +45,7 @@ export const config = () => ({
             [localize('red'), 'error'],
         ],
         NOTIFICATION_SOUND: [
-            [localize('Silent'), 'silent'],
+            [localize('Silent'), SILENT_NOTIFICATION_SOUND],
             [localize('Announcement'), 'announcement'],
             [localize('Earned money'), 'earned-money'],
             [localize('Job done'), 'job-done'],

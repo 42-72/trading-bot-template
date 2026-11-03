@@ -6,8 +6,15 @@ import { ProposalOpenContract } from '@deriv/api-types';
 const GTM = (() => {
     let timeoutId: NodeJS.Timeout;
     let initialized = false;
+    // A dataLayer push makes Google Tag Manager run its tags synchronously (a Google Ads
+    // conversion tag and GA4 - ~12 ms per trade, up to ~90 ms): pushed in the browser's
+    // idle time, never right after a buy or a result.
     const pushDataLayer = (data: { [key: string]: string | number | boolean; event: string }): void => {
-        window.dataLayer?.push(data);
+        const push = () => window.dataLayer?.push(data);
+        const idle = (window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number })
+            .requestIdleCallback;
+        if (typeof idle === 'function') idle(push, { timeout: 2000 });
+        else setTimeout(push, 0);
     };
 
     const init = (_root_store: RootStore): void => {

@@ -57,10 +57,11 @@ const clone = (function () {
             includeNonEnumerable = circular.includeNonEnumerable;
             circular = circular.circular;
         }
-        // maintain two arrays for circular references, where corresponding parents
-        // and children have the same index
-        const allParents = [];
-        const allChildren = [];
+        // Circular references: each parent object -> its clone. A Map, not the original
+        // two arrays + indexOf: that lookup made the clone quadratic, and the trade
+        // engine clones the whole interpreter state on every Bot.start (restart on
+        // error) - ~300 ms per trade, between the result and the next buy.
+        const clones = new nativeMap();
 
         const useBuffer = typeof Buffer !== 'undefined';
 
@@ -80,9 +81,13 @@ const clone = (function () {
                 return parent;
             }
 
-            if (_instanceof(parent, nativeMap)) {
+            // The tag once per object (it was computed up to three times: array, regexp, date).
+            const tag = __objToStr(parent);
+            const is_map = _instanceof(parent, nativeMap);
+            const is_set = !is_map && _instanceof(parent, nativeSet);
+            if (is_map) {
                 child = new nativeMap();
-            } else if (_instanceof(parent, nativeSet)) {
+            } else if (is_set) {
                 child = new nativeSet();
             } else if (_instanceof(parent, nativePromise)) {
                 child = new nativePromise(function (resolve, reject) {
@@ -95,12 +100,12 @@ const clone = (function () {
                         }
                     );
                 });
-            } else if (clone.__isArray(parent)) {
+            } else if (tag === '[object Array]') {
                 child = [];
-            } else if (clone.__isRegExp(parent)) {
+            } else if (tag === '[object RegExp]') {
                 child = new RegExp(parent.source, __getRegExpFlags(parent));
                 if (parent.lastIndex) child.lastIndex = parent.lastIndex;
-            } else if (clone.__isDate(parent)) {
+            } else if (tag === '[object Date]') {
                 child = new Date(parent.getTime());
             } else if (useBuffer && Buffer.isBuffer(parent)) {
                 if (Buffer.from) {
@@ -123,46 +128,34 @@ const clone = (function () {
             }
 
             if (circular) {
-                const index = allParents.indexOf(parent);
-
-                if (index != -1) {
-                    return allChildren[index];
+                if (clones.has(parent)) {
+                    return clones.get(parent);
                 }
-                allParents.push(parent);
-                allChildren.push(child);
+                clones.set(parent, child);
             }
 
-            if (_instanceof(parent, nativeMap)) {
+            if (is_map) {
                 parent.forEach(function (value, key) {
                     const keyChild = _clone(key, depth - 1);
                     const valueChild = _clone(value, depth - 1);
                     child.set(keyChild, valueChild);
                 });
             }
-            if (_instanceof(parent, nativeSet)) {
+            if (is_set) {
                 parent.forEach(function (value) {
                     const entryChild = _clone(value, depth - 1);
                     child.add(entryChild);
                 });
             }
 
-            for (var i in parent) {
-                const attrs = Object.getOwnPropertyDescriptor(parent, i);
-                if (attrs) {
-                    // https://github.com/pvorb/clone/issues/58
-                    if (Object.keys(parent).indexOf(i) < 0) {
-                        continue;
-                    }
-
-                    child[i] = _clone(parent[i], depth - 1);
-                }
-
+            // Own enumerable string keys, in for...in order (https://github.com/pvorb/clone/issues/58:
+            // inherited properties are skipped). The original walked for...in, rebuilt
+            // Object.keys(parent) for every key and cloned each property twice (the second
+            // copy came from the circular cache, so it was the same value) - same result, once.
+            const keys = Object.keys(parent);
+            for (var k = 0; k < keys.length; k++) {
+                const i = keys[k];
                 try {
-                    const objProperty = Object.getOwnPropertyDescriptor(parent, i);
-                    if (objProperty.set === 'undefined') {
-                        // no setter defined. Skip cloning this property
-                        continue;
-                    }
                     child[i] = _clone(parent[i], depth - 1);
                 } catch (e) {
                     if (e instanceof TypeError) {

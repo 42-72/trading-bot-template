@@ -19,6 +19,7 @@ import GTM from '@/utils/gtm';
 import { session_status } from '@/utils/session-status';
 import { dismissNoticeOnRunAgain, stopRunsForSession, TSessionStopReason } from '@/utils/session-stop';
 import { helpers } from '@/utils/store-helpers';
+import { afterUi, deferUi, flushUi } from '@/utils/ui-queue';
 import { generateUrlWithRedirect } from '@/utils/url-redirect-utils';
 import { Buy, ProposalOpenContract } from '@deriv/api-types';
 import { TStores } from '@deriv/stores/types';
@@ -475,19 +476,27 @@ export default class RunPanelStore {
     registerBotListeners = () => {
         const { summary_card, transactions } = this.root_store;
 
+        // Per-trade UI updates run after the engine is done with the message (deferUi,
+        // utils/ui-queue.ts) - never between a result and the next buy. Everything else
+        // first lets them catch up (afterUi), so the order of events stays as it was.
+        // bot.running and bot.trade_again(true) come on every trade, from the engine on its way
+        // to the next buy: they must not run the queued UI work there.
         observer.register('bot.running', this.onBotRunningEvent);
-        observer.register('bot.sell', this.onBotSellEvent);
-        observer.register('bot.stop', this.onBotStopEvent);
-        observer.register('bot.bot_ready', this.onBotReadyEvent);
-        observer.register('bot.click_stop', this.onStopButtonClick);
-        observer.register('bot.trade_again', this.onBotTradeAgain);
-        observer.register('contract.status', this.onContractStatusEvent);
-        observer.register('bot.contract', this.onBotContractEvent);
-        observer.register('bot.contract', summary_card.onBotContractEvent);
-        observer.register('bot.contract', transactions.onBotContractEvent);
-        observer.register('bot.stop_button_click', this.onStopBotClick);
-        observer.register('Error', this.onError);
-        observer.register('bot.setPurchaseInProgress', this.SetpurchaseInProgress);
+        observer.register('bot.sell', afterUi(this.onBotSellEvent));
+        observer.register('bot.stop', afterUi(this.onBotStopEvent));
+        observer.register('bot.bot_ready', afterUi(this.onBotReadyEvent));
+        observer.register('bot.click_stop', afterUi(this.onStopButtonClick));
+        observer.register('bot.trade_again', (is_trade_again: boolean) => {
+            if (!is_trade_again) flushUi(); // the bot stops: its last results first
+            this.onBotTradeAgain(is_trade_again);
+        });
+        observer.register('contract.status', deferUi(this.onContractStatusEvent));
+        observer.register('bot.contract', deferUi(this.onBotContractEvent));
+        observer.register('bot.contract', deferUi(summary_card.onBotContractEvent));
+        observer.register('bot.contract', deferUi(transactions.onBotContractEvent));
+        observer.register('bot.stop_button_click', afterUi(this.onStopBotClick));
+        observer.register('Error', afterUi(this.onError));
+        observer.register('bot.setPurchaseInProgress', deferUi(this.SetpurchaseInProgress));
     };
 
     SetpurchaseInProgress = () => {
@@ -870,9 +879,10 @@ export default class RunPanelStore {
             this.showErrorMessage(errorMessage);
         };
 
-        observer.register('ui.log.error', handleUiLogError);
-        observer.register('ui.log.notify', journal.onNotify);
-        observer.register('ui.log.success', journal.onLogSuccess);
+        // Journal lines (and the Notify block's sound) are UI too: in order, after the engine.
+        observer.register('ui.log.error', deferUi(handleUiLogError));
+        observer.register('ui.log.notify', deferUi(journal.onNotify));
+        observer.register('ui.log.success', deferUi(journal.onLogSuccess));
         observer.register('client.invalid_token', this.handleInvalidToken);
     };
 

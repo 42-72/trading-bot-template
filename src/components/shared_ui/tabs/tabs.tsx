@@ -61,27 +61,49 @@ const Tabs = ({
     single_tab_has_no_label = false,
     top,
 }: TTabsProps) => {
-    const [active_line_style, updateActiveLineStyle] = React.useState({});
+    const [active_line_style, updateActiveLineStyle] = React.useState<{ left?: number; width?: number }>({});
     const active_tab_ref = React.useRef<HTMLLIElement>(null);
     const tabs_wrapper_ref = React.useRef<HTMLUListElement>(null);
     const pushHash = (hash: string) => {
         history.replace(`${history.location.pathname}${window.location.search}#${hash}`);
     };
 
+    // Measured at most once per frame, in requestAnimationFrame: called from every tab's
+    // effect after every render (a tab's label is a new element each time), it used to
+    // force a synchronous layout of the whole page on each re-render - e.g. the run
+    // panel's tabs on every contract update during a run. The state only changes when the
+    // line actually moves, so measuring never causes another render by itself.
+    const line_frame_ref = React.useRef<number | null>(null);
     const setActiveLineStyle = React.useCallback(() => {
-        const tabs_wrapper_bounds = tabs_wrapper_ref?.current?.getBoundingClientRect();
-        const active_tab_bounds = active_tab_ref?.current?.getBoundingClientRect();
-        if (tabs_wrapper_bounds && active_tab_bounds) {
-            updateActiveLineStyle({
-                left: active_tab_bounds.left - tabs_wrapper_bounds.left,
-                width: active_tab_bounds.width,
-            });
-        } else {
-            setTimeout(() => {
-                setActiveLineStyle();
-            }, 500);
-        }
+        if (line_frame_ref.current !== null) return;
+        const measure = () => {
+            line_frame_ref.current = null;
+            const tabs_wrapper_bounds = tabs_wrapper_ref?.current?.getBoundingClientRect();
+            const active_tab_bounds = active_tab_ref?.current?.getBoundingClientRect();
+            if (tabs_wrapper_bounds && active_tab_bounds) {
+                const left = active_tab_bounds.left - tabs_wrapper_bounds.left;
+                const width = active_tab_bounds.width;
+                updateActiveLineStyle((current: { left?: number; width?: number }) =>
+                    current.left === left && current.width === width ? current : { left, width }
+                );
+            } else {
+                setTimeout(() => {
+                    setActiveLineStyle();
+                }, 500);
+            }
+        };
+        if (typeof requestAnimationFrame === 'function') line_frame_ref.current = requestAnimationFrame(measure);
+        else measure();
     }, []);
+
+    React.useEffect(
+        () => () => {
+            if (line_frame_ref.current !== null && typeof cancelAnimationFrame === 'function') {
+                cancelAnimationFrame(line_frame_ref.current);
+            }
+        },
+        []
+    );
 
     let initial_index_to_show = 0;
     let tab_width: string;
