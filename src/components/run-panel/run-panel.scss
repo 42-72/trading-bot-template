@@ -557,3 +557,67 @@
         }
     }
 }
+
+// Phones (< 768px; useIsPhone), Tbots / DTrader tabs (PHONE_FULL_HEIGHT_TABS,
+// run-panel.tsx): the drawer and its handle are hidden so the tab gets the
+// full height. Kept mounted (display: none), so its content keeps its state.
+.run-panel--phone-tab-hidden {
+    display: none !important;
+}
+
+// ...and while a bot or the AI Scanner runs, only this slim Stop bar shows.
+// .bot-dashboard publishes its height as --phone-slim-stop-space, which
+// .tbots / .dtrader-panel reserve at their bottom (tbots.scss, dtrader.scss).
+.bot-dashboard {
+    --phone-slim-stop-height: 4.8rem;
+
+    &:has(.run-panel-slim-stop) {
+        --phone-slim-stop-space: calc(var(--phone-slim-stop-height) + env(safe-area-inset-bottom, 0px));
+    }
+}
+
+.run-panel-slim-stop {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 6; // popover_zindex.RUN_PANEL, like the drawer it stands in for
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.2rem;
+    height: calc(var(--phone-slim-stop-height, 4.8rem) + env(safe-area-inset-bottom, 0px));
+    padding: 0 1.6rem env(safe-area-inset-bottom, 0);
+    background: var(--general-main-1);
+    border-top: 1px solid var(--border-normal);
+
+    &__status {
+        min-width: 0;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        font-size: 1.3rem;
+        color: var(--text-general);
+    }
+
+    &__button {
+        flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.6rem;
+        height: 3.6rem;
+        padding: 0 1.6rem;
+        border: none;
+        border-radius: 0.8rem;
+        background-color: var(--button-primary-default);
+        color: #fff;
+        font-size: 1.4rem;
+        font-weight: bold;
+        cursor: pointer;
+
+        &:disabled {
+            opacity: 0.6;
+            cursor: default;
+        }
+    }
+}

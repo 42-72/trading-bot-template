@@ -23,6 +23,11 @@ const BLOCKERS: { selector: string; gap: number }[] = [
     { selector: '.dc-drawer__toggle', gap: 12 },
     { selector: '.app-footer', gap: EDGE_GAP },
     { selector: '.controls__section', gap: EDGE_GAP },
+    // Phones, Tbots / DTrader: the slim Stop bar that replaces the run drawer
+    // while something runs, and DTrader's own bottom bar (Trade / Positions /
+    // Menu) inside its frame, marked by an invisible guard (dtrader/index.tsx).
+    { selector: '.run-panel-slim-stop', gap: EDGE_GAP },
+    { selector: '.dtrader-panel__bottom-bar-guard', gap: EDGE_GAP },
 ];
 
 const visibleRect = (element: Element) => {

@@ -30,6 +30,13 @@ export const DBOT_TABS: TDashboardTabIndex = Object.freeze({
 // presence (dashboard.scss :has(.run-strategy-bar)), not this list.
 export const RUN_BAR_HIDDEN_TABS = [DBOT_TABS.TBOTS, DBOT_TABS.DTRADER];
 
+// Phones only (< 768px): on these tabs the run panel drawer (Summary /
+// Transactions / Journal) and its handle are hidden, so the tab gets the full
+// height (DTrader's own bottom bar sits at the bottom of the screen). While a
+// bot or the AI Scanner is running, a slim Stop bar is shown instead
+// (run-panel.tsx, SlimStopBar).
+export const PHONE_FULL_HEIGHT_TABS = [DBOT_TABS.TBOTS, DBOT_TABS.DTRADER];
+
 export const MAX_STRATEGIES = 10;
 
 export const TAB_IDS = [

@@ -19,6 +19,13 @@
         padding-bottom: calc(2.4rem + var(--run-panel-height, 6.2rem) + env(safe-area-inset-bottom, 0px));
     }
 
+    // Phones (< 768px): the run drawer is hidden on this tab (run-panel.tsx,
+    // PHONE_FULL_HEIGHT_TABS), so the list gets the full height - only the
+    // slim Stop bar is reserved, while something runs (run-panel.scss).
+    @media (max-width: 767px) {
+        padding-bottom: calc(2.4rem + var(--phone-slim-stop-space, env(safe-area-inset-bottom, 0px)));
+    }
+
     &__grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(28rem, 1fr));

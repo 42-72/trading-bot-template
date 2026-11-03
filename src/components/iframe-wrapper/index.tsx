@@ -11,6 +11,8 @@ type TIframeWrapperProps = {
     fallbackMessage?: string;
     // Optional iframe sandbox (omitted = no sandbox, as for TradingView)
     sandbox?: string;
+    // Called when the framed page has loaded - optional
+    onLoad?: () => void;
 };
 
 // If the iframe hasn't fired onLoad within this window (or fires onError),
@@ -29,6 +31,7 @@ const IframeWrapper = ({
     frameRef,
     fallbackMessage = 'Charts are temporarily unavailable',
     sandbox,
+    onLoad,
 }: TIframeWrapperProps) => {
     const [has_failed, setHasFailed] = useState(false);
     const has_loaded_ref = useRef(false);
@@ -48,6 +51,7 @@ const IframeWrapper = ({
 
     const handleLoad = () => {
         has_loaded_ref.current = true;
+        onLoad?.();
     };
 
     const handleError = () => {

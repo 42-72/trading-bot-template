@@ -5,6 +5,7 @@ import { observer } from 'mobx-react-lite';
 import IframeWrapper from '@/components/iframe-wrapper';
 import { generateOAuthURL } from '@/components/shared';
 import { DBOT_TABS } from '@/constants/bot-contents';
+import { useIsPhone } from '@/hooks/useIsPhone';
 import { useStore } from '@/hooks/useStore';
 import {
     DTRADER_EMBED_URL,
@@ -16,6 +17,9 @@ import {
     removeLegacyDTraderEmbedSwitch,
     TDTraderSession,
 } from '@/utils/dtrader-embed';
+import { scheduleDTraderWarmup } from '@/utils/dtrader-warmup';
+import { isBotOrScannerRunning } from '@/utils/run-activity';
+import { Localize } from '@deriv-com/translations';
 import './dtrader.scss';
 
 // How often the token is re-checked, so an expired session reaches the frame
@@ -30,12 +34,23 @@ const TOKEN_RETRY_WINDOW_MS = 60000;
  * always-mounted sibling of the Tabs component like TradingViewPanel, so the
  * iframe - once opened - survives tab switches. It hands DTrader this app's
  * session over postMessage and follows login, logout and Demo/Real switches.
+ *
+ * Phones only: when a bot or the AI Scanner starts running while another tab
+ * is open, the hidden frame is unloaded to free the phone's processor. It is
+ * loaded again only when the trader opens the DTrader tab (also mid-run - their
+ * choice), never automatically when the run ends.
  */
 const DTraderPanel = observer(() => {
-    const { dashboard, client } = useStore();
+    const store = useStore();
+    const { dashboard, client } = store;
     const { active_tab } = dashboard;
     const is_active = active_tab === DBOT_TABS.DTRADER;
+    const is_phone = useIsPhone();
     const [has_opened, setHasOpened] = useState(false);
+    // Until the frame's page has started (ct:ready or its load event)
+    const [is_frame_loading, setIsFrameLoading] = useState(true);
+    // Opened at least once in this page load (the warm-up has nothing left to do)
+    const was_opened_ref = useRef(false);
     const frame_ref = useRef<HTMLIFrameElement>(null);
     // undefined until the frame says ct:ready; null once it was told "logged out"
     const last_sent_ref = useRef<TDTraderSession | null | undefined>(undefined);
@@ -47,9 +62,38 @@ const DTraderPanel = observer(() => {
 
     useEffect(() => {
         if (is_active && !has_opened) {
+            was_opened_ref.current = true;
+            setIsFrameLoading(true);
             setHasOpened(true);
         }
     }, [is_active, has_opened]);
+
+    // Phones: a run starting while DTrader is hidden unloads the frame.
+    useEffect(() => {
+        if (!is_phone) return undefined;
+        return reaction(
+            () => isBotOrScannerRunning(store),
+            is_running => {
+                if (is_running && store.dashboard.active_tab !== DBOT_TABS.DTRADER) {
+                    last_sent_ref.current = undefined; // a reloaded frame says ct:ready again
+                    setHasOpened(false);
+                }
+            }
+        );
+    }, [is_phone, store]);
+
+    // Fill the browser cache with DTrader's files while the site is idle, so
+    // even the first open is quick (dtrader-warmup.ts).
+    useEffect(
+        () =>
+            scheduleDTraderWarmup({
+                isBusy: () => isBotOrScannerRunning(store),
+                isOpened: () => was_opened_ref.current,
+            }),
+        [store]
+    );
+
+    const onFrameStarted = useCallback(() => setIsFrameLoading(false), []);
 
     const getFrameWindow = () => frame_ref.current?.contentWindow;
 
@@ -97,6 +141,7 @@ const DTraderPanel = observer(() => {
 
             switch (message.type) {
                 case 'ct:ready':
+                    onFrameStarted();
                     sendSession();
                     break;
                 case 'ct:token-invalid': {
@@ -138,7 +183,7 @@ const DTraderPanel = observer(() => {
             dispose();
             clearInterval(interval_id);
         };
-    }, [client, has_opened, sendLogout, sendSession, syncSession]);
+    }, [client, has_opened, onFrameStarted, sendLogout, sendSession, syncSession]);
 
     return (
         <div className={classNames('dtrader-panel', { 'dtrader-panel--active': is_active })}>
@@ -151,9 +196,19 @@ const DTraderPanel = observer(() => {
                         frameRef={frame_ref}
                         sandbox={DTRADER_IFRAME_SANDBOX}
                         fallbackMessage='DTrader is temporarily unavailable'
+                        onLoad={onFrameStarted}
                     />
+                    {is_frame_loading && (
+                        <div className='dtrader-panel__loading' role='status' aria-live='polite'>
+                            <span className='dtrader-panel__spinner' aria-hidden='true' />
+                            <span className='dtrader-panel__loading-text'>
+                                <Localize i18n_default_text='Loading DTrader�' />
+                            </span>
+                        </div>
+                    )}
                 </div>
             )}
+            <div className='dtrader-panel__bottom-bar-guard' aria-hidden='true' />
         </div>
     );
 });

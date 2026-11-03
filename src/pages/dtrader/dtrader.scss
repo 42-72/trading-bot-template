@@ -25,9 +25,80 @@
         inset-inline-end: 0;
         height: var(--tab-content-height-mobile);
     }
+
+    // Phones (< 768px): the run drawer is hidden on this tab (run-panel.tsx,
+    // PHONE_FULL_HEIGHT_TABS), so DTrader runs to the bottom of the screen
+    // and its own bottom bar (Trade / Positions / Menu) sits there. Only the
+    // slim Stop bar is reserved, while something runs (run-panel.scss); else
+    // the home-indicator inset, which the frame itself can't see.
+    @media (max-width: 767px) {
+        bottom: var(--phone-slim-stop-space, env(safe-area-inset-bottom, 0));
+        height: auto;
+
+        .iframe-wrapper {
+            padding-bottom: 0;
+        }
+    }
+
+    // DTrader's bottom bar, marked for the AI Scanner button so it doesn't
+    // park on top of it (ai-scanner-layout.ts BLOCKERS). Phones only.
+    &__bottom-bar-guard {
+        display: none;
+
+        @media (max-width: 767px) {
+            display: block;
+            position: absolute;
+            inset-inline: 0;
+            bottom: 0;
+            height: 5.6rem;
+            pointer-events: none;
+        }
+    }
 }
 
 .dtrader-tab-panel {
+    position: relative;
     width: 100%;
     height: 100%;
+}
+
+// Light loading state while DTrader's page starts (first open, or reopening
+// after a phone unload) - gone at ct:ready or the frame's load event,
+// whichever comes first; DTrader's own skeleton takes over from there.
+.dtrader-panel__loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.2rem;
+    background: var(--general-main-1);
+    pointer-events: none;
+}
+
+.dtrader-panel__spinner {
+    width: 3.2rem;
+    height: 3.2rem;
+    border: 0.3rem solid var(--border-normal);
+    border-top-color: var(--button-primary-default);
+    border-radius: 50%;
+    animation: dtrader-panel-spin 0.9s linear infinite;
+}
+
+.dtrader-panel__loading-text {
+    font-size: 1.4rem;
+    color: var(--text-less-prominent, var(--text-general));
+}
+
+@keyframes dtrader-panel-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dtrader-panel__spinner {
+        animation: none;
+    }
 }

@@ -11,12 +11,15 @@ import Text from '@/components/shared_ui/text';
 import Summary from '@/components/summary';
 import TradeAnimation from '@/components/trade-animation';
 import Transactions from '@/components/transactions';
-import { DBOT_TABS, RUN_BAR_HIDDEN_TABS } from '@/constants/bot-contents';
+import { DBOT_TABS, PHONE_FULL_HEIGHT_TABS, RUN_BAR_HIDDEN_TABS } from '@/constants/bot-contents';
 import { popover_zindex } from '@/constants/z-indexes';
+import { useIsPhone } from '@/hooks/useIsPhone';
 import { useStore } from '@/hooks/useStore';
+import { isBotOrScannerRunning } from '@/utils/run-activity';
 import { Localize, localize } from '@deriv-com/translations';
 import { useDevice } from '@deriv-com/ui';
 import ThemedScrollbars from '../shared_ui/themed-scrollbars';
+import SlimStopBar from './slim-stop-bar';
 
 type TStatisticsTile = {
     content: React.ElementType | string;
@@ -254,9 +257,10 @@ const StatisticsInfoModal = ({
 };
 
 const RunPanel = observer(() => {
-    const { run_panel, dashboard, transactions } = useStore();
+    const { run_panel, dashboard, transactions, ai_scanner } = useStore();
     const { client } = useStore();
     const { isDesktop } = useDevice();
+    const is_phone = useIsPhone();
     const { currency } = client;
     const {
         active_index,
@@ -346,9 +350,20 @@ const RunPanel = observer(() => {
     if (isDesktop && RUN_BAR_HIDDEN_TABS.includes(active_tab)) return null;
     if (active_tour === 'bot_builder') return null;
 
+    // Phones, Tbots / DTrader: the drawer (and its handle) is hidden so the tab
+    // gets the full height. Hidden, not unmounted: Summary / Transactions /
+    // Journal keep their state and mount effects exactly as on other tabs. A
+    // running bot or AI Scanner gets the slim Stop bar instead.
+    const is_phone_full_height_tab = is_phone && PHONE_FULL_HEIGHT_TABS.includes(active_tab);
+    const show_slim_stop = is_phone_full_height_tab && isBotOrScannerRunning({ run_panel, ai_scanner });
+
     return (
         <>
-            <div className={!isDesktop && is_drawer_open ? 'run-panel__container--mobile' : 'run-panel'}>
+            <div
+                className={classNames(!isDesktop && is_drawer_open ? 'run-panel__container--mobile' : 'run-panel', {
+                    'run-panel--phone-tab-hidden': is_phone_full_height_tab,
+                })}
+            >
                 <Drawer
                     anchor='right'
                     className={classNames('run-panel', {
@@ -370,6 +385,7 @@ const RunPanel = observer(() => {
                     Position/styling of .controls__section itself is untouched. */}
                 {!isDesktop && !RUN_BAR_HIDDEN_TABS.includes(active_tab) && <MobileDrawerFooter />}
             </div>
+            {show_slim_stop && <SlimStopBar />}
 
             <StatisticsInfoModal
                 is_mobile={!isDesktop}
