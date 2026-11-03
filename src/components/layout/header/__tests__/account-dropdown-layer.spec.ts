@@ -16,11 +16,7 @@ const account_dropdown = number(
     /\$acc-dropdown-z:\s*(\d+)/,
     'account dropdown z-index'
 );
-const run_bar = number(
-    read('pages/main/main.scss'),
-    /\.run-strategy-bar\s*\{[^}]*?z-index:\s*(\d+)/s,
-    'Run bar z-index'
-);
+const run_dock = number(read('pages/main/main.scss'), /\.run-dock\s*\{[^}]*?z-index:\s*(\d+)/s, 'Run dock z-index');
 const ai_panel = number(
     read('components/ai-scanner/ai-scanner.scss'),
     /\$ai-scanner-panel-z:\s*(\d+)/,
@@ -38,8 +34,8 @@ const session_notice = number(
 );
 
 describe('account switcher dropdown layer', () => {
-    it('opens above the Run bar (it used to cover the second account row on laptops)', () => {
-        expect(account_dropdown).toBeGreaterThan(run_bar);
+    it('opens above the Run dock in the nav row (the old Run bar used to cover the second account row on laptops)', () => {
+        expect(account_dropdown).toBeGreaterThan(run_dock);
     });
 
     it('opens above the AI panel', () => {

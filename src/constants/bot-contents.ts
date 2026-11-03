@@ -26,8 +26,7 @@ export const DBOT_TABS: TDashboardTabIndex = Object.freeze({
 // .controls__section) has nothing meaningful to run against - Tbots loads
 // a strategy but doesn't run it from here, DTrader redirects away
 // entirely. On desktop the run panel is not shown there either. Shared by
-// run-strategy.tsx and run-panel.tsx; the reserved space follows the bar's
-// presence (dashboard.scss :has(.run-strategy-bar)), not this list.
+// run-strategy.tsx and run-panel.tsx.
 export const RUN_BAR_HIDDEN_TABS = [DBOT_TABS.TBOTS, DBOT_TABS.DTRADER];
 
 // Phones only (< 768px): on these tabs the run panel drawer (Summary /

@@ -519,12 +519,11 @@ const AppWrapper = observer(() => {
                 </div>
             </div>
             <DesktopWrapper>
-                {/* Desktop right-hand column: RunStrategy (Run/Pause/Stop) is
-                    a full-width band directly under the nav row, and
-                    .bot-dashboard reserves its height for all tab content
-                    whenever it renders (dashboard.scss, :has(.run-strategy-
-                    bar)), so nothing sits underneath it. RunPanel starts
-                    below that band. */}
+                {/* Desktop Run controls: with the run panel open, the Run bar is
+                    the panel's top row (RunPanel); closed, RunStrategy docks a
+                    compact Run + Execution control at the right end of the nav
+                    row. Neither takes height - every tab starts directly below
+                    the nav row. */}
                 <div className='main__run-strategy-wrapper'>
                     <RunStrategy />
                     <RunPanel />

@@ -1,7 +1,7 @@
 // Where the AI Scanner's floating button and panel may sit: the viewport less
 // the header, the Run controls and the footer, measured live from the DOM
-// rather than repeated as magic numbers - the Run bar only exists on some
-// tabs, the run panel column slides open and closed, and the mobile run bar
+// rather than repeated as magic numbers - the Run controls only exist on
+// some tabs, the run panel column slides open and closed, and the mobile run bar
 // grows by the safe-area inset. Anything that needs to stay uncovered is in
 // BLOCKERS; the button is kept fully inside what's left.
 
@@ -10,15 +10,19 @@ export type TPoint = { x: number; y: number };
 
 const EDGE_GAP = 8;
 
-// Header, desktop Run bar (run-strategy.tsx), desktop run panel column with
-// its toggle (run-panel.tsx), desktop footer, mobile run bar
-// (.controls__section), and the run drawer's toggle bar on its own: below
-// 1280px the closed drawer's container measures 0 tall while its full-width
-// ▲ toggle bar still shows, so the container alone missed it. The toggle bar
-// gets a 12px gap (clampToBounds adds EDGE_GAP, the rest is added here).
-const BLOCKERS: { selector: string; gap: number }[] = [
+// Header, desktop nav tab row (it holds the compact Run dock while the run
+// panel is closed, run-strategy.tsx - desktop layout only, from 1280px, so
+// phones and tablets keep their bounds), desktop run panel column with its
+// toggle (run-panel.tsx; the open panel's Run bar is its top row), desktop
+// footer, mobile run bar (.controls__section), and the run drawer's toggle
+// bar on its own: below 1280px the closed drawer's container measures 0 tall
+// while its full-width ▲ toggle bar still shows, so the container alone
+// missed it. The toggle bar gets a 12px gap (clampToBounds adds EDGE_GAP, the
+// rest is added here).
+const DESKTOP_LAYOUT_MIN_WIDTH = 1280;
+const BLOCKERS: { selector: string; gap: number; min_width?: number }[] = [
     { selector: '.deriv-header', gap: EDGE_GAP },
-    { selector: '.run-strategy-bar', gap: EDGE_GAP },
+    { selector: '.dc-tabs__list--main__tabs', gap: EDGE_GAP, min_width: DESKTOP_LAYOUT_MIN_WIDTH },
     { selector: '.run-panel__container', gap: EDGE_GAP },
     { selector: '.dc-drawer__toggle', gap: 12 },
     { selector: '.app-footer', gap: EDGE_GAP },
@@ -58,7 +62,8 @@ export const getSafeBounds = ({ ignore_run_drawer = false } = {}): TBounds => {
     const vh = window.innerHeight;
     const bounds: TBounds = { top: 0, left: 0, right: vw, bottom: vh };
 
-    BLOCKERS.forEach(({ selector, gap }) => {
+    BLOCKERS.forEach(({ selector, gap, min_width = 0 }) => {
+        if (vw < min_width) return;
         if (ignore_run_drawer && (selector === '.run-panel__container' || selector === '.dc-drawer__toggle')) return;
         const extra = gap - EDGE_GAP;
         document.querySelectorAll(selector).forEach(element => {
@@ -78,24 +83,6 @@ export const getSafeBounds = ({ ignore_run_drawer = false } = {}): TBounds => {
     });
 
     return bounds;
-};
-
-/**
- * The Run bar is a full-width band, but its controls (Run button, status)
- * only fill its right end. A box spanning `left`..`right` that stays clear of
- * them may also use the empty rest of the band, up to the nav row: returns
- * that higher top, or null when there's no Run bar or the box would reach a
- * control.
- */
-export const runBarTopBeside = (left: number, right: number): number | null => {
-    const bar = document.querySelector('.run-strategy-bar');
-    const bar_rect = bar && visibleRect(bar);
-    if (!bar || !bar_rect) return null;
-    const controls = Array.from(bar.children)
-        .map(visibleRect)
-        .filter((rect): rect is DOMRect => !!rect);
-    const reaches_control = controls.some(rect => left < rect.right + EDGE_GAP && right > rect.left - EDGE_GAP);
-    return reaches_control ? null : bar_rect.top;
 };
 
 /** Keep a size x size box fully inside `bounds` (with a small gap). */

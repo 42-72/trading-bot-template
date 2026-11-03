@@ -724,11 +724,11 @@
     }
 }
 
-// The open account list is over everything on the page: the Run bar (30), the run
+// The open account list is over everything on the page: the Run dock in the nav row (30), the run
 // panel / drawer (5-20) and the AI panel (998). Still under the app's dialogs
 // (.modal-root 9998), toasts and session notices (9999) and the landing page (10000).
-// No ancestor makes a stacking context, so this value competes with the Run bar directly
-// (at 3 the Run bar covered the second row on laptops).
+// No ancestor makes a stacking context, so this value competes with the Run dock directly
+// (at 3 the old Run bar covered the second row on laptops).
 $acc-dropdown-z: 1000;
 
 /** @define acc-dropdown */

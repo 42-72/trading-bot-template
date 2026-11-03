@@ -1,11 +1,4 @@
-import {
-    clampToBounds,
-    defaultPosition,
-    getSafeBounds,
-    readStoredPosition,
-    runBarTopBeside,
-    storePosition,
-} from '../ai-scanner-layout';
+import { clampToBounds, defaultPosition, getSafeBounds, readStoredPosition, storePosition } from '../ai-scanner-layout';
 
 const BUTTON = 56;
 
@@ -86,30 +79,34 @@ describe('AI button default spot on a desktop / laptop', () => {
     const desktop = () => {
         setViewport(1366, 768);
         place('deriv-header', { top: 0, bottom: 56, left: 0, right: 1366 });
-        const bar = place('run-strategy-bar', { top: 122, bottom: 186, left: 0, right: 1366 });
-        const controls = document.createElement('div');
-        controls.getBoundingClientRect = () =>
-            ({ top: 134, bottom: 174, left: 967, right: 1358, width: 391, height: 40, x: 967, y: 134 }) as DOMRect;
-        bar.appendChild(controls);
-        place('run-panel__container', { top: 186, bottom: 732, left: 943, right: 1366 });
-        place('dc-drawer__toggle', { top: 186, bottom: 732, left: 943, right: 959 });
+        // Nav tab row; with the panel open the Run bar is the panel's top row.
+        place('dc-tabs__list--main__tabs', { top: 72, bottom: 122, left: 16, right: 1350 });
+        place('run-panel__container', { top: 122, bottom: 732, left: 943, right: 1366 });
+        place('dc-drawer__toggle', { top: 122, bottom: 732, left: 943, right: 959 });
         place('app-footer', { top: 732, bottom: 768, left: 0, right: 1366 });
     };
 
-    it('bottom-right of the content area: clear of the run panel, its toggle, the Run bar and the footer', () => {
+    it('bottom-right of the content area: clear of the run panel, its toggle, the nav row and the footer', () => {
         desktop();
         const bounds = getSafeBounds();
         const spot = clampToBounds(defaultPosition(BUTTON, bounds), BUTTON, bounds);
         expect(spot).toEqual({ x: 871, y: 660 });
         expect(spot.x + BUTTON).toBeLessThan(943); // run panel column and its toggle
         expect(spot.y + BUTTON).toBeLessThan(732); // footer
-        expect(spot.y).toBeGreaterThan(186); // Run bar
     });
 
-    it('the empty left part of the Run bar band is usable, never the part with its controls', () => {
+    it('can never be dragged onto the nav row, where the closed-panel Run dock sits', () => {
         desktop();
-        expect(runBarTopBeside(443, 863)).toBe(122);
-        expect(runBarTopBeside(600, 1000)).toBeNull();
+        const bounds = getSafeBounds();
+        expect(bounds.top).toBe(122);
+        expect(clampToBounds({ x: 1200, y: 80 }, BUTTON, bounds).y).toBe(130);
+    });
+
+    it('phones and tablets (< 1280px) keep their bounds: the nav row is not a blocker there', () => {
+        setViewport(1024, 768);
+        place('deriv-header', { top: 0, bottom: 56, left: 0, right: 1024 });
+        place('dc-tabs__list--main__tabs', { top: 56, bottom: 112, left: 0, right: 1024 });
+        expect(getSafeBounds().top).toBe(56);
     });
 
     it('desktop / laptop and phone spots are remembered apart, under the new key', () => {

@@ -222,6 +222,24 @@
         min-height: 0;
     }
 
+    // The Run bar at the top of the open panel, above Summary / Transactions
+    // / Journal, across the panel's content column: Run on the left, the
+    // Execution pill on the right, 40px tall (trade-animation.scss).
+    &__run-bar {
+        flex: 0 0 auto;
+        box-sizing: border-box;
+        height: 5.6rem;
+        display: flex;
+        align-items: center;
+        padding: 0 0.8rem;
+        border-bottom: 1px solid var(--general-section-1);
+
+        .animation__wrapper {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+    }
+
     &__scroll {
         flex: 1 1 auto;
         min-height: 0;

@@ -162,10 +162,15 @@ const DrawerContent = ({ active_index, is_drawer_open, active_tour, setActiveTab
         );
     }
 
-    // Desktop: scrollable tabs and stats as one flex column. The Run bar is
-    // its own band above the panel (run-strategy.tsx), not part of it.
+    // Desktop: Run bar, scrollable tabs and stats as one flex column. The bar
+    // slot is always there, so nothing moves while the panel slides; its
+    // controls render only while the panel is open - closed, the compact dock
+    // in the nav row has them (run-strategy.tsx), never both at once.
     return (
         <div className='run-panel__layout'>
+            <div className='run-panel__run-bar' data-testid='dt_run_panel_run_bar'>
+                {is_drawer_open && <TradeAnimation className='run-panel__run-bar-animation' />}
+            </div>
             <div className='run-panel__scroll'>{tabs}</div>
             {stats}
         </div>

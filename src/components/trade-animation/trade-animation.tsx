@@ -15,6 +15,8 @@ import './run-panel-tooltip.scss';
 
 type TTradeAnimation = {
     className?: string;
+    /** Fixed side for the "no bot yet" tooltip, instead of working it out from the position. */
+    tooltip_alignment?: 'top' | 'bottom' | 'left' | 'right';
 };
 
 /**
@@ -22,7 +24,7 @@ type TTradeAnimation = {
  * the Run button turning into Stop, the summary card, Journal and Transactions
  * show how a run is going.
  */
-const TradeAnimation = observer(({ className }: TTradeAnimation) => {
+const TradeAnimation = observer(({ className, tooltip_alignment }: TTradeAnimation) => {
     const { dashboard, run_panel, blockly_store } = useStore();
     const { active_tab } = dashboard;
     const { has_active_bot, has_saved_bots } = blockly_store;
@@ -110,12 +112,9 @@ const TradeAnimation = observer(({ className }: TTradeAnimation) => {
         };
     }, [is_stop_button_visible, is_stop_button_disabled]);
 
-    // Fix TypeScript error by ensuring active_tab is a number
-    // Use a fallback to dashboard if active_tab is undefined
-    const safeActiveTab = typeof active_tab === 'number' ? active_tab : DBOT_TABS.DASHBOARD;
-
     // Function to determine tooltip alignment based on run panel position
     const determineTooltipAlignment = (): string => {
+        if (tooltip_alignment) return tooltip_alignment;
         // Force tooltip to always appear on top for mobile devices
         if (isMobile) {
             return 'top';

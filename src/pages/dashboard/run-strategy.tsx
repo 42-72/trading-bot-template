@@ -4,32 +4,37 @@ import { RUN_BAR_HIDDEN_TABS } from '@/constants/bot-contents';
 import { useStore } from '@/hooks/useStore';
 import { useDevice } from '@deriv-com/ui';
 
-// .toolbar__section is also used, unrelatedly, by the Bot Builder's own
-// workspace toolbar (src/pages/bot-builder/toolbar/toolbar.tsx) - kept here
-// for the Button's existing styling, but run-strategy-bar is the one this
-// file's own CSS (main.scss) targets, so the two never collide.
+// Desktop Run controls while the run panel is CLOSED: a compact Run +
+// Execution dock at the right end of the nav tab row (main.scss .run-dock),
+// over the row's empty end - not over tab content, and taking no height, so
+// every tab starts directly below the nav row. While the panel is open, the
+// Run bar sits at the top of the panel instead (run-panel.tsx); exactly one
+// of the two renders at a time, so there is only ever one Run button.
 //
 // isDesktop here MUST come from @deriv-com/ui's useDevice() (min-width:
-// 1280px), the exact same hook/breakpoint run-panel.tsx uses to gate
-// .controls__section (`!isDesktop && ... && <MobileDrawerFooter />`) - not
-// the project's own isDesktop()/DesktopWrapper (which flips at ~601px).
-// Wrapping this component in <DesktopWrapper> alone (as before) left a
-// 601-1279px gap where both this strip AND .controls__section rendered at
-// once. Using the same hook value both places makes the two mutually
-// exclusive by construction: exactly one Run button at every width.
+// 1280px), the exact same hook/breakpoint run-panel.tsx uses to gate the
+// panel's bar and .controls__section (`!isDesktop && ... &&
+// <MobileDrawerFooter />`) - not the project's own isDesktop()/
+// DesktopWrapper (which flips at ~601px). Same hook value both places: the
+// phone/tablet Run bar and these desktop controls are mutually exclusive.
 const RunStrategy = observer(() => {
-    const { dashboard } = useStore();
-    const { active_tab } = dashboard;
+    const { dashboard, run_panel } = useStore();
+    const { active_tab, active_tour } = dashboard;
+    const { is_drawer_open } = run_panel;
     const { isDesktop } = useDevice();
 
     // Prefer not rendering at all over hiding with CSS, so a hidden button
     // can never be clicked - matches the same rule applied to the mobile
     // .controls__section in run-panel.tsx.
     if (!isDesktop || RUN_BAR_HIDDEN_TABS.includes(active_tab)) return null;
+    // The open panel carries the bar - unless the panel itself isn't
+    // rendered (the Bot Builder tour, run-panel.tsx).
+    if (is_drawer_open && active_tour !== 'bot_builder') return null;
 
     return (
-        <div className='toolbar__section run-strategy-bar' data-testid='dt_run_strategy'>
-            <TradeAnimation className='toolbar__animation' />
+        <div className='run-dock' data-testid='dt_run_strategy'>
+            {/* Below the dock: to its left it would cover the nav tabs. */}
+            <TradeAnimation className='run-dock__animation' tooltip_alignment='bottom' />
         </div>
     );
 });

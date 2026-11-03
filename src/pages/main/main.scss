@@ -420,38 +420,40 @@
     }
 }
 
-// Desktop Run/Pause/Stop strip (run-strategy.tsx, recovered from f93193f).
-// A full-width band directly under the nav row - 6.6rem is that row's
-// bottom, .bot-builder's own live-measured value (bb78d90) - so it can
-// RESERVE its height rather than float: .bot-dashboard pushes every tab's
-// content down by exactly this band while it renders (dashboard.scss,
-// :has(.run-strategy-bar)). The previous strip was only as wide as the
-// panel and floated over whatever tab was underneath (Charts, Copy
-// Trading). position: absolute against .bot-dashboard; .main__run-
-// strategy-wrapper around it has no CSS of its own beyond the Run/Stop
-// colours. The Run controls sit right-aligned and exactly as wide as the
-// run panel's content column below them: --run-panel-width less the 16px
-// drawer toggle and an 8px gutter each side. The bar has no inline
-// padding so the 31% inside --run-panel-width resolves against the same
-// width the panel's does (.bot-dashboard's).
-.run-strategy-bar {
+// Desktop Run controls while the run panel is closed (run-strategy.tsx):
+// a compact Run + Execution dock at the right end of the nav tab row, over
+// the row's empty end. It takes no height - every tab starts directly below
+// the nav row (6.6rem, .bot-builder's live-measured value, bb78d90) - and
+// never reaches tab content: the nav row is 5rem tall from 1.6rem, the dock
+// 4rem tall, centred in it. Aligned to the nav row's right edge (1.6rem in).
+// Under the account dropdown (account-switcher.scss, 1000). While the panel
+// is open the full Run bar is the panel's top row instead (run-panel.scss
+// .run-panel__run-bar).
+.run-dock {
     position: absolute;
-    top: 6.6rem;
-    inset-inline: 0;
-    height: var(--run-strategy-bar-height, 6.4rem);
-    box-sizing: border-box;
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    padding: 1.2rem 0;
+    top: 2.1rem;
+    inset-inline-end: 1.6rem;
     z-index: 30;
 
-    // Fill the column instead of keeping content width: flex items default
-    // to flex-grow: 0, which is what left the Run bar at 209px (af50aa4).
-    .animation__wrapper {
+    // Compact: the pill keeps NORMAL / FAST and its toggle; the "Execution"
+    // word only shows where the row has room for it (tabs end at ~1098px).
+    .execution-mode {
         flex: 0 0 auto;
-        width: calc(var(--run-panel-width) - 3.2rem);
-        margin-inline-end: 0.8rem;
+    }
+
+    @media (max-width: 1599px) {
+        .execution-mode__label {
+            display: none;
+        }
+    }
+}
+
+// Room for the dock next to the 8 nav tabs on 1280-1439px laptops: 1.4rem
+// instead of 2rem each side (96px), so the tabs end ~1002px and the compact
+// dock (up to ~235px with the "no bot yet" info icon) still fits at 1280.
+@media (min-width: 1280px) and (max-width: 1439px) {
+    .main__container .dc-tabs__item.dc-tabs__item--main__tabs {
+        padding: 0 1.4rem;
     }
 }
 
