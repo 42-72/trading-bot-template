@@ -1,10 +1,11 @@
 /* [AI] - Analytics removed - utility functions moved to @/utils/account-helpers */
-import { getAccountId, getAccountType, isDemoAccount, removeUrlParameter } from '@/utils/account-helpers';
-/* [/AI] */
-import CommonStore from '@/stores/common-store';
 import { DerivWSAccountsService } from '@/services/derivws-accounts.service';
 import { OAuthTokenExchangeService } from '@/services/oauth-token-exchange.service';
+/* [/AI] */
+import CommonStore from '@/stores/common-store';
 import { TAuthData } from '@/types/api-types';
+import { getAccountId, getAccountType, isDemoAccount, removeUrlParameter } from '@/utils/account-helpers';
+import { ct_perf } from '@/utils/ct-perf';
 import { handleBackendError, isBackendError } from '@/utils/error-handler';
 import { session_status, SessionExpiredError } from '@/utils/session-status';
 import { keep_alive } from '@/utils/socket-keep-alive';
@@ -632,6 +633,7 @@ class APIBase {
         this.reconnect_step = 0;
         session_status.setReconnecting(false);
         keep_alive.start(() => this.sendKeepAlive());
+        ct_perf.mark('authorized');
         if (this.first_authorized_generation === -1) this.first_authorized_generation = generation;
         else if (generation !== this.first_authorized_generation) {
             // Offerings may have changed while offline: asked again, as after a page load.
@@ -738,7 +740,9 @@ class APIBase {
         const api = this.api;
         if (!api || api.connection?.readyState !== 1) return;
         try {
-            Promise.resolve(api.send({ ping: 1 })).catch(() => {});
+            const request = api.send({ ping: 1 });
+            ct_perf.timePing(request);
+            Promise.resolve(request).catch(() => {});
         } catch {
             // The close handler deals with a dead socket.
         }

@@ -1,12 +1,13 @@
 import { action, computed, makeObservable, observable } from 'mobx';
-/* [AI] - Analytics removed - utility functions moved to @/utils/account-helpers */
-import { getAccountId } from '@/utils/account-helpers';
 /* [/AI] */
 import { isEmptyObject } from '@/components/shared';
 import { isMultipliersOnly, isOptionsBlocked } from '@/components/shared/common/utility';
 import { removeCookies } from '@/components/shared/utils/storage/storage';
 import { observer as globalObserver, observer } from '@/external/bot-skeleton';
 import { api_base } from '@/external/bot-skeleton/services/api/api-base';
+/* [AI] - Analytics removed - utility functions moved to @/utils/account-helpers */
+import { getAccountId } from '@/utils/account-helpers';
+import { ct_perf } from '@/utils/ct-perf';
 import { ErrorLogger } from '@/utils/error-logger';
 import type { Balance } from '@deriv/api-types';
 import {
@@ -363,6 +364,7 @@ export default class ClientStore {
         if (this.is_regenerating) return;
 
         this.is_regenerating = true;
+        ct_perf.setContext('account switch');
         this.setIsAccountRegenerating(true);
 
         try {

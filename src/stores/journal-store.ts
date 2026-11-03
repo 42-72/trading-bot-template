@@ -1,13 +1,14 @@
 import { action, computed, makeObservable, observable, reaction, when } from 'mobx';
 import { v4 as uuidv4 } from 'uuid';
-/* [AI] - Analytics removed - utility functions moved to @/utils/account-helpers */
-import { isVirtualAccount } from '@/utils/account-helpers';
 /* [/AI] */
 import { formatDate } from '@/components/shared';
 import { run_panel } from '@/constants/run-panel';
 import { LogTypes, MessageTypes } from '@/external/bot-skeleton';
 import { config } from '@/external/bot-skeleton/constants/config';
 import { RESET_STRATEGIES, RESET_STRATEGIES_BLOCK_IDS, STRATEGIES } from '@/pages/bot-builder/quick-strategy/config';
+/* [AI] - Analytics removed - utility functions moved to @/utils/account-helpers */
+import { isVirtualAccount } from '@/utils/account-helpers';
+import { ct_perf } from '@/utils/ct-perf';
 import { localize } from '@deriv-com/translations';
 import { isCustomJournalMessage } from '../utils/journal-notifications';
 import { getStoredItemsByKey, getStoredItemsByUser, setStoredItemsByKey } from '../utils/session-storage';
@@ -336,11 +337,13 @@ export default class JournalStore {
         // Write journal messages to session storage on each change in unfiltered messages.
         const disposeWriteJournalMessageListener = reaction(
             () => this.unfiltered_messages,
-            unfiltered_messages => {
-                const stored_journals = getStoredItemsByKey(this.JOURNAL_CACHE, {});
-                stored_journals[client.loginid as string] = unfiltered_messages?.slice(0, 5000);
-                setStoredItemsByKey(this.JOURNAL_CACHE, stored_journals);
-            }
+            unfiltered_messages =>
+                ct_perf.time('Journal saved to sessionStorage', () => {
+                    ct_perf.gauge('journal_in_memory', unfiltered_messages?.length ?? 0);
+                    const stored_journals = getStoredItemsByKey(this.JOURNAL_CACHE, {});
+                    stored_journals[client.loginid as string] = unfiltered_messages?.slice(0, 5000);
+                    setStoredItemsByKey(this.JOURNAL_CACHE, stored_journals);
+                })
         );
 
         // Attempt to load cached journal messages on client loginid change.

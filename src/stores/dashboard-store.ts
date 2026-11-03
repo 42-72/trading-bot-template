@@ -2,6 +2,7 @@ import DOMPurify from 'dompurify';
 import { action, makeObservable, observable, reaction } from 'mobx';
 import { botNotification } from '@/components/bot-notification/bot-notification';
 import { notification_message, NOTIFICATION_TYPE } from '@/components/bot-notification/bot-notification-utils';
+import { ct_perf } from '@/utils/ct-perf';
 import { TStores } from '@deriv/stores/types';
 import * as strategy_description from '../constants/quick-strategies';
 import { TDescriptionItem } from '../pages/bot-builder/quick-strategy/types';
@@ -55,6 +56,18 @@ export interface IDashboardStore {
     is_trading_view_modal_visible: boolean;
     setPreviewOnPopup: (is_preview_on_popup: boolean) => void;
 }
+
+/** Nav tab names for [CT perf] logs, in DBOT_TABS order. */
+const TAB_NAMES = [
+    'Dashboard',
+    'Bot Builder',
+    'Tbots',
+    'Market Tool',
+    'DTrader',
+    'TradingView',
+    'Charts',
+    'Copy Trading',
+];
 
 export default class DashboardStore implements IDashboardStore {
     root_store: RootStore;
@@ -316,6 +329,7 @@ export default class DashboardStore implements IDashboardStore {
     };
 
     setActiveTab = (active_tab: number): void => {
+        if (active_tab !== this.active_tab) ct_perf.setContext(`tab switch to ${TAB_NAMES[active_tab] ?? active_tab}`);
         this.active_tab = active_tab;
         localStorage.setItem('active_tab', active_tab.toString());
     };
@@ -353,5 +367,4 @@ export default class DashboardStore implements IDashboardStore {
 
         workspace.zoom(metrics.viewWidth / 2, metrics.viewHeight / 2, addition);
     };
-
 }

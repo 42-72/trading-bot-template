@@ -1,4 +1,5 @@
 import { checkAiScannerBuy } from '@/utils/ai-scanner-trade-guard';
+import { ct_perf } from '@/utils/ct-perf';
 import { LogTypes } from '../../../constants/messages';
 import { createError } from '../../../utils/error';
 import { api_base } from '../../api/api-base';
@@ -21,6 +22,7 @@ export default Engine =>
 
             const gap_ms = isFastExecution() ? getBuyGapDelayMs(this.last_buy_sent_at, Date.now()) : 0;
             if (gap_ms > 0) {
+                ct_perf.designWait(gap_ms);
                 return new Promise(resolve => setTimeout(resolve, gap_ms)).then(() => {
                     // Stopped, or no longer before purchase, while waiting: don't buy.
                     if (!api_base.is_running || this.store.getState().scope !== BEFORE_PURCHASE) return undefined;
@@ -32,10 +34,12 @@ export default Engine =>
 
         sendPurchase(contract_type) {
             this.last_buy_sent_at = Date.now();
+            ct_perf.buyCalled(isFastExecution() ? 'fast' : 'normal');
 
             const onSuccess = response => {
                 // Don't unnecessarily send a forget request for a purchased contract.
                 const { buy } = response;
+                ct_perf.buyConfirmed();
 
                 contractStatus({
                     id: 'contract.purchase_received',
@@ -64,7 +68,10 @@ export default Engine =>
             if (this.is_proposal_subscription_required) {
                 const { id, askPrice } = this.selectProposal(contract_type);
 
-                const action = () => api_base.api.send({ buy: id, price: askPrice });
+                const action = () => {
+                    ct_perf.buySent();
+                    return api_base.api.send({ buy: id, price: askPrice });
+                };
 
                 this.isSold = false;
 
@@ -103,7 +110,10 @@ export default Engine =>
             // The AI Scanner never buys anything but its locked trade.
             const mismatch = checkAiScannerBuy(trade_option);
             if (mismatch) return Promise.reject(createError('AiTradeMismatch', mismatch));
-            const action = () => api_base.api.send(trade_option);
+            const action = () => {
+                ct_perf.buySent();
+                return api_base.api.send(trade_option);
+            };
 
             this.isSold = false;
 

@@ -13,6 +13,7 @@ import { useApiBase } from '@/hooks/useApiBase';
 import { useStartupWatchdog } from '@/hooks/useStartupWatchdog';
 import { useStore } from '@/hooks/useStore';
 import useThemeSwitcher from '@/hooks/useThemeSwitcher';
+import { ct_perf } from '@/utils/ct-perf';
 import { startLog } from '@/utils/start-log';
 import { ThemeProvider } from '@deriv-com/quill-ui';
 import { setSmartChartsPublicPath } from '@deriv-com/smartcharts-champion';
@@ -136,6 +137,7 @@ const AppContent = observer(() => {
                     startLog('bot area: markets failed - loading without them');
                 })
                 .finally(() => {
+                    ct_perf.mark('app ready');
                     setIsLoading(false);
                 });
         };

@@ -1,4 +1,5 @@
 import { getSocketURL } from '@/components/shared';
+import { ct_perf } from '@/utils/ct-perf';
 import { startLog } from '@/utils/start-log';
 import DerivAPIBasic from '@deriv/deriv-api/dist/DerivAPIBasic';
 import APIMiddleware from './api-middleware';
@@ -93,6 +94,7 @@ export const generateDerivApiInstance = async (forceNew = false) => {
 
             // Store the instance immediately (don't wait for connection)
             derivApiInstance = deriv_api;
+            ct_perf.watchApi(deriv_api);
 
             // Set up close handler to clear instance
             deriv_socket.addEventListener('close', () => {

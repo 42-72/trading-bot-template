@@ -1,6 +1,7 @@
 import { action, computed, makeObservable, observable, reaction } from 'mobx';
 import { formatDate, isEnded } from '@/components/shared';
 import { LogTypes } from '@/external/bot-skeleton';
+import { ct_perf } from '@/utils/ct-perf';
 import { ProposalOpenContract } from '@deriv/api-types';
 import { TPortfolioPosition, TStores } from '@deriv/stores/types';
 import { TContractInfo } from '../components/summary/summary-card.types';
@@ -190,11 +191,13 @@ export default class TransactionsStore {
         // Write transactions to session storage on each change in transaction elements.
         const disposeTransactionElementsListener = reaction(
             () => this.elements[client?.loginid as string],
-            elements => {
-                const stored_transactions = getStoredItemsByKey(this.TRANSACTION_CACHE, {});
-                stored_transactions[client.loginid as string] = elements?.slice(0, 5000) ?? [];
-                setStoredItemsByKey(this.TRANSACTION_CACHE, stored_transactions);
-            }
+            elements =>
+                ct_perf.time('Transactions saved to sessionStorage', () => {
+                    ct_perf.gauge('transactions_in_memory', elements?.length ?? 0);
+                    const stored_transactions = getStoredItemsByKey(this.TRANSACTION_CACHE, {});
+                    stored_transactions[client.loginid as string] = elements?.slice(0, 5000) ?? [];
+                    setStoredItemsByKey(this.TRANSACTION_CACHE, stored_transactions);
+                })
         );
 
         // User could've left the page mid-contract. On initial load, try

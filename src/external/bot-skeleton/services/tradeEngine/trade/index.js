@@ -1,6 +1,7 @@
 import { applyMiddleware, createStore } from 'redux';
 import { thunk } from 'redux-thunk';
 import { getLocalizedErrorMessage } from '@/constants/backend-error-messages';
+import { ct_perf } from '@/utils/ct-perf';
 import { createError } from '../../../utils/error';
 import { observer as globalObserver } from '../../../utils/observer';
 import { api_base } from '../../api/api-base';
@@ -17,6 +18,15 @@ import Sell from './Sell';
 import Ticks from './Ticks';
 import Total from './Total';
 import { watchBefore, watchDuring } from './watch-scope';
+
+/** [CT perf]: how long a watch waited (ticks / result) - the same promise result, one microtask later. */
+const timeWatch = (watch_name, promise, was_fast_pass) => {
+    const started_at = performance.now();
+    return promise.then(value => {
+        ct_perf.watchSettled(watch_name, performance.now() - started_at, was_fast_pass);
+        return value;
+    });
+};
 
 export default class TradeEngine extends Balance(Purchase(Sell(OpenContract(Proposal(Ticks(Total(class {}))))))) {
     constructor($scope) {
@@ -109,9 +119,9 @@ export default class TradeEngine extends Balance(Purchase(Sell(OpenContract(Prop
             // "before" after it. Later passes of the same "before" wait for ticks as usual.
             const fast_pass = is_fast && this.has_fast_pass;
             this.has_fast_pass = false;
-            return watchBefore(this.store, fast_pass);
+            return timeWatch(watchName, watchBefore(this.store, fast_pass), fast_pass);
         }
-        return watchDuring(this.store, is_fast);
+        return timeWatch(watchName, watchDuring(this.store, is_fast), false);
     }
 
     makeDirectPurchaseDecision() {

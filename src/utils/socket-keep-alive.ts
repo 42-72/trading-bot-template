@@ -14,6 +14,8 @@
  * - While a bot or the AI Scanner is busy, a Web Lock is held: Chrome does not
  *   freeze a page that holds one, so its timers and socket keep running.
  */
+import { ct_perf } from './ct-perf';
+
 export const KEEP_ALIVE_INTERVAL_MS = 20000;
 const RUN_LOCK_NAME = 'ct-bot-running';
 
@@ -80,6 +82,7 @@ class SocketKeepAlive {
 
     /** A bot (`bot`) or the AI Scanner (`ai_scanner`) is busy or not: the lock is held while any is. */
     setBusy(reason: string, is_busy: boolean) {
+        ct_perf.setBusy(reason, is_busy);
         if (is_busy) this.busy.add(reason);
         else this.busy.delete(reason);
         if (this.busy.size > 0) this.holdLock();

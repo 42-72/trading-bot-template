@@ -1,4 +1,5 @@
 import { getRoundedNumber } from '@/components/shared';
+import { ct_perf } from '@/utils/ct-perf';
 import { api_base } from '../../api/api-base';
 import { contract as broadcastContract, contractStatus } from '../utils/broadcast';
 import { isFastExecution } from '../utils/execution-mode';
@@ -16,6 +17,7 @@ export default Engine =>
                         return;
                     }
 
+                    if (contract.is_sold) ct_perf.resultIn();
                     this.setContractFlags(contract);
 
                     this.data.contract = contract;
@@ -39,6 +41,7 @@ export default Engine =>
                         // The result is recorded (updateTotals above), so Fast mode may let the
                         // next "before" run without waiting for a new tick.
                         this.has_fast_pass = isFastExecution();
+                        ct_perf.resultRecorded();
                         this.store.dispatch(sell());
                     } else {
                         this.store.dispatch(openContractReceived());

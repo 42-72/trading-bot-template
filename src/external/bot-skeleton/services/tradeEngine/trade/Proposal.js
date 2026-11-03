@@ -1,4 +1,5 @@
 import { getLocalizedErrorMessage } from '@/constants/backend-error-messages';
+import { ct_perf } from '@/utils/ct-perf';
 import { api_base } from '../../api/api-base';
 import { doUntilDone, tradeOptionToProposal } from '../utils/helpers';
 import { clearProposals, proposalsReady } from './state/actions';
@@ -68,7 +69,7 @@ export default Engine =>
 
             Promise.all(
                 this.proposal_templates.map(proposal => {
-                    doUntilDone(() => api_base.api.send(proposal)).catch(error => {
+                    doUntilDone(() => ct_perf.timeProposal(api_base.api.send(proposal))).catch(error => {
                         // We intercept ContractBuyValidationError as user may have specified
                         // e.g. a DIGITUNDER 0 or DIGITOVER 9, while one proposal may be invalid
                         // the other is valid. We will error on Purchase rather than here.

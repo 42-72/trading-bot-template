@@ -1,5 +1,6 @@
 /* eslint-disable no-confusing-arrow */
 import { Map } from 'immutable';
+import { ct_perf } from '@/utils/ct-perf';
 import { getLast, historyToTicks } from '../../utils/binary-utils';
 import { observer as globalObserver } from '../../utils/observer';
 import { doUntilDone, getUUID } from '../tradeEngine/utils/helpers';
@@ -209,6 +210,7 @@ export default class TicksService {
                     const { tick } = data;
                     const { symbol, id } = tick;
                     if (this.ticks.has(symbol)) {
+                        ct_perf.botTick();
                         this.subscriptions = this.subscriptions.setIn(['tick', symbol], id);
                         this.updateTicksAndCallListeners(symbol, updateTicks(this.ticks.get(symbol), parseTick(tick)));
                     }
