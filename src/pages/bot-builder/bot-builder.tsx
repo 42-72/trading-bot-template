@@ -13,7 +13,7 @@ import WorkspaceWrapper from './workspace-wrapper';
 
 const BotBuilder = observer(() => {
     const { dashboard, app, run_panel, toolbar, quick_strategy, blockly_store } = useStore();
-    const { active_tab, active_tour, is_preview_on_popup } = dashboard;
+    const { active_tab, is_preview_on_popup } = dashboard;
     const { is_open } = quick_strategy;
     const { is_running } = run_panel;
     const { is_loading } = blockly_store;
@@ -112,7 +112,6 @@ const BotBuilder = observer(() => {
                 className={classNames('bot-builder', {
                     'bot-builder--active': active_tab === 1 && !is_preview_on_popup,
                     'bot-builder--inactive': is_preview_on_popup,
-                    'bot-builder--tour-active': active_tour,
                 })}
             >
                 <div id='scratch_div' ref={el_ref}>

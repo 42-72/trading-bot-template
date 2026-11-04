@@ -118,58 +118,24 @@ export const defaultPosition = (size: number, bounds: TBounds, right = bounds.ri
     y: bounds.bottom - 2 * EDGE_GAP - size,
 });
 
-// Blockly's can, lid included. Not the element's rectangle: that is its whole
-// unclipped sprite, 96 x 124.
-const TRASH_CAN_WIDTH = 47;
-const TRASH_CAN_HEIGHT = 60;
-
-/**
- * The Bot Builder's trash can, or null when it isn't on screen. Read from its
- * transform, which is where it ends up: the can takes 0.4s to get there
- * (main.scss), so its rectangle would be somewhere along the way.
- */
-const trashCanRect = (): TBounds | null => {
-    const trash = document.querySelector('.bot-builder--active .blocklyTrash');
-    const workspace = trash?.closest('svg');
-    if (!trash || !workspace || !visibleRect(trash)) return null;
-    const translate = /translate\(\s*(-?[\d.]+)[\s,]+(-?[\d.]+)/.exec(trash.getAttribute('transform') ?? '');
-    if (!translate) return null;
-    const { left: origin_x, top: origin_y } = workspace.getBoundingClientRect();
-    const left = origin_x + Number(translate[1]);
-    const top = origin_y + Number(translate[2]);
-    return { left, top, right: left + TRASH_CAN_WIDTH, bottom: top + TRASH_CAN_HEIGHT };
-};
-
 /**
  * From 1280px: where the right of the default spot has to be - the bounds'
- * edge, or the edge the open run panel slides to, then the left of the trash
- * can if the button would touch it there: the can sits just left of the open
- * panel (trashcan-spot.js), so on Bot Builder that is where the button ends up,
- * left of them both. Only ever a move to the left: the
- * height stays. Null below 1280px. Takes the store's `is_run_panel_open`, not
- * the page's: the toggle bar's --open class lands a render later, and the
+ * edge, or the edge the open run panel slides to. Only ever a move to the left:
+ * the height stays. Null below 1280px. Takes the store's `is_run_panel_open`,
+ * not the page's: the toggle bar's --open class lands a render later, and the
  * button has to set off with the panel. The panel's own rectangle only says
  * whether it is on this tab (not on Tbots / DTrader) and how wide it is: its
  * position is somewhere along the slide. Only for the default spot: a spot the
  * trader chose stays where they left it.
  */
-export const defaultRight = (size: number, bounds: TBounds, is_run_panel_open: boolean): number | null => {
+export const defaultRight = (bounds: TBounds, is_run_panel_open: boolean): number | null => {
     if (window.innerWidth < DESKTOP_LAYOUT_MIN_WIDTH) return null;
     const panel = is_run_panel_open && document.querySelector('.run-panel__container');
     const panel_rect = panel && visibleRect(panel);
+    if (!panel_rect) return bounds.right;
     // Rounded: mid-slide the width differs by a hair, and any change of `left`,
     // however small, starts the button's transition over.
-    const right = panel_rect ? Math.min(bounds.right, window.innerWidth - Math.round(panel_rect.width)) : bounds.right;
-
-    const can = trashCanRect();
-    if (!can) return right;
-    const { x, y } = defaultPosition(size, bounds, right);
-    const touches_can =
-        x < can.right + EDGE_GAP &&
-        x + size + EDGE_GAP > can.left &&
-        y < can.bottom + EDGE_GAP &&
-        y + size + EDGE_GAP > can.top;
-    return touches_can ? can.left : right;
+    return Math.min(bounds.right, window.innerWidth - Math.round(panel_rect.width));
 };
 
 // v2 for desktop / laptop: everyone gets the new bottom-right default once

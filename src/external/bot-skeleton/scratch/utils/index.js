@@ -44,49 +44,11 @@ export const getSelectedTradeType = (workspace = window.Blockly.derivWorkspace) 
     return mandatory_tradeoptions_block;
 };
 
-export const matchTranslateAttribute = translateString => {
-    const match = translateString.match(/translate\((-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)\)/);
-    if (match && match.length > 2) {
-        const x = parseFloat(match[1]);
-        const y = parseFloat(match[2]);
-        return { x, y };
-    }
-    return null; // Invalid or no match
-};
-
-export const extractTranslateValues = () => {
-    const transform_value = window.Blockly?.derivWorkspace?.trashcan?.svgGroup.getAttribute('transform');
-    const translate_xy = matchTranslateAttribute(transform_value);
-
-    if (!translate_xy) {
-        globalObserver.emit('Error', 'Invalid String');
-    }
-
-    return {
-        translate_X: translate_xy.x,
-        translate_Y: translate_xy.y,
-    };
-};
-
-export const validateErrorOnBlockDelete = () => {
-    // Get the bounding rectangle of the selected block
-    const { translate_X, translate_Y } = extractTranslateValues();
-    const blockRect = window.Blockly.getSelected()?.getSvgRoot().getBoundingClientRect();
-    const translate_offset = 200;
-    // Extract coordinates from the bounding rectangles
-    const blockX = blockRect?.left || 0;
-    const blockY = blockRect?.top || 0;
-    const mandatory_trade_option_block = getSelectedTradeType();
-    const required_block_types = [mandatory_trade_option_block, 'trade_definition', 'purchase', 'before_purchase'];
-    if (required_block_types?.includes(window.Blockly?.getSelected()?.type)) {
-        if (
-            blockY >= translate_Y - translate_offset &&
-            blockY <= translate_Y + translate_offset &&
-            blockX >= translate_X - translate_offset &&
-            blockX <= translate_X + translate_offset
-        ) {
-            globalObserver.emit('ui.log.error', error_message_map?.()?.[window.Blockly?.getSelected()?.type]?.default);
-        }
+/** A block dropped on a delete area: say so if the bot can't do without it. */
+export const validateErrorOnBlockDelete = block => {
+    const required_block_types = [getSelectedTradeType(), 'trade_definition', 'purchase', 'before_purchase'];
+    if (required_block_types.includes(block.type)) {
+        globalObserver.emit('ui.log.error', error_message_map?.()?.[block.type]?.default);
     }
 };
 

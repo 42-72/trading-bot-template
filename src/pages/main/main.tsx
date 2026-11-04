@@ -12,7 +12,6 @@ import TradeTypeConfirmationModal from '@/components/trade-type-confirmation-mod
 import TradingViewModal from '@/components/trading-view-chart/trading-view-modal';
 import { DBOT_TABS, TAB_IDS } from '@/constants/bot-contents';
 import { api_base, updateWorkspaceName } from '@/external/bot-skeleton';
-import { getTrashcanSpot } from '@/external/bot-skeleton/scratch/utils/trashcan-spot';
 import { CONNECTION_STATUS } from '@/external/bot-skeleton/services/api/observables/connection-status-stream';
 import { useApiBase } from '@/hooks/useApiBase';
 import { useStore } from '@/hooks/useStore';
@@ -68,15 +67,7 @@ const AppWrapper = observer(() => {
         setTourDialogVisibility,
     } = dashboard;
     const { dashboard_strategies } = load_modal;
-    const {
-        is_dialog_open,
-        is_drawer_open,
-        dialog_options,
-        onCancelButtonClick,
-        onCloseDialog,
-        onOkButtonClick,
-        stopBot,
-    } = run_panel;
+    const { is_dialog_open, dialog_options, onCancelButtonClick, onCloseDialog, onOkButtonClick, stopBot } = run_panel;
     const { is_open } = quick_strategy;
     const { cancel_button_text, ok_button_text, title, message, dismissable, is_closed_on_cancel } = dialog_options as {
         [key: string]: string;
@@ -315,25 +306,6 @@ const AppWrapper = observer(() => {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [active_tab]);
-
-    // At once, in a layout effect: the AI button works out its spot from the
-    // can's in its own effect, as the panel starts to slide. Again after 100ms
-    // for a workspace that is only just showing.
-    React.useLayoutEffect(() => {
-        const placeTrashcan = () => {
-            if (active_tab === BOT_BUILDER && Blockly?.derivWorkspace?.trashcan) {
-                const { x, y } = getTrashcanSpot(is_drawer_open);
-                Blockly?.derivWorkspace?.trashcan?.setTrashcanPosition(x, y);
-            }
-        };
-        placeTrashcan();
-        const trashcan_init_id = setTimeout(placeTrashcan, 100);
-
-        return () => {
-            clearTimeout(trashcan_init_id); // Clear the timeout on unmount
-        };
-        //eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [active_tab, is_drawer_open]);
 
     useEffect(() => {
         let timer: ReturnType<typeof setTimeout>;

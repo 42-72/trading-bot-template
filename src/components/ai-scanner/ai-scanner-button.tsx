@@ -29,8 +29,8 @@ type TAiScannerButton = {
  * is only ever displayed clamped into the live safe area (ai-scanner-layout.ts),
  * so it can't sit on the Run bar, the nav row or the mobile run bar - including
  * after a tab switch. On a laptop the default spot slides left along the bottom
- * with the run panel, to just left of it and of Bot Builder's trash can; a
- * remembered spot stays put, even over the panel.
+ * with the run panel, to just left of it; a remembered spot stays put, even
+ * over the panel.
  */
 const AiScannerButton = observer(({ is_desktop, onLayout }: TAiScannerButton) => {
     const { run_panel, dashboard } = useStore();
@@ -55,7 +55,7 @@ const AiScannerButton = observer(({ is_desktop, onLayout }: TAiScannerButton) =>
         const measure = () => {
             const safe_bounds = getSafeBounds();
             setBounds(safe_bounds);
-            setDefaultRight(defaultRight(button_ref.current?.offsetWidth || 56, safe_bounds, is_drawer_open));
+            setDefaultRight(defaultRight(safe_bounds, is_drawer_open));
             setIsWide(isWideScreen());
         };
         measure();

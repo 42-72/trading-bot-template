@@ -11,7 +11,8 @@ import main_xml from './xml/main.xml';
 import { forgetAccumulatorsProposalRequest } from './accumulators-proposal-handler';
 import { loadBlockly } from './blockly';
 import DBotStore from './dbot-store';
-import { isAllRequiredBlocksEnabled, updateDisabledBlocks, validateErrorOnBlockDelete } from './utils';
+import { addToolboxDeleteAreas } from './toolbox-delete-areas';
+import { isAllRequiredBlocksEnabled, updateDisabledBlocks } from './utils';
 
 class DBot {
     constructor() {
@@ -182,7 +183,7 @@ class DBot {
                 this.workspace = window.Blockly.inject(el_scratch_div, {
                     media: 'assets/media/',
                     renderer: 'zelos',
-                    trashcan: !is_mobile,
+                    trashcan: false,
                     zoom: { wheel: true, startScale: workspaceScale },
                     scrollbars: true,
                     theme: window.Blockly.Themes.zelos_renderer,
@@ -196,7 +197,6 @@ class DBot {
                 this.workspace.addChangeListener(event => updateDisabledBlocks(this.workspace, event));
                 this.workspace.addChangeListener(event => this.workspace.dispatchBlockEventEffects(event));
                 this.workspace.addChangeListener(event => {
-                    if (event.type === 'drag' && !event.isStart && !is_mobile) validateErrorOnBlockDelete();
                     if (event.type == window.Blockly.Events.BLOCK_CHANGE) {
                         const block = this.workspace.getBlockById(event.blockId);
                         if (is_mobile && block && event.element == 'collapsed') {
@@ -204,6 +204,8 @@ class DBot {
                         }
                     }
                 });
+
+                addToolboxDeleteAreas(this.workspace);
 
                 window.Blockly.derivWorkspace = this.workspace;
 

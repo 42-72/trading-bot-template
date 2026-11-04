@@ -102,25 +102,8 @@ describe('AI button default spot on a desktop / laptop', () => {
     // The default spot as the button works it out, with the store's panel state.
     const spot = (is_panel_open: boolean) => {
         const bounds = getSafeBounds();
-        const right = defaultRight(BUTTON, bounds, is_panel_open) ?? bounds.right;
+        const right = defaultRight(bounds, is_panel_open) ?? bounds.right;
         return clampToBounds(defaultPosition(BUTTON, bounds, right), BUTTON, bounds);
-    };
-
-    // Bot Builder's workspace and can. The sprite's 96 x 124 rectangle, as
-    // measured: only the transform says where the can really is.
-    const placeTrashCan = (translate: string, is_shown = true) => {
-        const builder = document.createElement('div');
-        builder.className = 'bot-builder--active';
-        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        svg.getBoundingClientRect = () => ({ left: 16, top: 122 }) as DOMRect;
-        const trash = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-        trash.setAttribute('class', 'blocklyTrash');
-        trash.setAttribute('transform', translate);
-        trash.getBoundingClientRect = () =>
-            ({ left: 1282, right: 1378, top: 608, bottom: 732, width: is_shown ? 96 : 0, height: 124 }) as DOMRect;
-        svg.appendChild(trash);
-        builder.appendChild(svg);
-        document.body.appendChild(builder);
     };
 
     it('panel closed: bottom-right of the screen, above the footer', () => {
@@ -165,47 +148,11 @@ describe('AI button default spot on a desktop / laptop', () => {
         expect(spot(true)).toEqual({ x: 1294, y: 660 });
     });
 
-    it('Bot Builder, panel closed: just left of the trash can, still at the bottom', () => {
-        desktop(false);
-        placeTrashCan('translate(1266, 518)');
-        expect(spot(false)).toEqual({ x: 1210, y: 660 });
-    });
-
-    it('Bot Builder, panel open: left of the can when it pokes out from the panel', () => {
-        desktop(true);
-        placeTrashCan('translate(906, 518)');
-        expect(spot(true)).toEqual({ x: 850, y: 660 });
-    });
-
-    it('Bot Builder, panel open: a can right behind the panel leaves the spot alone', () => {
-        desktop(true);
-        placeTrashCan('translate(1076, 518)');
-        expect(spot(true)).toEqual({ x: 871, y: 660 });
-    });
-
-    it("Bot Builder: the can is read from Blockly's own form of the transform too", () => {
-        desktop(false);
-        placeTrashCan('translate(1242,499)');
-        expect(spot(false).x).toBe(1186);
-    });
-
-    it('a can that is not on screen (the tour hides it) moves nothing', () => {
-        desktop(false);
-        placeTrashCan('translate(1266, 518)', false);
-        expect(spot(false).x).toBe(1294);
-    });
-
-    it('a can far from the bottom corner moves nothing', () => {
-        desktop(false);
-        placeTrashCan('translate(1266, 100)');
-        expect(spot(false).x).toBe(1294);
-    });
-
     it('below 1280px: no slide, the default spot follows the bounds as before', () => {
         setViewport(1024, 768);
         place('dc-drawer__toggle dc-drawer__toggle--open', { top: 700, bottom: 736, left: 0, right: 1024 });
         place('run-panel__container', { top: 100, bottom: 700, left: 0, right: 1024 });
-        expect(defaultRight(BUTTON, getSafeBounds(), true)).toBeNull();
+        expect(defaultRight(getSafeBounds(), true)).toBeNull();
     });
 
     it("Tbots / DTrader, no Run bar: still can't be dragged onto the nav row", () => {
