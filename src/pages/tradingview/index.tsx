@@ -5,6 +5,7 @@ import IframeWrapper from '@/components/iframe-wrapper';
 import { DBOT_TABS } from '@/constants/bot-contents';
 import { useStore } from '@/hooks/useStore';
 import useThemeSwitcher from '@/hooks/useThemeSwitcher';
+import { localize } from '@deriv-com/translations';
 import './tradingview.scss';
 
 /**
@@ -48,6 +49,12 @@ const TradingViewPanel = observer(() => {
                         src={`https://charts.deriv.com/deriv?theme=${theme}`}
                         title='TradingView Charts'
                         className='tradingview-container'
+                        patientLoad={{
+                            isVisible: is_active,
+                            loadingText: localize('Loading chart…'),
+                            failedText: localize("Chart couldn't load"),
+                            retryText: localize('Try again'),
+                        }}
                     />
                 </div>
             )}

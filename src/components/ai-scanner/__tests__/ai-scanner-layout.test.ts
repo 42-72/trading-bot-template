@@ -76,33 +76,55 @@ describe('AI button default spot on a desktop / laptop', () => {
     });
 
     // 1366x768 Bot Builder, as measured on the dev server.
-    const desktop = () => {
+    const desktop = (is_panel_open = true) => {
         setViewport(1366, 768);
         place('deriv-header', { top: 0, bottom: 56, left: 0, right: 1366 });
-        // Nav tab row; with the panel open the Run bar is the panel's top row.
         place('dc-tabs__list--main__tabs', { top: 72, bottom: 122, left: 16, right: 1350 });
-        place('run-panel__container', { top: 122, bottom: 732, left: 943, right: 1366 });
-        place('dc-drawer__toggle', { top: 122, bottom: 732, left: 943, right: 959 });
+        // Floats at the right end, over the panel's top row.
+        place('run-strategy-bar', { top: 130, bottom: 170, left: 967, right: 1358 });
+        if (is_panel_open) {
+            place('run-panel__container', { top: 122, bottom: 732, left: 943, right: 1366 });
+            place('dc-drawer__toggle', { top: 122, bottom: 732, left: 943, right: 959 });
+        } else {
+            place('run-panel__container', { top: 122, bottom: 732, left: 1350, right: 1773 });
+            place('dc-drawer__toggle', { top: 122, bottom: 732, left: 1350, right: 1366 });
+        }
         place('app-footer', { top: 732, bottom: 768, left: 0, right: 1366 });
     };
 
-    it('bottom-right of the content area: clear of the run panel, its toggle, the nav row and the footer', () => {
-        desktop();
+    it.each([
+        ['open', true],
+        ['closed', false],
+    ])('bottom-right of the screen, above the footer, with the run panel %s', (_name, is_panel_open) => {
+        desktop(is_panel_open);
         const bounds = getSafeBounds();
-        const spot = clampToBounds(defaultPosition(BUTTON, bounds), BUTTON, bounds);
-        expect(spot).toEqual({ x: 871, y: 660 });
-        expect(spot.x + BUTTON).toBeLessThan(943); // run panel column and its toggle
-        expect(spot.y + BUTTON).toBeLessThan(732); // footer
+        expect(clampToBounds(defaultPosition(BUTTON, bounds), BUTTON, bounds)).toEqual({ x: 1294, y: 660 });
     });
 
-    it('can never be dragged onto the nav row, where the closed-panel Run dock sits', () => {
-        desktop();
-        const bounds = getSafeBounds();
-        expect(bounds.top).toBe(122);
-        expect(clampToBounds({ x: 1200, y: 80 }, BUTTON, bounds).y).toBe(130);
+    it('opening the panel does not move a remembered spot at the right edge', () => {
+        const spot = { x: 1280, y: 400 };
+        desktop(false);
+        expect(clampToBounds(spot, BUTTON, getSafeBounds())).toEqual(spot);
+        document.body.innerHTML = '';
+        desktop(true);
+        expect(clampToBounds(spot, BUTTON, getSafeBounds())).toEqual(spot);
     });
 
-    it('phones and tablets (< 1280px) keep their bounds: the nav row is not a blocker there', () => {
+    it('can never be dragged under the Run bar or onto the nav row, anywhere across the screen', () => {
+        desktop();
+        const bounds = getSafeBounds();
+        expect(bounds.top).toBe(170);
+        expect(clampToBounds({ x: 1200, y: 140 }, BUTTON, bounds).y).toBe(178);
+        expect(clampToBounds({ x: 100, y: 80 }, BUTTON, bounds).y).toBe(178);
+    });
+
+    it('below 1280px the run panel column still bounds the button, as before', () => {
+        setViewport(1279, 768);
+        place('run-panel__container', { top: 122, bottom: 732, left: 900, right: 1279 });
+        expect(getSafeBounds().right).toBe(900);
+    });
+
+    it('phones and tablets (< 1280px) keep their bounds: no Run bar there, and the nav row is no blocker', () => {
         setViewport(1024, 768);
         place('deriv-header', { top: 0, bottom: 56, left: 0, right: 1024 });
         place('dc-tabs__list--main__tabs', { top: 56, bottom: 112, left: 0, right: 1024 });

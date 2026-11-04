@@ -108,6 +108,17 @@
     --tone-border-soft: rgb(100 116 139 / 45%);
 }
 
+// ---- Title ----------------------------------------------------------------
+
+// Same blue as the selected digit and the live dot.
+.market-tool__title {
+    margin: 0 0 1.2rem;
+    font-size: 1.8rem;
+    font-weight: 700;
+    line-height: 1.2;
+    color: #0f7bff;
+}
+
 // ---- Controls -------------------------------------------------------------
 
 .market-tool__controls {

@@ -206,6 +206,7 @@ const MarketTool = () => {
 
     return (
         <div className='market-tool'>
+            <h2 className='market-tool__title'>Synthetic Analysis</h2>
             <div className='market-tool__controls'>
                 <div className='market-tool__control market-tool__control--symbol'>
                     <label htmlFor='market-tool-symbol'>Synthetic index</label>

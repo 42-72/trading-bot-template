@@ -8,6 +8,12 @@
     // width so it's never uncomfortably narrow, capped at 620px so it
     // doesn't balloon on an ultrawide monitor.
     --run-panel-width: clamp(360px, 31%, 620px);
+
+    // Desktop: where a tab starts if its own controls would otherwise sit under
+    // the floating Run bar (main.scss .run-strategy-bar) - level with the run
+    // panel's Summary / Transactions / Journal row. Only DTrader and TradingView
+    // use it; every other tab starts directly below the nav row (6.6rem).
+    --tab-below-run-bar: 12.3rem;
     --drawer-content-height-mobile: calc(100% - 233px);
     --tab-content-height: calc(100vh - 16.6rem);
     --tab-content-height-mobile: calc(100vh - 12.6rem);

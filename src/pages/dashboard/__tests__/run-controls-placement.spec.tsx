@@ -1,13 +1,16 @@
+import fs from 'fs';
 import { action, observable, runInAction } from 'mobx';
+import path from 'path';
 import RunPanel from '@/components/run-panel';
 import { DBOT_TABS } from '@/constants/bot-contents';
 import { useStore } from '@/hooks/useStore';
 import { act, render, screen } from '@testing-library/react';
 import RunStrategy from '../run-strategy';
 
-// Desktop Run controls: the Run bar is the open run panel's top row; with the
-// panel closed a compact dock in the nav row has them. Never both, never none
-// (except on Tbots / DTrader, which have no Run on desktop).
+// Desktop Run bar: one element, mounted once, outside the run panel, on every
+// tab with the panel open or closed. jsdom has no layout, so "same spot" is
+// checked as: same DOM node, never inside anything that moves, and one fixed
+// rule in the stylesheet that no tab or panel state can change.
 
 jest.mock('@/hooks/useStore', () => ({ useStore: jest.fn() }));
 const mock_device = { isDesktop: true, isMobile: false };
@@ -24,7 +27,18 @@ jest.mock('@/components/journal', () => ({ __esModule: true, default: () => null
 jest.mock('@/components/summary', () => ({ __esModule: true, default: () => null }));
 jest.mock('@/components/transactions', () => ({ __esModule: true, default: () => null }));
 
-const setup = (active_tab = DBOT_TABS.DASHBOARD) => {
+const ALL_TABS: [string, number][] = [
+    ['Dashboard', DBOT_TABS.DASHBOARD],
+    ['Bot Builder', DBOT_TABS.BOT_BUILDER],
+    ['Tbots', DBOT_TABS.TBOTS],
+    ['Market Tool', DBOT_TABS.MARKET_TOOL],
+    ['DTrader', DBOT_TABS.DTRADER],
+    ['TradingView', DBOT_TABS.TRADINGVIEW],
+    ['Charts', DBOT_TABS.CHART],
+    ['Copy Trading', DBOT_TABS.COPY_TRADING],
+];
+
+const setup = (active_tab: number = DBOT_TABS.DASHBOARD) => {
     const run_panel: { is_drawer_open: boolean; is_running: boolean; toggleDrawer: (o: boolean) => void } = observable(
         {
             active_index: 0,
@@ -75,79 +89,119 @@ const setup = (active_tab = DBOT_TABS.DASHBOARD) => {
         </>
     );
     const setDrawer = (is_open: boolean) => act(() => run_panel.toggleDrawer(is_open));
-    return { run_panel, dashboard, setDrawer };
+    const setTab = (tab: number) => act(() => runInAction(() => (dashboard.active_tab = tab)));
+    return { run_panel, dashboard, setDrawer, setTab };
 };
 
-const placement = () => {
-    const controls = screen.queryAllByTestId('run-controls');
-    if (controls.length !== 1) return `${controls.length} Run controls`;
-    if (controls[0].closest('.run-dock')) return 'dock';
-    if (controls[0].closest('.run-panel__run-bar')) return 'panel';
-    return 'elsewhere';
+const theRunBar = () => {
+    const controls = screen.getAllByTestId('run-controls');
+    expect(controls).toHaveLength(1);
+    const bar = controls[0].closest('.run-strategy-bar');
+    expect(bar).not.toBeNull();
+    expect(bar?.closest('.run-panel__container')).toBeNull();
+    return controls[0];
 };
 
-describe('desktop Run controls placement', () => {
+describe('desktop Run bar', () => {
     beforeEach(() => {
         mock_device.isDesktop = true;
         mock_device.isMobile = false;
     });
 
-    it.each([
-        ['Dashboard', DBOT_TABS.DASHBOARD],
-        ['Market Tool', DBOT_TABS.MARKET_TOOL],
-        ['TradingView', DBOT_TABS.TRADINGVIEW],
-        ['Charts', DBOT_TABS.CHART],
-        ['Copy Trading', DBOT_TABS.COPY_TRADING],
-    ])('%s: in the nav-row dock while the panel is closed', (_name, tab) => {
-        setup(tab);
-        expect(placement()).toBe('dock');
-    });
-
-    it('Bot Builder opens the panel: the Run bar is its top row, the dock is gone', () => {
-        setup(DBOT_TABS.BOT_BUILDER);
-        expect(placement()).toBe('panel');
-        expect(document.querySelector('.run-dock')).toBeNull();
-    });
-
-    it('moves with the panel: open -> top of the panel, closed -> dock', () => {
-        const { setDrawer } = setup(DBOT_TABS.CHART);
-        setDrawer(true);
-        expect(placement()).toBe('panel');
+    it.each(ALL_TABS)('%s: exactly one, outside the panel, panel closed and open', (_name, tab) => {
+        const { setDrawer } = setup(tab);
         setDrawer(false);
-        expect(placement()).toBe('dock');
+        theRunBar();
+        setDrawer(true);
+        theRunBar();
     });
 
-    it('the panel keeps its Run bar row while closed, so nothing moves as it slides', () => {
-        setup(DBOT_TABS.CHART);
-        expect(document.querySelector('.run-panel__run-bar')).not.toBeNull();
-        expect(document.querySelector('.run-panel__run-bar')?.children).toHaveLength(0);
+    it('is the same element through every tab and panel state: never moved, never remounted', () => {
+        const { setDrawer, setTab } = setup(DBOT_TABS.DASHBOARD);
+        const bar = theRunBar();
+        ALL_TABS.forEach(([, tab]) => {
+            setTab(tab);
+            [false, true].forEach(is_open => {
+                setDrawer(is_open);
+                expect(theRunBar()).toBe(bar);
+            });
+        });
     });
 
-    it('a run opens the panel on any tab: Stop is at the top of the panel', () => {
+    it('the panel keeps an empty row for it, open or closed, so Summary starts below the bar', () => {
+        const { setDrawer } = setup(DBOT_TABS.CHART);
+        [false, true].forEach(is_open => {
+            setDrawer(is_open);
+            const slot = screen.getByTestId('dt_run_panel_run_bar_slot');
+            expect(slot.children).toHaveLength(0);
+            expect(slot.nextElementSibling).toHaveClass('run-panel__scroll');
+        });
+    });
+
+    it('a run opens the panel on any tab, and the bar stays where it is', () => {
         const { run_panel } = setup(DBOT_TABS.MARKET_TOOL);
+        const bar = theRunBar();
+        expect(run_panel.is_drawer_open).toBe(false);
         act(() => runInAction(() => (run_panel.is_running = true)));
-        expect(placement()).toBe('panel');
+        expect(run_panel.is_drawer_open).toBe(true);
+        expect(theRunBar()).toBe(bar);
     });
 
-    it('Tbots and DTrader: no Run on desktop, and no panel', () => {
-        setup(DBOT_TABS.TBOTS);
-        expect(screen.queryAllByTestId('run-controls')).toHaveLength(0);
-        expect(document.querySelector('.run-panel__run-bar')).toBeNull();
-    });
-
-    it('the Bot Builder tour hides the panel: Run stays reachable in the dock', () => {
+    it('the Bot Builder tour hides the panel: the bar stays', () => {
         const { dashboard } = setup(DBOT_TABS.BOT_BUILDER);
+        const bar = theRunBar();
         act(() => runInAction(() => (dashboard.active_tour = 'bot_builder')));
-        expect(placement()).toBe('dock');
+        expect(document.querySelector('.run-panel__container')).toBeNull();
+        expect(theRunBar()).toBe(bar);
     });
 
-    it('phones and tablets: neither (their Run bar is the panel footer, unchanged)', () => {
+    it.each([
+        ['Dashboard', DBOT_TABS.DASHBOARD, 1],
+        ['Tbots', DBOT_TABS.TBOTS, 0],
+        ['DTrader', DBOT_TABS.DTRADER, 0],
+    ])('phones and tablets, %s: unchanged, Run only in the panel footer', (_name, tab, footers) => {
         mock_device.isDesktop = false;
         mock_device.isMobile = true;
-        setup(DBOT_TABS.DASHBOARD);
-        expect(document.querySelector('.run-dock')).toBeNull();
-        expect(document.querySelector('.run-panel__run-bar')).toBeNull();
-        expect(placement()).toBe('elsewhere');
-        expect(screen.getByTestId('run-controls').closest('.controls__section')).not.toBeNull();
+        setup(tab);
+        expect(document.querySelector('.run-strategy-bar')).toBeNull();
+        expect(screen.queryByTestId('dt_run_panel_run_bar_slot')).toBeNull();
+        expect(document.querySelectorAll('.controls__section')).toHaveLength(footers);
+        expect(screen.queryAllByTestId('run-controls')).toHaveLength(footers);
+    });
+});
+
+describe('desktop Run bar stylesheet', () => {
+    const src = path.resolve(__dirname, '../../..');
+    const read = (file: string) => fs.readFileSync(path.join(src, file), 'utf8');
+    const main_scss = read('pages/main/main.scss');
+    const rule = main_scss.match(/\n\.run-strategy-bar \{[\s\S]*?\n\}/)?.[0] ?? '';
+
+    it('one fixed spot: absolute, same top and right, as wide as the panel column', () => {
+        expect(rule).toMatch(/position: absolute;/);
+        expect(rule).toMatch(/top: 7\.45rem;/);
+        expect(rule).toMatch(/right: 0\.8rem;/);
+        expect(rule).toMatch(/width: calc\(var\(--run-panel-width\) - 3\.2rem\);/);
+    });
+
+    it('nothing overrides that spot for a tab, a panel state or a screen size', () => {
+        expect(main_scss.match(/\.run-strategy-bar/g)).toHaveLength(1);
+        expect(read('pages/dashboard/dashboard.scss')).not.toMatch(/run-strategy-bar/);
+        expect(read('components/run-panel/run-panel.scss')).not.toMatch(/^[^/]*\.run-strategy-bar/m);
+    });
+
+    it('reserves no full-width row: the only tabs moved down are the two with controls under the bar', () => {
+        expect(read('pages/dashboard/dashboard.scss')).not.toMatch(/--run-strategy-bar/);
+        expect(read('pages/dtrader/dtrader.scss')).toMatch(/top: var\(--tab-below-run-bar\);/);
+        expect(read('pages/tradingview/tradingview.scss')).toMatch(/top: var\(--tab-below-run-bar\);/);
+        expect(main_scss).toMatch(/\.bot-builder \{\s+position: absolute;\s+top: 6\.6rem;/);
+    });
+
+    it('the nav dock and its tab padding are gone', () => {
+        expect(main_scss).not.toMatch(/run-dock/);
+        expect(main_scss).not.toMatch(/padding: 0 1\.4rem/);
+    });
+
+    it('.bot-dashboard keeps overflow: clip on desktop (no horizontal scroll on Charts / Copy Trading)', () => {
+        expect(read('pages/dashboard/dashboard.scss')).toMatch(/@include desktop-screen \{\s+overflow: clip;/);
     });
 });

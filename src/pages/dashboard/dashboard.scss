@@ -60,8 +60,8 @@
         // 6.6rem - not a new number: it's .bot-builder's own value
         // (main.scss), live-measured against this same nav row
         // (.dc-tabs__list bottom minus --header-height, bb78d90). The panel
-        // starts right below the nav row; the Run bar is its own top row
-        // (run-panel.tsx .run-panel__run-bar).
+        // starts right below the nav row; the floating Run bar sits over its
+        // empty top row (run-panel.scss .run-panel__run-bar-slot).
         position: absolute;
         top: 6.6rem;
         // This element also carries .run-panel (run-panel.tsx's outer

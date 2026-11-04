@@ -26,8 +26,9 @@ type TAiScannerButton = {
 /**
  * The round, draggable "AI" button. Its remembered spot (per desktop-laptop / phone width)
  * is only ever displayed clamped into the live safe area (ai-scanner-layout.ts),
- * so it can't sit on the Run bar, the run panel or its toggle, or the mobile
- * run bar - including after a tab switch or the run panel sliding open.
+ * so it can't sit on the Run bar, the nav row or the mobile run bar - including
+ * after a tab switch. On a laptop the run panel doesn't move it: it floats over
+ * the panel.
  */
 const AiScannerButton = observer(({ is_desktop, onLayout }: TAiScannerButton) => {
     const { run_panel, dashboard } = useStore();

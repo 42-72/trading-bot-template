@@ -22,11 +22,10 @@ export const DBOT_TABS: TDashboardTabIndex = Object.freeze({
     COPY_TRADING: 7,
 });
 
-// Tabs where the run bar (desktop run-strategy.tsx + mobile
-// .controls__section) has nothing meaningful to run against - Tbots loads
-// a strategy but doesn't run it from here, DTrader redirects away
-// entirely. On desktop the run panel is not shown there either. Shared by
-// run-strategy.tsx and run-panel.tsx.
+// Tabs where the phone / tablet run bar (.controls__section) has nothing
+// meaningful to run against - Tbots loads a strategy but doesn't run it from
+// here, DTrader redirects away entirely. Below 1280px only: the desktop Run
+// bar and run panel are on every tab (run-strategy.tsx, run-panel.tsx).
 export const RUN_BAR_HIDDEN_TABS = [DBOT_TABS.TBOTS, DBOT_TABS.DTRADER];
 
 // Phones only (< 768px): on these tabs the run panel drawer (Summary /

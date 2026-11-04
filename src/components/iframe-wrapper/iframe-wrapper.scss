@@ -53,4 +53,57 @@
             text-decoration: underline;
         }
     }
+
+    // Loading / failed state over the frame (patientLoad, index.tsx). Loading
+    // lets clicks through: the frame underneath may already be usable.
+    &__status {
+        position: absolute;
+        inset: 0;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1.2rem;
+        padding: 1.6rem;
+        background: var(--general-main-1);
+        text-align: center;
+        pointer-events: none;
+
+        // Centred in what shows above the run bar, like the frame itself.
+        @include mobile-screen {
+            padding-bottom: calc(1.6rem + var(--run-panel-height, 6.2rem) + env(safe-area-inset-bottom, 0px));
+        }
+
+        &--failed {
+            pointer-events: auto;
+        }
+    }
+
+    &__status-text {
+        margin: 0;
+        color: var(--text-general);
+        font-size: 1.4rem;
+    }
+
+    &__spinner {
+        width: 3.2rem;
+        height: 3.2rem;
+        border: 0.3rem solid var(--border-normal);
+        border-top-color: var(--button-primary-default);
+        border-radius: 50%;
+        animation: iframe-wrapper-spin 0.9s linear infinite;
+    }
+}
+
+@keyframes iframe-wrapper-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .iframe-wrapper__spinner {
+        animation: none;
+    }
 }

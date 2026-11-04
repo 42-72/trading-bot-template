@@ -420,40 +420,31 @@
     }
 }
 
-// Desktop Run controls while the run panel is closed (run-strategy.tsx):
-// a compact Run + Execution dock at the right end of the nav tab row, over
-// the row's empty end. It takes no height - every tab starts directly below
-// the nav row (6.6rem, .bot-builder's live-measured value, bb78d90) - and
-// never reaches tab content: the nav row is 5rem tall from 1.6rem, the dock
-// 4rem tall, centred in it. Aligned to the nav row's right edge (1.6rem in).
-// Under the account dropdown (account-switcher.scss, 1000). While the panel
-// is open the full Run bar is the panel's top row instead (run-panel.scss
-// .run-panel__run-bar).
-.run-dock {
+// Desktop Run bar (run-strategy.tsx): ONE fixed spot on every tab, run panel
+// open or closed. It floats, so it takes no height and every tab still starts
+// directly below the nav row. position: absolute against .bot-dashboard, which
+// never scrolls, so tab content scrolling can't move it; it is not inside the
+// panel, so the panel's slide can't either.
+//
+// The numbers put it on the open panel's top row: --run-panel-width less the
+// 16px drawer toggle and an 8px gutter each side, and centred in the empty
+// .run-panel__run-bar-slot (run-panel.scss), which stays in the panel so
+// Summary / Transactions / Journal start below it. Physical right, like
+// .run-panel__container. Over the panel (6), under the account dropdown
+// (account-switcher.scss, 1000). The tabs whose own controls would sit under
+// it start at --tab-below-run-bar instead (app.scss).
+.run-strategy-bar {
     position: absolute;
-    top: 2.1rem;
-    inset-inline-end: 1.6rem;
+    top: 7.45rem;
+    right: 0.8rem;
     z-index: 30;
+    width: calc(var(--run-panel-width) - 3.2rem);
 
-    // Compact: the pill keeps NORMAL / FAST and its toggle; the "Execution"
-    // word only shows where the row has room for it (tabs end at ~1098px).
-    .execution-mode {
-        flex: 0 0 auto;
-    }
-
-    @media (max-width: 1599px) {
-        .execution-mode__label {
-            display: none;
-        }
-    }
-}
-
-// Room for the dock next to the 8 nav tabs on 1280-1439px laptops: 1.4rem
-// instead of 2rem each side (96px), so the tabs end ~1002px and the compact
-// dock (up to ~235px with the "no bot yet" info icon) still fits at 1280.
-@media (min-width: 1280px) and (max-width: 1439px) {
-    .main__container .dc-tabs__item.dc-tabs__item--main__tabs {
-        padding: 0 1.4rem;
+    // Opaque, in the panel's own colour: with the panel closed the bar sits
+    // on top of tab content.
+    .animation__wrapper {
+        border-radius: 4px;
+        background-color: var(--general-main-2);
     }
 }
 

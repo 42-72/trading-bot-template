@@ -10,19 +10,20 @@ export type TPoint = { x: number; y: number };
 
 const EDGE_GAP = 8;
 
-// Header, desktop nav tab row (it holds the compact Run dock while the run
-// panel is closed, run-strategy.tsx - desktop layout only, from 1280px, so
-// phones and tablets keep their bounds), desktop run panel column with its
-// toggle (run-panel.tsx; the open panel's Run bar is its top row), desktop
-// footer, mobile run bar (.controls__section), and the run drawer's toggle
-// bar on its own: below 1280px the closed drawer's container measures 0 tall
-// while its full-width ▲ toggle bar still shows, so the container alone
-// missed it. The toggle bar gets a 12px gap (clampToBounds adds EDGE_GAP, the
-// rest is added here).
+// Header, desktop Run bar (run-strategy.tsx; it only exists from 1280px, so
+// phones and tablets keep their bounds), run panel column with its toggle
+// (run-panel.tsx; below 1280px only, see getSafeBounds), desktop footer, mobile
+// run bar (.controls__section), and the run drawer's toggle bar on its own:
+// below 1280px the closed drawer's container measures 0 tall while its
+// full-width ▲ toggle bar still shows, so the container alone missed it. The
+// toggle bar gets a 12px gap (clampToBounds adds EDGE_GAP, the rest is added
+// here). top_band: caps the top like a band across the screen, whatever its
+// width - the Run bar floats at the right end, and below it is the only place
+// that keeps the button clear of both it and the nav row above it.
 const DESKTOP_LAYOUT_MIN_WIDTH = 1280;
-const BLOCKERS: { selector: string; gap: number; min_width?: number }[] = [
+const BLOCKERS: { selector: string; gap: number; top_band?: boolean }[] = [
     { selector: '.deriv-header', gap: EDGE_GAP },
-    { selector: '.dc-tabs__list--main__tabs', gap: EDGE_GAP, min_width: DESKTOP_LAYOUT_MIN_WIDTH },
+    { selector: '.run-strategy-bar', gap: EDGE_GAP, top_band: true },
     { selector: '.run-panel__container', gap: EDGE_GAP },
     { selector: '.dc-drawer__toggle', gap: 12 },
     { selector: '.app-footer', gap: EDGE_GAP },
@@ -56,27 +57,30 @@ export const isRunDrawerOpen = (fallback: boolean) => {
 /**
  * `ignore_run_drawer`: leave the run drawer out (the mobile AI panel when the
  * drawer is open - it covers the whole screen and would leave no room).
+ * From 1280px the run panel never counts: the AI button keeps its spot at the
+ * bottom right of the screen and floats over the panel when that is open, so
+ * opening the panel can't move it (ai-scanner.scss). The AI panel doesn't use
+ * these bounds at those widths.
  */
 export const getSafeBounds = ({ ignore_run_drawer = false } = {}): TBounds => {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const bounds: TBounds = { top: 0, left: 0, right: vw, bottom: vh };
+    const skip_run_drawer = ignore_run_drawer || vw >= DESKTOP_LAYOUT_MIN_WIDTH;
 
-    BLOCKERS.forEach(({ selector, gap, min_width = 0 }) => {
-        if (vw < min_width) return;
-        if (ignore_run_drawer && (selector === '.run-panel__container' || selector === '.dc-drawer__toggle')) return;
+    BLOCKERS.forEach(({ selector, gap, top_band = false }) => {
+        if (skip_run_drawer && (selector === '.run-panel__container' || selector === '.dc-drawer__toggle')) return;
         const extra = gap - EDGE_GAP;
         document.querySelectorAll(selector).forEach(element => {
             const rect = visibleRect(element);
             if (!rect) return;
-            if (rect.width >= vw * 0.6) {
+            if (top_band || rect.width >= vw * 0.6) {
                 // A band across the screen: it caps the top or the bottom,
                 // whichever half it's in.
                 if (rect.top + rect.height / 2 < vh / 2) bounds.top = Math.max(bounds.top, rect.bottom + extra);
                 else bounds.bottom = Math.min(bounds.bottom, rect.top - extra);
             } else if (rect.right >= vw - 1) {
-                // A column on the right (the desktop run panel, or just its
-                // toggle sliver when closed).
+                // A column on the right.
                 bounds.right = Math.min(bounds.right, rect.left - extra);
             }
         });
@@ -102,9 +106,8 @@ export const WIDE_MIN_WIDTH = 768;
 export const isWideScreen = () => window.innerWidth >= WIDE_MIN_WIDTH;
 
 /**
- * Bottom-right of the content area on every screen: on a desktop / laptop
- * (>= 768px) left of the run panel column and above the footer, on a phone
- * above the run bar - `bounds` already leaves those out.
+ * Bottom-right on every screen: on a desktop / laptop above the footer, on a
+ * phone above the run bar - `bounds` already leaves those out.
  */
 export const defaultPosition = (size: number, bounds: TBounds): TPoint => ({
     x: bounds.right - 2 * EDGE_GAP - size,

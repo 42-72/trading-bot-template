@@ -162,15 +162,12 @@ const DrawerContent = ({ active_index, is_drawer_open, active_tour, setActiveTab
         );
     }
 
-    // Desktop: Run bar, scrollable tabs and stats as one flex column. The bar
-    // slot is always there, so nothing moves while the panel slides; its
-    // controls render only while the panel is open - closed, the compact dock
-    // in the nav row has them (run-strategy.tsx), never both at once.
+    // Desktop: scrollable tabs and stats as one flex column, below an empty
+    // row. The Run bar (run-strategy.tsx) floats over that row and never moves
+    // with the panel, so with the panel open it reads as the panel's top row.
     return (
         <div className='run-panel__layout'>
-            <div className='run-panel__run-bar' data-testid='dt_run_panel_run_bar'>
-                {is_drawer_open && <TradeAnimation className='run-panel__run-bar-animation' />}
-            </div>
+            <div className='run-panel__run-bar-slot' data-testid='dt_run_panel_run_bar_slot' />
             <div className='run-panel__scroll'>{tabs}</div>
             {stats}
         </div>
@@ -307,11 +304,7 @@ const RunPanel = observer(() => {
     // switch or running-state change; a manual chevron toggle in between
     // is respected until the next one of those changes resets it to that
     // tab's own default - deliberate, not an oversight, since "hidden by
-    // default on every other tab" is the explicit requirement. Does NOT
-    // replace the RUN_BAR_HIDDEN_TABS checks (run-strategy.tsx, the desktop
-    // early return below, MobileDrawerFooter) (Tbots/DTrader specifically hide the Run
-    // button itself, a separate, narrower concern from this tab's
-    // panel-visibility default).
+    // default on every other tab" is the explicit requirement.
     React.useEffect(() => {
         if (!isDesktop) return;
         toggleDrawer(is_running || active_tab === BOT_BUILDER);
@@ -347,12 +340,9 @@ const RunPanel = observer(() => {
         />
     );
 
-    // Desktop: mounts on every tab except RUN_BAR_HIDDEN_TABS (Tbots,
-    // DTrader), where neither the Run bar nor the panel is shown. On the
-    // other tabs see the effect above for default visibility (collapsed vs
-    // shown) - the Drawer's chevron stays reachable so a collapsed panel can
-    // still be opened manually.
-    if (isDesktop && RUN_BAR_HIDDEN_TABS.includes(active_tab)) return null;
+    // Desktop: mounts on every tab, see the effect above for default
+    // visibility (collapsed vs shown) - the Drawer's chevron stays reachable
+    // so a collapsed panel can still be opened manually.
     if (active_tour === 'bot_builder') return null;
 
     // Phones, Tbots / DTrader: the drawer (and its handle) is hidden so the tab
@@ -386,7 +376,7 @@ const RunPanel = observer(() => {
                 </Drawer>
                 {/* Prefer not rendering at all over hiding with CSS, so a hidden
                     button can never be clicked - same rule as the desktop
-                    strip in run-strategy.tsx, applied here to .controls__section.
+                    bar in run-strategy.tsx, applied here to .controls__section.
                     Position/styling of .controls__section itself is untouched. */}
                 {!isDesktop && !RUN_BAR_HIDDEN_TABS.includes(active_tab) && <MobileDrawerFooter />}
             </div>

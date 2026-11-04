@@ -519,11 +519,9 @@ const AppWrapper = observer(() => {
                 </div>
             </div>
             <DesktopWrapper>
-                {/* Desktop Run controls: with the run panel open, the Run bar is
-                    the panel's top row (RunPanel); closed, RunStrategy docks a
-                    compact Run + Execution control at the right end of the nav
-                    row. Neither takes height - every tab starts directly below
-                    the nav row. */}
+                {/* Desktop Run bar: floats in one fixed spot on every tab, run panel
+                    open or closed, at the height of the panel's top row. It takes
+                    no height - every tab starts directly below the nav row. */}
                 <div className='main__run-strategy-wrapper'>
                     <RunStrategy />
                     <RunPanel />

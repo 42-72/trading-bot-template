@@ -5,10 +5,14 @@
 // display:none rather than unmounted so the DTrader frame survives tab
 // switches. On phone it uses the same tab-content height, and
 // .iframe-wrapper's own mobile padding keeps the frame above the run drawer bar.
+//
+// Desktop: starts below the floating Run bar, not at the nav row (6.6rem) -
+// DTrader's own top row (trade types, account) is cross-origin, so it can't
+// move out of the bar's way and would sit under it.
 .dtrader-panel {
     display: none;
     position: absolute;
-    top: 6.6rem;
+    top: var(--tab-below-run-bar);
     bottom: 0;
     inset-inline-start: 0;
     inset-inline-end: 0;

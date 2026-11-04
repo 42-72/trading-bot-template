@@ -18,6 +18,13 @@
         &:hover {
             background-color: var(--purchase-main-1) !important;
         }
+
+        // Same look as the "no bot yet" Run (trade-animation.tsx). Inert here
+        // too: api-base's toggleRunButton can clear the disabled attribute.
+        &--locked {
+            opacity: 0.5;
+            pointer-events: none;
+        }
     }
 
     &__stop-button {

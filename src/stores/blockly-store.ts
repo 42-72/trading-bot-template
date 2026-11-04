@@ -26,6 +26,13 @@ export default class BlocklyStore {
 
     // Computed property to check if there's an active bot
     get has_active_bot(): boolean {
+        return this.hasWorkspaceBlocks();
+    }
+
+    // The same check, read fresh. The workspace is not observable, so the
+    // computed above stays cached for as long as something observes it - which
+    // for the always-mounted desktop Run bar would be forever.
+    hasWorkspaceBlocks(): boolean {
         // Check if there's an active bot in the workspace
         const workspace = window.Blockly?.derivWorkspace;
         if (!workspace) return false;

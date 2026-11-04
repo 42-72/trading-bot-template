@@ -27,8 +27,11 @@ type TTradeAnimation = {
 const TradeAnimation = observer(({ className, tooltip_alignment }: TTradeAnimation) => {
     const { dashboard, run_panel, blockly_store } = useStore();
     const { active_tab } = dashboard;
-    const { has_active_bot, has_saved_bots } = blockly_store;
-    const { isMobile } = useDevice();
+    const { has_saved_bots } = blockly_store;
+    const { isDesktop, isMobile } = useDevice();
+    // The desktop bar never remounts, so it reads this fresh on every render
+    // (each tab change); below 1280px it stays as it was.
+    const has_active_bot = isDesktop ? blockly_store.hasWorkspaceBlocks() : blockly_store.has_active_bot;
 
     const { contract_stage, is_stop_button_visible, is_stop_button_disabled, onRunButtonClick, onStopBotClick } =
         run_panel;
@@ -84,9 +87,15 @@ const TradeAnimation = observer(({ className, tooltip_alignment }: TTradeAnimati
     const has_no_bots = !has_active_bot && !has_saved_bots;
     const is_bot_builder_tab = active_tab === DBOT_TABS.BOT_BUILDER;
 
+    // Bots aren't started from the Dashboard, loaded or not. Only Run: once a
+    // bot or the AI Scanner is running, Stop works here as everywhere. A scanner
+    // run starts through the store, not this button.
+    const is_run_locked = active_tab === DBOT_TABS.DASHBOARD && !is_stop_button_visible;
+
     // Disable the RUN button if:
     // 1. There are no active or saved bots AND the user is not in the bot builder tab
-    const should_disable_run = has_no_bots && !is_bot_builder_tab;
+    // 2. It's the Dashboard
+    const should_disable_run = (has_no_bots && !is_bot_builder_tab) || is_run_locked;
 
     const is_disabled = is_stop_button_visible ? false : shouldDisable || should_disable_run;
 
@@ -173,10 +182,13 @@ const TradeAnimation = observer(({ className, tooltip_alignment }: TTradeAnimati
             ) : (
                 <Button
                     is_disabled={(is_disabled && !is_unavailable_for_payment_agent) || contract_stage === 3}
-                    className={button_props.class}
+                    className={classNames(button_props.class, { 'animation__run-button--locked': is_run_locked })}
                     id={button_props.id}
                     icon={button_props.icon}
                     onClick={() => {
+                        // Not only is_disabled: api-base's toggleRunButton sets
+                        // the button's disabled attribute directly.
+                        if (is_run_locked) return;
                         setShouldDisable(true);
                         if (is_stop_button_visible) {
                             onStopBotClick();

@@ -1,11 +1,16 @@
+@use 'components/shared/styles/mixins' as *;
+
 // AI Scanner (ai-scanner.tsx). CharlesTraders brand colours (brand.config.json
 // -> --brand-* in _themes.scss) on the app's own theme tokens, so light and
 // dark both work. 1rem = 10px. Positions come from JS (ai-scanner-layout.ts,
 // measured live), which is why left/top/bottom are inline styles here.
 
 // The button: over the page content, under modals (--zindex-modal: 6) and
-// the Run controls; it never overlaps those anyway.
+// the Run controls; it never overlaps those anyway. From 1280px it stays at
+// the bottom right over the open run panel (6), so one above that, still
+// under the Run bar (30).
 $ai-scanner-z: 5;
+$ai-scanner-z-desktop: 7;
 
 // The panel, on every screen: over the Run bar (main.scss, toolbar: 100),
 // the run panel and the run drawer (5-20), but under everything the app
@@ -37,6 +42,10 @@ $ai-scanner-panel-z: 998;
     transition:
         box-shadow 0.2s ease,
         transform 0.2s ease;
+
+    @include desktop-screen {
+        z-index: $ai-scanner-z-desktop;
+    }
 
     &:hover {
         box-shadow: 0 0.6rem 1.6rem rgb(15 23 42 / 40%);

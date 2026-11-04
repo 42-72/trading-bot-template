@@ -21,9 +21,10 @@
 // exactly. Hidden with display:none rather than unmounted, so the iframe
 // (and its chart state) is preserved.
 //
-// On desktop the Run strip (main.scss) reserves its own band under the nav
-// row, and dashboard.scss moves this panel's top down by that band while the
-// strip renders - so the strip never covers it.
+// Desktop: starts below the floating Run bar, not at the nav row (6.6rem) -
+// the chart's own toolbar ends in Save / settings / fullscreen / snapshot at
+// its top-right, inside a cross-origin frame, so they can't move out of the
+// bar's way and would sit under it.
 //
 // inset-inline-start/end are 0 (not the same +1.6rem pattern top used to
 // follow) - the chart should be edge to edge (measured: it was inset 32px
@@ -34,7 +35,7 @@
 .tradingview-panel {
     display: none;
     position: absolute;
-    top: 6.6rem;
+    top: var(--tab-below-run-bar);
     bottom: 0;
     inset-inline-start: 0;
     inset-inline-end: 0;
@@ -72,8 +73,7 @@
 // edge flush with the wrapper's (otherwise the negative margin would leave
 // an equal-sized empty gap at the bottom). The clip is deliberate: the
 // banner is Deriv's branding and this is a white-label site, so hidden is
-// the intended result - not a side effect of anything sitting on top of it
-// (the floating Run bar that used to cover this spot no longer exists).
+// the intended result - not a side effect of anything sitting on top of it.
 // Desktop-only (min-width: 1280px) - see the block below for narrower
 // widths.
 @include desktop-screen {
