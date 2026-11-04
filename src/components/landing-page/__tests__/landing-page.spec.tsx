@@ -1,5 +1,5 @@
 import { session_status } from '@/utils/session-status';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import LandingPage from '..';
 
 let mock_api_base = { isAuthorizing: false, activeLoginid: '' };
@@ -35,6 +35,15 @@ describe('LandingPage', () => {
         const chart = container.querySelector('.landing-page__chart');
         expect(chart).toHaveAttribute('aria-hidden', 'true');
         expect(chart?.querySelector('animate, animateTransform')).toBeNull();
+    });
+
+    it('keeps the short risk bullet, and the way in without an account still works', () => {
+        const { container } = render(<LandingPage />);
+        expect(screen.getByText('Trade at your own risk')).toBeInTheDocument();
+        expect(screen.queryByText(/Past performance/)).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Continue without an account' }));
+        expect(container).toBeEmptyDOMElement();
     });
 
     it('never flashes up during a demo <-> real switch (old account cleared, new one not in yet)', () => {

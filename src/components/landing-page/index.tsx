@@ -184,15 +184,11 @@ const LandingPage = observer(() => {
                         </li>
                     ))}
                 </ul>
-
-                <p className='landing-page__risk'>
-                    <Localize i18n_default_text='Trading involves risk and you can lose more than you put in. Past performance does not guarantee future results. Practise with a demo account first.' />
-                </p>
-
-                <button type='button' className='landing-page__dismiss' onClick={handleDismiss}>
-                    <Localize i18n_default_text='Continue without an account' />
-                </button>
             </div>
+
+            <button type='button' className='landing-page__dismiss' onClick={handleDismiss}>
+                <Localize i18n_default_text='Continue without an account' />
+            </button>
         </div>
     );
 });

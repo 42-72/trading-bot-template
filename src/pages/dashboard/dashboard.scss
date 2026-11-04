@@ -410,6 +410,19 @@
         width: 100%;
         max-width: 134rem;
         margin: auto;
+
+        // Four cards just fill a 1280-1366 screen: this keeps space either side.
+        // (On a 1920 laptop at 150% display scaling the page is 1280 wide.)
+        @container (min-width: 820px) {
+            max-width: min(134rem, 90%);
+        }
+    }
+}
+
+// Beside an open run panel the space is already tight.
+.tab__dashboard__content--panel-open .dashboard-home__inner {
+    @container (min-width: 820px) {
+        max-width: none;
     }
 }
 
@@ -466,6 +479,12 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-auto-rows: 1fr;
     gap: 1.2rem;
+
+    // An open run panel can leave a laptop only room for two across.
+    @include desktop-screen {
+        grid-template-columns: repeat(2, minmax(0, 31rem));
+        justify-content: center;
+    }
 
     // At most 31rem each, centred as a group; they narrow only if the screen or
     // an open run panel leaves less.

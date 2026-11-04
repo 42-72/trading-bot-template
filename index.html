@@ -76,10 +76,11 @@
 
             /* Market illustration, animated only by transforms and opacity: those run off the
                main thread, so it stays smooth while the app's code starts and costs that
-               start-up nothing (animating strokes would repaint every frame). Two covers
-               slide off the drawing: one in steps, a candle at a time, and one smoothly for
-               the line. Each hides what lies under it, hence candles < stepped cover < line <
-               cover, with the grid above both so it shows from the start. */
+               start-up nothing (animating strokes would repaint every frame). The left half
+               shows from the start; two covers slide off the right half: one in steps, a
+               candle at a time, and one smoothly for the line. Each hides what lies under it,
+               hence candles < stepped cover < line < cover, with the grid above both. The
+               app waits for this draw to end (src/utils/boot-splash.ts), so keep it short. */
             #mw-boot-splash .chart {
                 position: absolute;
                 inset: 0;
@@ -102,7 +103,7 @@
                 position: absolute;
                 inset: 0;
                 background: #0e0e0e;
-                animation: mw-boot-draw 7s linear both;
+                animation: mw-boot-draw 1.8s linear both;
             }
             #mw-boot-splash .chart .cover::before {
                 content: '';
@@ -113,10 +114,10 @@
                 width: 1.2rem;
                 background: linear-gradient(90deg, transparent, #0e0e0e);
             }
-            /* 40 steps of 30 drawing units: one candle each. The soft edge, one step wide,
+            /* 20 steps of 30 drawing units: one candle each. The soft edge, one step wide,
                brings each candle in over two steps rather than at once. */
             #mw-boot-splash .chart .cover.step {
-                animation-timing-function: steps(40, end);
+                animation-timing-function: steps(20, end);
             }
             #mw-boot-splash .chart .cover.step::before {
                 width: 2.5%;
@@ -128,7 +129,7 @@
                 position: absolute;
                 inset: 0;
                 transform: translate(93.75%, 23.88%);
-                animation: mw-boot-pt 7s linear both;
+                animation: mw-boot-pt 1.8s linear both;
             }
             #mw-boot-splash .chart .pt::before,
             #mw-boot-splash .chart .pt::after {
@@ -146,7 +147,9 @@
             }
             #mw-boot-splash .chart .pt::after {
                 background: #5b86ad;
-                animation: mw-boot-pulse 1.6s ease-out infinite;
+                opacity: 0;
+                /* Starts as the dot reaches the last price. */
+                animation: mw-boot-pulse 1.2s ease-out 1.57s infinite;
             }
             #mw-boot-splash .chart .fade {
                 position: absolute;
@@ -208,6 +211,9 @@
                 }
             }
             @keyframes mw-boot-draw {
+                from {
+                    transform: translateX(50%);
+                }
                 to {
                     transform: translateX(100%);
                 }
@@ -224,120 +230,60 @@
             }
             @keyframes mw-boot-pt {
                 0% {
-                    transform: translate(1.25%, 73.63%);
+                    transform: translate(50%, 18.81%);
                 }
-                1.25% {
-                    transform: translate(1.25%, 73.63%);
-                }
-                3.75% {
-                    transform: translate(3.75%, 77.88%);
-                }
-                6.25% {
-                    transform: translate(6.25%, 85.13%);
-                }
-                8.75% {
-                    transform: translate(8.75%, 85.13%);
-                }
-                11.25% {
-                    transform: translate(11.25%, 80.25%);
-                }
-                13.75% {
-                    transform: translate(13.75%, 69.38%);
-                }
-                16.25% {
-                    transform: translate(16.25%, 56.38%);
-                }
-                18.75% {
-                    transform: translate(18.75%, 43.88%);
-                }
-                21.25% {
-                    transform: translate(21.25%, 37%);
-                }
-                23.75% {
-                    transform: translate(23.75%, 31.38%);
-                }
-                26.25% {
-                    transform: translate(26.25%, 29.38%);
-                }
-                28.75% {
-                    transform: translate(28.75%, 36.13%);
-                }
-                31.25% {
-                    transform: translate(31.25%, 27.38%);
-                }
-                33.75% {
-                    transform: translate(33.75%, 20.25%);
-                }
-                36.25% {
-                    transform: translate(36.25%, 15.13%);
-                }
-                38.75% {
-                    transform: translate(38.75%, 13.88%);
-                }
-                41.25% {
-                    transform: translate(41.25%, 20.63%);
-                }
-                43.75% {
-                    transform: translate(43.75%, 22.75%);
-                }
-                46.25% {
-                    transform: translate(46.25%, 24.25%);
-                }
-                48.75% {
-                    transform: translate(48.75%, 18.13%);
-                }
-                51.25% {
+                2.5% {
                     transform: translate(51.25%, 19.5%);
                 }
-                53.75% {
+                7.5% {
                     transform: translate(53.75%, 26.5%);
                 }
-                56.25% {
+                12.5% {
                     transform: translate(56.25%, 30.75%);
                 }
-                58.75% {
+                17.5% {
                     transform: translate(58.75%, 30.75%);
                 }
-                61.25% {
+                22.5% {
                     transform: translate(61.25%, 25.38%);
                 }
-                63.75% {
+                27.5% {
                     transform: translate(63.75%, 15.75%);
                 }
-                66.25% {
+                32.5% {
                     transform: translate(66.25%, 18.38%);
                 }
-                68.75% {
+                37.5% {
                     transform: translate(68.75%, 21.75%);
                 }
-                71.25% {
+                42.5% {
                     transform: translate(71.25%, 29%);
                 }
-                73.75% {
+                47.5% {
                     transform: translate(73.75%, 33.88%);
                 }
-                76.25% {
+                52.5% {
                     transform: translate(76.25%, 36.13%);
                 }
-                78.75% {
+                57.5% {
                     transform: translate(78.75%, 41.63%);
                 }
-                81.25% {
+                62.5% {
                     transform: translate(81.25%, 59%);
                 }
-                83.75% {
+                67.5% {
                     transform: translate(83.75%, 74%);
                 }
-                86.25% {
+                72.5% {
                     transform: translate(86.25%, 87.75%);
                 }
-                88.75% {
+                77.5% {
                     transform: translate(88.75%, 83.38%);
                 }
-                91.25% {
+                82.5% {
                     transform: translate(91.25%, 52.25%);
                 }
-                93.75% {
+                87.5% {
                     transform: translate(93.75%, 23.88%);
                 }
                 100% {

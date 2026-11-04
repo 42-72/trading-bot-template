@@ -4,6 +4,7 @@
     z-index: 10000;
     overflow-y: auto;
     display: flex;
+    flex-direction: column;
     padding: 4rem 2rem;
     background-color: #0e0e0e;
 
@@ -242,8 +243,7 @@
 
         // The caution item is not a capability claim — no green marker, so it doesn't
         // read as though risk is being sold as a feature. Text stays the same colour
-        // as the rest of the row so it doesn't become a second warning competing with
-        // the risk line below.
+        // as the rest of the row.
         &-item--caution {
             padding-inline-start: 0;
         }
@@ -257,19 +257,14 @@
         }
     }
 
-    &__risk {
-        max-width: 56rem;
-        margin-top: 1rem;
-        padding-top: 1.6rem;
-        border-top: 1px solid #94a3b82e;
-        font-size: 1.1rem;
-        // Left at #94a3b8 (~7.5:1 on #0e0e0e) — comfortably above the 4.5:1 floor this
-        // text is required to hold, and above the #64748b lower bound.
-        color: #94a3b8;
-        animation: landing-enter 500ms ease-out 350ms both;
-    }
-
+    // Apart from the rest: the content's auto margins push it to the bottom.
     &__dismiss {
+        position: relative;
+        z-index: 1;
+        flex-shrink: 0;
+        align-self: center;
+        margin-top: 2.4rem;
+        margin-bottom: env(safe-area-inset-bottom);
         padding: 0.3rem 0.8rem;
         // Same backdrop approach as the badge: at narrow widths this link falls past
         // the vignette's transparent stop into clear rain (measured 2.52:1 at 381px,
@@ -337,7 +332,6 @@
     .landing-page__headline,
     .landing-page__ctas,
     .landing-page__facts,
-    .landing-page__risk,
     .landing-page__dismiss {
         animation: none;
         opacity: 1;
