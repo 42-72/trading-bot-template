@@ -20,18 +20,23 @@ const readIdleLoggedOut = () => {
  *                     session_expired: persistent until the trader logs in.
  *   is_idle_logged_out - this tab was logged out for being away (utils/idle-logout.ts):
  *                     it stays on its page, not the landing page, until the next login.
+ *   is_landing_shown - the landing page is on screen: the visitor isn't in the app yet,
+ *                     so the app's own loaders keep out of sight.
  */
 class SessionStatus {
     is_reconnecting = false;
     notice: TSessionNotice = null;
     is_idle_logged_out = readIdleLoggedOut();
+    is_landing_shown = false;
 
     constructor() {
         makeObservable(this, {
             is_reconnecting: observable,
             notice: observable,
             is_idle_logged_out: observable,
+            is_landing_shown: observable,
             setReconnecting: action,
+            setLandingShown: action,
             setIdleLoggedOut: action,
             setNotice: action,
             dismissNotice: action,
@@ -40,6 +45,10 @@ class SessionStatus {
 
     setReconnecting = (is_reconnecting: boolean) => {
         this.is_reconnecting = is_reconnecting;
+    };
+
+    setLandingShown = (is_landing_shown: boolean) => {
+        this.is_landing_shown = is_landing_shown;
     };
 
     /** Kept in sessionStorage too: a reload must not bring the landing page back. */

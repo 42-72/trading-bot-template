@@ -37,6 +37,28 @@ describe('LandingPage', () => {
         expect(chart?.querySelector('animate, animateTransform')).toBeNull();
     });
 
+    it('tells the app while it is on screen, so the app keeps its loaders away', () => {
+        const { unmount } = render(<LandingPage />);
+        expect(session_status.is_landing_shown).toBe(true);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Continue without an account' }));
+        expect(session_status.is_landing_shown).toBe(false);
+
+        unmount();
+        sessionStorage.clear();
+        const { unmount: leave } = render(<LandingPage />);
+        expect(session_status.is_landing_shown).toBe(true);
+        leave();
+        expect(session_status.is_landing_shown).toBe(false);
+    });
+
+    it('does not claim the screen for a logged-in trader', () => {
+        localStorage.setItem('active_loginid', 'CR1');
+        mock_api_base = { isAuthorizing: false, activeLoginid: 'CR1' };
+        render(<LandingPage />);
+        expect(session_status.is_landing_shown).toBe(false);
+    });
+
     it('keeps the short risk bullet, and the way in without an account still works', () => {
         const { container } = render(<LandingPage />);
         expect(screen.getByText('Trade at your own risk')).toBeInTheDocument();

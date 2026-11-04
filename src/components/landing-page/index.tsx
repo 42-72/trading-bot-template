@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { observer } from 'mobx-react-lite';
 import { useApiBase } from '@/hooks/useApiBase';
 import { useAuthActions } from '@/hooks/useAuthActions';
@@ -114,6 +114,12 @@ const LandingPage = observer(() => {
     // This page is a full screen of its own: the start-up splash makes way for it.
     useEffect(() => {
         if (!is_hidden) hideBootSplash('landing page');
+    }, [is_hidden]);
+
+    // Before paint, so a loader already up never gets a frame over this page.
+    useLayoutEffect(() => {
+        session_status.setLandingShown(!is_hidden);
+        return () => session_status.setLandingShown(false);
     }, [is_hidden]);
 
     if (is_hidden) return null;
