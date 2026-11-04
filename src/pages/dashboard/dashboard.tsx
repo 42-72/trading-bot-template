@@ -1,70 +1,51 @@
 import React from 'react';
 import classNames from 'classnames';
 import { observer } from 'mobx-react-lite';
-import Text from '@/components/shared_ui/text';
+import { getSavedWorkspaces } from '@/external/bot-skeleton';
 import { useStore } from '@/hooks/useStore';
-import { localize } from '@deriv-com/translations';
 import { useDevice } from '@deriv-com/ui';
-import Announcements from './announcements';
 import Cards from './cards';
+import Motto from './motto';
+// Not only the old bot list: it also styles the Load modal and other dialogs.
+import './bot-list/index.scss';
 
-type TMobileIconGuide = {
-    handleTabChange: (active_number: number) => void;
-};
+const DashboardComponent = observer(() => {
+    const { load_modal, dashboard, run_panel } = useStore();
+    const { setDashboardStrategies } = load_modal;
+    const { active_tour, setStrategySaveType, strategy_save_type } = dashboard;
+    const { isDesktop } = useDevice();
 
-const DashboardComponent = observer(({ handleTabChange }: TMobileIconGuide) => {
-    const { load_modal, dashboard, client } = useStore();
-    const { dashboard_strategies } = load_modal;
-    const { active_tour } = dashboard;
-    const has_dashboard_strategies = !!dashboard_strategies?.length;
-    const { isDesktop, isTablet } = useDevice();
+    // The list is gone from this page, but the Run button, the page title and
+    // the Save file name still read the saved bots from this store.
+    React.useEffect(() => {
+        setStrategySaveType('');
+        const getStrategies = async () => {
+            setDashboardStrategies(await getSavedWorkspaces());
+        };
+        getStrategies();
+        // strategy_save_type changes when the save modal stores a bot.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [strategy_save_type]);
 
     return (
-        <React.Fragment>
+        <div
+            className={classNames('tab__dashboard', {
+                'tab__dashboard--tour-active': active_tour,
+            })}
+        >
             <div
-                className={classNames('tab__dashboard', {
-                    'tab__dashboard--tour-active': active_tour,
+                className={classNames('tab__dashboard__content', {
+                    'tab__dashboard__content--panel-open': isDesktop && run_panel.is_drawer_open,
                 })}
             >
-                <div className='tab__dashboard__content'>
-                    {client.is_logged_in && (
-                        <Announcements is_mobile={!isDesktop} is_tablet={isTablet} handleTabChange={handleTabChange} />
-                    )}
-                    <div className='quick-panel'>
-                        <div
-                            className={classNames('tab__dashboard__header', {
-                                'tab__dashboard__header--listed': isDesktop && has_dashboard_strategies,
-                            })}
-                        >
-                            {!has_dashboard_strategies && (
-                                <Text
-                                    className='title'
-                                    as='h2'
-                                    color='prominent'
-                                    size={isDesktop ? 'sm' : 's'}
-                                    lineHeight='xxl'
-                                    weight='bold'
-                                >
-                                    {localize('Load or build your bot')}
-                                </Text>
-                            )}
-                            <Text
-                                as='p'
-                                color='prominent'
-                                lineHeight='s'
-                                size={isDesktop ? 's' : 'xxs'}
-                                className={classNames('subtitle', { 'subtitle__has-list': has_dashboard_strategies })}
-                            >
-                                {localize(
-                                    'Import a bot from your computer or Google Drive, build it from scratch, or start with a quick strategy.'
-                                )}
-                            </Text>
-                        </div>
-                        <Cards has_dashboard_strategies={has_dashboard_strategies} is_mobile={!isDesktop} />
+                <div className='dashboard-home'>
+                    <div className='dashboard-home__inner'>
+                        <Motto />
+                        <Cards is_mobile={!isDesktop} />
                     </div>
                 </div>
             </div>
-        </React.Fragment>
+        </div>
     );
 });
 

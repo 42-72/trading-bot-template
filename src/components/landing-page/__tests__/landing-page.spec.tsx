@@ -30,6 +30,13 @@ describe('LandingPage', () => {
         expect(hideBootSplash).toHaveBeenCalledWith('landing page');
     });
 
+    it('draws the still market chart under the digits, hidden from screen readers', () => {
+        const { container } = render(<LandingPage />);
+        const chart = container.querySelector('.landing-page__chart');
+        expect(chart).toHaveAttribute('aria-hidden', 'true');
+        expect(chart?.querySelector('animate, animateTransform')).toBeNull();
+    });
+
     it('never flashes up during a demo <-> real switch (old account cleared, new one not in yet)', () => {
         localStorage.setItem('active_loginid', 'VRTC1');
         mock_store = { client: { is_account_regenerating: true } };

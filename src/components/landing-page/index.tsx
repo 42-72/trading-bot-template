@@ -7,6 +7,7 @@ import { hideBootSplash } from '@/utils/boot-splash';
 import { session_status } from '@/utils/session-status';
 import { Localize, localize } from '@deriv-com/translations';
 import DigitRain from './DigitRain';
+import MarketChart from './MarketChart';
 import './landing-page.scss';
 
 const DISMISS_KEY = 'ct-landing-dismissed';
@@ -130,6 +131,7 @@ const LandingPage = observer(() => {
 
     return (
         <div className='landing-page'>
+            <MarketChart />
             <DigitRain />
             <div className='landing-page__vignette' aria-hidden='true' />
 

@@ -74,6 +74,48 @@
                     sans-serif;
             }
 
+            /* Market illustration. The price line "draws" by a cover sliding off it: a
+               transform runs off the main thread, so it stays smooth while the app's code
+               starts and costs that start-up nothing (animating the stroke would repaint
+               on the main thread every frame). Hence line < cover < candles. */
+            #mw-boot-splash .chart {
+                position: absolute;
+                inset: 0;
+                overflow: hidden;
+                pointer-events: none;
+            }
+            #mw-boot-splash .chart svg {
+                position: absolute;
+                inset: 0;
+                width: 100%;
+                height: 100%;
+                fill: none;
+            }
+            /* The drawing stretches to the screen, so a phone sees the whole sweep. Thin
+               strokes keep their width; candle bodies narrow with it. */
+            #mw-boot-splash .chart path:not(.b) {
+                vector-effect: non-scaling-stroke;
+            }
+            #mw-boot-splash .chart .cover {
+                position: absolute;
+                top: 0;
+                bottom: 0;
+                left: -16rem;
+                width: calc(100% + 16rem);
+                background: linear-gradient(90deg, transparent, #0e0e0e 16rem);
+                animation: mw-boot-draw 9s linear forwards;
+            }
+            #mw-boot-splash .chart .fade {
+                position: absolute;
+                inset: 0;
+                background: radial-gradient(ellipse 34% 24% at center, #0e0e0ecc 35%, transparent);
+            }
+            #mw-boot-splash .wm,
+            #mw-boot-splash .tag,
+            #mw-boot-splash .bar {
+                position: relative;
+            }
+
             #mw-boot-splash .wm {
                 font-size: 3.2rem;
                 font-weight: 900;
@@ -122,7 +164,15 @@
                     transform: translateX(320%);
                 }
             }
+            @keyframes mw-boot-draw {
+                to {
+                    transform: translateX(100%);
+                }
+            }
             @media (prefers-reduced-motion: reduce) {
+                #mw-boot-splash .chart .cover {
+                    display: none;
+                }
                 #mw-boot-splash .bar::after {
                     animation: none;
                     width: 100%;
@@ -158,6 +208,26 @@
             })();
         </script>
         <div id="mw-boot-splash" role="status" aria-live="polite" aria-label="Loading CharlesTraders">
+            <!-- Same drawing as src/components/landing-page/MarketChart.tsx: change them together. -->
+            <div class="chart" aria-hidden="true">
+                <svg viewBox="0 0 1200 800" preserveAspectRatio="none">
+                    <path stroke="#5b86ad" stroke-opacity=".14" stroke-width="7" stroke-linejoin="round" d="M10 589L30 582L50 606L70 625L90 649L110 641L130 626L150 611L170 611L190 609L210 592L230 607L250 585L270 561L290 560L310 551L330 566L350 539L370 527L390 485L410 459L430 454L450 431L470 419L490 418L510 381L530 396L550 381L570 392L590 416L610 440L630 426L650 444L670 453L690 443L710 465L730 452L750 454L770 459L790 476L810 477L830 465L850 498L870 495L890 481L910 476L930 442L950 398L970 361L990 355L1010 337L1030 343L1050 338L1070 336L1090 331L1110 312L1130 317L1150 316L1170 298L1190 285" />
+                    <path stroke="#5b86ad" stroke-opacity=".5" stroke-width="2" stroke-linejoin="round" d="M10 589L30 582L50 606L70 625L90 649L110 641L130 626L150 611L170 611L190 609L210 592L230 607L250 585L270 561L290 560L310 551L330 566L350 539L370 527L390 485L410 459L430 454L450 431L470 419L490 418L510 381L530 396L550 381L570 392L590 416L610 440L630 426L650 444L670 453L690 443L710 465L730 452L750 454L770 459L790 476L810 477L830 465L850 498L870 495L890 481L910 476L930 442L950 398L970 361L990 355L1010 337L1030 343L1050 338L1070 336L1090 331L1110 312L1130 317L1150 316L1170 298L1190 285" />
+                </svg>
+                <div class="cover"></div>
+                <svg viewBox="0 0 1200 800" preserveAspectRatio="none">
+                    <path stroke="#3d5468" stroke-opacity=".2" d="M0 100H1200M0 200H1200M0 300H1200M0 400H1200M0 500H1200M0 600H1200M0 700H1200M100 0V800M200 0V800M300 0V800M400 0V800M500 0V800M600 0V800M700 0V800M800 0V800M900 0V800M1000 0V800M1100 0V800" />
+                    <g stroke="#0f7a55" stroke-opacity=".55" stroke-width="1.5">
+                        <path d="M10 565v40M30 562v39M110 632v34M130 615v53M150 587v50M170 588v44M190 578v59M210 578v50M250 572v64M270 549v61M290 548v24M310 541v34M350 519v70M370 511v37M390 470v65M410 440v62M430 432v39M450 404v70M470 400v63M490 411v26M510 371v61M550 361v53M630 411v47M690 412v58M730 428v66M830 440v63M870 464v65M890 455v55M910 451v55M930 422v70M950 384v73M970 350v68M990 341v45M1010 321v47M1050 330v20M1070 324v23M1090 302v43M1110 293v47M1150 288v55M1170 279v64M1190 274v53" />
+                        <path class="b" stroke-width="10" d="M10 589v4M30 582v6M110 641v8M130 626v15M150 611v15M170 611v4M190 609v4M210 592v17M250 585v23M270 561v23M290 560v4M310 551v9M350 539v27M370 527v12M390 485v42M410 459v26M430 454v5M450 431v23M470 419v12M490 418v4M510 381v37M550 381v15M630 426v15M690 443v10M730 452v13M830 465v12M870 495v4M890 481v14M910 476v5M930 442v33M950 398v45M970 361v37M990 355v6M1010 337v18M1050 338v5M1070 336v4M1090 331v4M1110 312v19M1150 316v4M1170 298v18M1190 285v13" />
+                    </g>
+                    <g stroke="#8c2233" stroke-opacity=".55" stroke-width="1.5">
+                        <path d="M50 574v57M70 591v48M90 600v71M230 572v41M330 532v57M530 350v60M570 350v59M590 362v66M610 396v51M650 407v54M670 419v55M710 416v68M750 422v46M770 448v30M790 450v35M810 446v43M850 442v73M1030 310v45M1130 283v42" />
+                        <path class="b" stroke-width="10" d="M50 582v24M70 606v18M90 625v24M230 592v16M330 551v15M530 381v15M570 381v11M590 392v24M610 416v24M650 426v18M670 444v9M710 443v22M750 452v4M770 454v5M790 459v17M810 476v4M850 465v33M1030 337v6M1130 312v5" />
+                    </g>
+                </svg>
+                <div class="fade"></div>
+            </div>
             <div class="wm"><span class="wm-charles">Charles</span><span class="wm-traders">Traders</span></div>
             <div class="tag">Automate your trades</div>
             <div class="bar" aria-hidden="true"></div>

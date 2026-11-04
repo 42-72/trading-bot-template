@@ -370,7 +370,7 @@ const AppWrapper = observer(() => {
                                 }
                                 id='id-dbot-dashboard'
                             >
-                                <Dashboard handleTabChange={handleTabChange} />
+                                <Dashboard />
                             </div>
                             <div
                                 label={

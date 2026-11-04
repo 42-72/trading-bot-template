@@ -173,52 +173,6 @@
             }
         }
 
-        &__header {
-            &--listed {
-                margin-bottom: 0.8rem;
-            }
-
-            @include mobile-screen {
-                height: auto;
-                margin-top: 0;
-            }
-
-            @include tablet-screen {
-                padding: 0.8rem;
-            }
-
-            .title {
-                text-align: center;
-                height: 7.2rem;
-
-                @include mobile-or-tablet-screen {
-                    height: auto;
-                }
-            }
-
-            .subtitle {
-                text-align: center;
-                margin-top: 1.6rem;
-                margin-bottom: 1rem;
-
-                &__has-list {
-                    text-align: center;
-                    margin-top: 0;
-
-                    @include mobile-or-tablet-screen {
-                        text-align: start;
-                        width: 85%;
-                    }
-
-                    @include tablet-screen {
-                        display: flex;
-                        justify-content: center;
-                        padding: 0.8rem 0;
-                    }
-                }
-            }
-        }
-
         &__content {
             display: flex;
             align-items: flex-start;
@@ -233,18 +187,20 @@
             }
 
             @include desktop-screen {
-                padding: 80px 216px 0;
+                padding: 0 2.4rem;
+                transition: padding 0.4s; // the run panel's own timing
+            }
+
+            // The open run panel lies over this page: the cards stay in the part left.
+            &--panel-open {
+                padding-inline-end: calc(var(--run-panel-width) + 2.4rem);
             }
 
             @include mobile-or-tablet-screen {
                 height: calc(100vh - 19rem); /* fallback for engines without svh */
                 height: calc(100svh - 19rem); /* see .main in main.scss */
                 align-items: flex-start;
-                padding: 1.6rem;
-            }
-
-            .quick-panel {
-                flex: 1 1 44%;
+                padding: 0 1.6rem;
             }
 
             .preview-panel {
@@ -369,100 +325,267 @@
                 width: 30%;
             }
         }
+    }
+}
 
-        &__table {
-            &--minimized {
-                width: 100%;
-            }
+// The Dashboard home: quote and quick-action cards. Scrolls inside itself so a
+// short screen never cuts anything off. The padding keeps it clear of the
+// floating Run bar (top right, laptop) and the AI button (bottom right).
+.dashboard-home {
+    --home-card-bg: linear-gradient(160deg, #1a1e22, #131619);
+    --home-card-border: #ffffff14;
+    --home-title: #f8fafc;
+    --home-text: #94a3b8;
+    --home-motto: #eef5f0;
+    --home-motto-glow: 0 0 1.6rem #22c55e38;
 
-            &__tiles {
-                @include flex-center(center, flex-start);
+    container-type: inline-size;
+    display: flex;
+    width: 100%;
+    height: 100%;
+    padding-block: 1.2rem 10.4rem;
+    overflow-y: auto;
 
-                word-wrap: break-word;
-                font-size: 1.3rem;
-                text-align: center;
-                padding: 2.2rem;
+    @include desktop-screen {
+        padding-block: 7.2rem 8.8rem;
+    }
 
-                @include mobile-screen {
-                    flex-wrap: wrap;
-                }
+    &__inner {
+        width: 100%;
+        max-width: 124rem;
+        margin: auto;
+    }
+}
 
-                @include tablet-screen {
-                    padding: 2.4rem 0 0;
-                }
+.theme--light .dashboard-home {
+    --home-card-bg: var(--general-main-2);
+    --home-card-border: var(--border-normal);
+    --home-title: var(--text-prominent);
+    --home-text: var(--text-general);
+    --home-motto: var(--text-prominent);
+    --home-motto-glow: none;
+}
 
-                &--minimized {
-                    align-items: flex-start;
+.dashboard-motto {
+    margin: 0 0 clamp(1.6rem, 4.5vh, 4.8rem);
+    text-align: center;
 
-                    @include mobile-or-tablet-screen {
-                        display: flex;
-                        flex-flow: unset;
-                        padding: 2.4rem 0 1.6rem;
-                    }
+    &__quote {
+        margin: 0;
+        font-family: 'Barlow Condensed', 'Arial Narrow', Arial, sans-serif;
+        font-size: clamp(4.4rem, 5.2vw, 7.2rem);
+        font-style: italic;
+        font-weight: 800;
+        line-height: 1.05;
+        letter-spacing: 0.01em;
+        color: var(--home-motto);
+        text-shadow: var(--home-motto-glow);
+        text-wrap: balance;
+    }
 
-                    @include mobile-screen {
-                        justify-content: space-around;
-                    }
-                }
-            }
+    &__signature {
+        margin-top: 0.8rem;
+        font-family: 'Mr Dafoe', 'Segoe Script', cursive;
+        font-size: clamp(2.2rem, 2vw, 2.8rem);
+        line-height: 1.2;
+        color: #4ade80;
+    }
+}
 
-            &__disabled-card {
-                pointer-events: none;
-                cursor: not-allowed;
-                opacity: 0.6;
-            }
+// Two across unless there is room for four, measured on the page itself so an
+// open run panel counts too.
+.dashboard-cards {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: 1fr;
+    gap: 1.2rem;
 
-            &__block {
-                @include flex-center;
+    @container (min-width: 820px) {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 2rem;
+    }
+}
 
-                flex-direction: column;
-                padding-inline-end: 4rem;
+.dashboard-card {
+    --accent: #22c55e;
+    --accent-soft: #22c55e1f;
 
-                @include mobile-or-tablet-screen {
-                    padding: 1rem;
-                }
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-height: 16rem;
+    padding: 1.6rem 1.4rem 1.2rem;
+    overflow: hidden;
+    border: 1px solid var(--home-card-border);
+    border-radius: 1.6rem;
+    background: var(--home-card-bg);
+    color: var(--home-title);
+    font-family: inherit;
+    text-align: start;
 
-                &:hover {
-                    cursor: pointer;
-                }
+    @container (min-width: 820px) {
+        min-height: clamp(21rem, 33vh, 30rem);
+        padding: 2.8rem 2.4rem 2.2rem;
+    }
 
-                span {
-                    width: 9.1rem;
-                    word-wrap: break-word;
-                    text-align: center;
+    // The accent line along the top edge.
+    &::before {
+        content: '';
+        position: absolute;
+        inset: 0 0 auto;
+        height: 0.3rem;
+        background: var(--accent);
+    }
 
-                    @include mobile-or-tablet-screen {
-                        height: auto;
-                    }
-                }
+    &--google-drive {
+        --accent: #3b82f6;
+        --accent-soft: #3b82f61f;
+    }
 
-                &--minimized {
-                    @include mobile-screen {
-                        width: 6.4rem;
-                    }
+    &--bot-builder {
+        --accent: #a855f7;
+        --accent-soft: #a855f71f;
+    }
 
-                    & .dc-text {
-                        width: 8rem;
-                        text-align: center;
-                    }
-                }
-            }
+    &--quick-strategy {
+        --accent: #f59e0b;
+        --accent-soft: #f59e0b1f;
+    }
 
-            &__images {
-                background-color: var(--general-section-1);
-                margin-bottom: 0.8rem;
-                border-radius: 0.8rem;
-                padding: 1.6rem;
+    &--unavailable {
+        opacity: 0.55;
+    }
 
-                &--minimized {
-                    @include mobile-or-tablet-screen {
-                        width: 6.4rem;
-                        height: 6.4rem;
-                        padding: 0.8rem;
-                    }
-                }
+    &__icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 4.8rem;
+        height: 4.8rem;
+        margin-bottom: 1rem;
+        border-radius: 1.2rem;
+        background: var(--accent-soft);
+
+        svg {
+            width: 3.2rem;
+            height: 3.2rem;
+        }
+
+        @container (min-width: 820px) {
+            width: 5.6rem;
+            height: 5.6rem;
+            margin-bottom: 1.4rem;
+            border-radius: 1.4rem;
+
+            svg {
+                width: 3.6rem;
+                height: 3.6rem;
             }
         }
+    }
+
+    &__title {
+        font-size: 1.7rem;
+        font-weight: 700;
+        line-height: 1.25;
+
+        @container (min-width: 820px) {
+            font-size: 2rem;
+        }
+    }
+
+    &__description {
+        margin-top: 0.6rem;
+        font-size: 1.3rem;
+        line-height: 1.4;
+        color: var(--home-text);
+
+        @container (min-width: 820px) {
+            font-size: 1.4rem;
+        }
+    }
+
+    &__open {
+        margin-top: auto;
+        padding-top: 0.8rem;
+        font-size: 1.3rem;
+        font-weight: 700;
+        color: var(--accent);
+
+        span {
+            display: inline-block;
+            transition: transform 0.18s ease;
+        }
+    }
+
+    &__arrow {
+        position: absolute;
+        top: 1.4rem;
+        inset-inline-end: 1.2rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 3rem;
+        height: 3rem;
+        border: 1px solid var(--home-card-border);
+        border-radius: 50%;
+        color: var(--home-text);
+        transition:
+            background-color 0.18s ease,
+            color 0.18s ease;
+
+        svg {
+            fill: none;
+            stroke: currentcolor;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+    }
+}
+
+// Only the pressable cards are buttons.
+button.dashboard-card {
+    cursor: pointer;
+    transition:
+        transform 0.18s ease,
+        border-color 0.18s ease,
+        box-shadow 0.18s ease;
+
+    &:hover {
+        transform: translateY(-0.3rem);
+        border-color: var(--accent);
+        box-shadow: 0 0.8rem 2.8rem var(--accent-soft);
+
+        .dashboard-card__open span {
+            transform: translateX(0.3rem);
+        }
+
+        .dashboard-card__arrow {
+            border-color: var(--accent);
+            background-color: var(--accent);
+            color: #0e0e0e;
+        }
+    }
+
+    &:active {
+        transform: scale(0.98);
+    }
+
+    &:focus-visible {
+        outline: 0.2rem solid var(--accent);
+        outline-offset: 0.2rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    button.dashboard-card,
+    button.dashboard-card:hover,
+    button.dashboard-card:active,
+    button.dashboard-card:hover .dashboard-card__open span {
+        transform: none;
+        transition: none;
     }
 }
 
