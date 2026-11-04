@@ -5,6 +5,7 @@ import { getSavedWorkspaces } from '@/external/bot-skeleton';
 import { useStore } from '@/hooks/useStore';
 import { useDevice } from '@deriv-com/ui';
 import Cards from './cards';
+import MarketBackdrop from './market-backdrop';
 import Motto from './motto';
 // Not only the old bot list: it also styles the Load modal and other dialogs.
 import './bot-list/index.scss';
@@ -38,6 +39,7 @@ const DashboardComponent = observer(() => {
                     'tab__dashboard__content--panel-open': isDesktop && run_panel.is_drawer_open,
                 })}
             >
+                <MarketBackdrop />
                 <div className='dashboard-home'>
                     <div className='dashboard-home__inner'>
                         <Motto />

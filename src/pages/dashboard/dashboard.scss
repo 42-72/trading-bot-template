@@ -328,6 +328,61 @@
     }
 }
 
+// Fills the page behind the quote and cards, and stays put when they scroll.
+.dashboard-backdrop {
+    --chart-grid: #3d5468;
+    --chart-grid-opacity: 0.12;
+    --chart-line: #5b86ad;
+    --chart-line-opacity: 0.26;
+    --chart-candle-opacity: 0.26;
+
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    fill: none;
+    pointer-events: none;
+
+    path:not(.dashboard-backdrop__body) {
+        vector-effect: non-scaling-stroke;
+    }
+
+    &__grid {
+        stroke: var(--chart-grid);
+        stroke-opacity: var(--chart-grid-opacity);
+    }
+
+    &__line {
+        stroke: var(--chart-line);
+        stroke-opacity: var(--chart-line-opacity);
+        stroke-linejoin: round;
+    }
+
+    &__up,
+    &__down {
+        stroke-opacity: var(--chart-candle-opacity);
+    }
+
+    &__up {
+        stroke: #0f7a55;
+    }
+
+    &__down {
+        stroke: #8c2233;
+    }
+
+    &__body {
+        stroke-width: 16;
+    }
+}
+
+.theme--light .dashboard-backdrop {
+    --chart-grid-opacity: 0.1;
+    --chart-line: #3d5468;
+    --chart-line-opacity: 0.2;
+    --chart-candle-opacity: 0.16;
+}
+
 // The Dashboard home: quote and quick-action cards. Scrolls inside itself so a
 // short screen never cuts anything off. The padding keeps it clear of the
 // floating Run bar (top right, laptop) and the AI button (bottom right).
@@ -336,9 +391,10 @@
     --home-card-border: #ffffff14;
     --home-title: #f8fafc;
     --home-text: #94a3b8;
-    --home-motto: #eef5f0;
-    --home-motto-glow: 0 0 1.6rem #22c55e38;
+    --home-motto: #cdb983;
+    --home-signature: #4ade80;
 
+    position: relative; // above the backdrop
     container-type: inline-size;
     display: flex;
     width: 100%;
@@ -352,7 +408,7 @@
 
     &__inner {
         width: 100%;
-        max-width: 124rem;
+        max-width: 134rem;
         margin: auto;
     }
 }
@@ -362,33 +418,44 @@
     --home-card-border: var(--border-normal);
     --home-title: var(--text-prominent);
     --home-text: var(--text-general);
-    --home-motto: var(--text-prominent);
-    --home-motto-glow: none;
+    --home-motto: #7a6220;
+    --home-signature: #15803d;
 }
 
+// A short motto line: the cards are the focus.
 .dashboard-motto {
-    margin: 0 0 clamp(1.6rem, 4.5vh, 4.8rem);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: center;
+    gap: 0.2rem 0.8rem;
+    margin: 0 0 clamp(1.4rem, 3vh, 2.8rem);
     text-align: center;
 
     &__quote {
         margin: 0;
-        font-family: 'Barlow Condensed', 'Arial Narrow', Arial, sans-serif;
-        font-size: clamp(4.4rem, 5.2vw, 7.2rem);
+        font-family: 'Barlow Condensed', 'Arial Narrow', 'Arial', sans-serif;
+        font-size: 1.7rem;
         font-style: italic;
-        font-weight: 800;
-        line-height: 1.05;
-        letter-spacing: 0.01em;
+        font-weight: 500;
+        line-height: 1.3;
+        letter-spacing: 0.02em;
         color: var(--home-motto);
-        text-shadow: var(--home-motto-glow);
-        text-wrap: balance;
+
+        @container (min-width: 820px) {
+            font-size: 2.2rem;
+        }
     }
 
     &__signature {
-        margin-top: 0.8rem;
         font-family: 'Mr Dafoe', 'Segoe Script', cursive;
-        font-size: clamp(2.2rem, 2vw, 2.8rem);
-        line-height: 1.2;
-        color: #4ade80;
+        font-size: 1.7rem;
+        line-height: 1.3;
+        color: var(--home-signature);
+
+        @container (min-width: 820px) {
+            font-size: 2rem;
+        }
     }
 }
 
@@ -400,9 +467,12 @@
     grid-auto-rows: 1fr;
     gap: 1.2rem;
 
+    // At most 31rem each, centred as a group; they narrow only if the screen or
+    // an open run panel leaves less.
     @container (min-width: 820px) {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 2rem;
+        grid-template-columns: repeat(4, minmax(0, 31rem));
+        justify-content: center;
+        gap: 2.4rem;
     }
 }
 
@@ -425,7 +495,7 @@
     text-align: start;
 
     @container (min-width: 820px) {
-        min-height: clamp(21rem, 33vh, 30rem);
+        min-height: 25rem;
         padding: 2.8rem 2.4rem 2.2rem;
     }
 

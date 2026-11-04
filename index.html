@@ -74,10 +74,12 @@
                     sans-serif;
             }
 
-            /* Market illustration. The price line "draws" by a cover sliding off it: a
-               transform runs off the main thread, so it stays smooth while the app's code
-               starts and costs that start-up nothing (animating the stroke would repaint
-               on the main thread every frame). Hence line < cover < candles. */
+            /* Market illustration, animated only by transforms and opacity: those run off the
+               main thread, so it stays smooth while the app's code starts and costs that
+               start-up nothing (animating strokes would repaint every frame). Two covers
+               slide off the drawing: one in steps, a candle at a time, and one smoothly for
+               the line. Each hides what lies under it, hence candles < stepped cover < line <
+               cover, with the grid above both so it shows from the start. */
             #mw-boot-splash .chart {
                 position: absolute;
                 inset: 0;
@@ -98,12 +100,53 @@
             }
             #mw-boot-splash .chart .cover {
                 position: absolute;
+                inset: 0;
+                background: #0e0e0e;
+                animation: mw-boot-draw 7s linear both;
+            }
+            #mw-boot-splash .chart .cover::before {
+                content: '';
+                position: absolute;
                 top: 0;
                 bottom: 0;
-                left: -16rem;
-                width: calc(100% + 16rem);
-                background: linear-gradient(90deg, transparent, #0e0e0e 16rem);
-                animation: mw-boot-draw 9s linear forwards;
+                right: 100%;
+                width: 1.2rem;
+                background: linear-gradient(90deg, transparent, #0e0e0e);
+            }
+            /* 40 steps of 30 drawing units: one candle each. The soft edge, one step wide,
+               brings each candle in over two steps rather than at once. */
+            #mw-boot-splash .chart .cover.step {
+                animation-timing-function: steps(40, end);
+            }
+            #mw-boot-splash .chart .cover.step::before {
+                width: 2.5%;
+            }
+            /* The latest price. As wide and tall as the chart, so a percentage translate is
+               a position on the drawing at any screen size. Rides the line because its
+               keyframes are the line's own points, at the times the cover passes them. */
+            #mw-boot-splash .chart .pt {
+                position: absolute;
+                inset: 0;
+                transform: translate(93.75%, 23.88%);
+                animation: mw-boot-pt 7s linear both;
+            }
+            #mw-boot-splash .chart .pt::before,
+            #mw-boot-splash .chart .pt::after {
+                content: '';
+                position: absolute;
+                top: -0.4rem;
+                left: -0.4rem;
+                width: 0.8rem;
+                height: 0.8rem;
+                border-radius: 50%;
+            }
+            #mw-boot-splash .chart .pt::before {
+                background: #a9cbe6;
+                box-shadow: 0 0 1rem 0.2rem #5b86adb3;
+            }
+            #mw-boot-splash .chart .pt::after {
+                background: #5b86ad;
+                animation: mw-boot-pulse 1.6s ease-out infinite;
             }
             #mw-boot-splash .chart .fade {
                 position: absolute;
@@ -169,9 +212,145 @@
                     transform: translateX(100%);
                 }
             }
+            @keyframes mw-boot-pulse {
+                from {
+                    opacity: 0.6;
+                    transform: scale(1);
+                }
+                to {
+                    opacity: 0;
+                    transform: scale(3.6);
+                }
+            }
+            @keyframes mw-boot-pt {
+                0% {
+                    transform: translate(1.25%, 73.63%);
+                }
+                1.25% {
+                    transform: translate(1.25%, 73.63%);
+                }
+                3.75% {
+                    transform: translate(3.75%, 77.88%);
+                }
+                6.25% {
+                    transform: translate(6.25%, 85.13%);
+                }
+                8.75% {
+                    transform: translate(8.75%, 85.13%);
+                }
+                11.25% {
+                    transform: translate(11.25%, 80.25%);
+                }
+                13.75% {
+                    transform: translate(13.75%, 69.38%);
+                }
+                16.25% {
+                    transform: translate(16.25%, 56.38%);
+                }
+                18.75% {
+                    transform: translate(18.75%, 43.88%);
+                }
+                21.25% {
+                    transform: translate(21.25%, 37%);
+                }
+                23.75% {
+                    transform: translate(23.75%, 31.38%);
+                }
+                26.25% {
+                    transform: translate(26.25%, 29.38%);
+                }
+                28.75% {
+                    transform: translate(28.75%, 36.13%);
+                }
+                31.25% {
+                    transform: translate(31.25%, 27.38%);
+                }
+                33.75% {
+                    transform: translate(33.75%, 20.25%);
+                }
+                36.25% {
+                    transform: translate(36.25%, 15.13%);
+                }
+                38.75% {
+                    transform: translate(38.75%, 13.88%);
+                }
+                41.25% {
+                    transform: translate(41.25%, 20.63%);
+                }
+                43.75% {
+                    transform: translate(43.75%, 22.75%);
+                }
+                46.25% {
+                    transform: translate(46.25%, 24.25%);
+                }
+                48.75% {
+                    transform: translate(48.75%, 18.13%);
+                }
+                51.25% {
+                    transform: translate(51.25%, 19.5%);
+                }
+                53.75% {
+                    transform: translate(53.75%, 26.5%);
+                }
+                56.25% {
+                    transform: translate(56.25%, 30.75%);
+                }
+                58.75% {
+                    transform: translate(58.75%, 30.75%);
+                }
+                61.25% {
+                    transform: translate(61.25%, 25.38%);
+                }
+                63.75% {
+                    transform: translate(63.75%, 15.75%);
+                }
+                66.25% {
+                    transform: translate(66.25%, 18.38%);
+                }
+                68.75% {
+                    transform: translate(68.75%, 21.75%);
+                }
+                71.25% {
+                    transform: translate(71.25%, 29%);
+                }
+                73.75% {
+                    transform: translate(73.75%, 33.88%);
+                }
+                76.25% {
+                    transform: translate(76.25%, 36.13%);
+                }
+                78.75% {
+                    transform: translate(78.75%, 41.63%);
+                }
+                81.25% {
+                    transform: translate(81.25%, 59%);
+                }
+                83.75% {
+                    transform: translate(83.75%, 74%);
+                }
+                86.25% {
+                    transform: translate(86.25%, 87.75%);
+                }
+                88.75% {
+                    transform: translate(88.75%, 83.38%);
+                }
+                91.25% {
+                    transform: translate(91.25%, 52.25%);
+                }
+                93.75% {
+                    transform: translate(93.75%, 23.88%);
+                }
+                100% {
+                    transform: translate(93.75%, 23.88%);
+                }
+            }
             @media (prefers-reduced-motion: reduce) {
-                #mw-boot-splash .chart .cover {
+                #mw-boot-splash .chart .cover,
+                #mw-boot-splash .chart .pt::after {
                     display: none;
+                }
+                #mw-boot-splash .chart .pt {
+                    animation: none;
                 }
                 #mw-boot-splash .bar::after {
                     animation: none;
@@ -208,24 +387,55 @@
             })();
         </script>
         <div id="mw-boot-splash" role="status" aria-live="polite" aria-label="Loading CharlesTraders">
-            <!-- Same drawing as src/components/landing-page/MarketChart.tsx: change them together. -->
             <div class="chart" aria-hidden="true">
                 <svg viewBox="0 0 1200 800" preserveAspectRatio="none">
-                    <path stroke="#5b86ad" stroke-opacity=".14" stroke-width="7" stroke-linejoin="round" d="M10 589L30 582L50 606L70 625L90 649L110 641L130 626L150 611L170 611L190 609L210 592L230 607L250 585L270 561L290 560L310 551L330 566L350 539L370 527L390 485L410 459L430 454L450 431L470 419L490 418L510 381L530 396L550 381L570 392L590 416L610 440L630 426L650 444L670 453L690 443L710 465L730 452L750 454L770 459L790 476L810 477L830 465L850 498L870 495L890 481L910 476L930 442L950 398L970 361L990 355L1010 337L1030 343L1050 338L1070 336L1090 331L1110 312L1130 317L1150 316L1170 298L1190 285" />
-                    <path stroke="#5b86ad" stroke-opacity=".5" stroke-width="2" stroke-linejoin="round" d="M10 589L30 582L50 606L70 625L90 649L110 641L130 626L150 611L170 611L190 609L210 592L230 607L250 585L270 561L290 560L310 551L330 566L350 539L370 527L390 485L410 459L430 454L450 431L470 419L490 418L510 381L530 396L550 381L570 392L590 416L610 440L630 426L650 444L670 453L690 443L710 465L730 452L750 454L770 459L790 476L810 477L830 465L850 498L870 495L890 481L910 476L930 442L950 398L970 361L990 355L1010 337L1030 343L1050 338L1070 336L1090 331L1110 312L1130 317L1150 316L1170 298L1190 285" />
+                    <g stroke="#0f7a55" stroke-opacity=".55" stroke-width="1.5">
+                        <path
+                            d="M15 565v40M105 666v30M135 617v85M165 545v113M195 439v142M225 327v135M255 273v98M285 221v102M315 222v48M375 206v112M405 150v95M435 109v63M465 101v35M585 130v72M735 196v69M765 116v101M1065 640v81M1095 394v302M1125 161v270"
+                        />
+                        <path
+                            class="b"
+                            stroke-width="14"
+                            d="M15 589v5M105 681v5M135 642v39M165 555v87M195 451v104M225 351v100M255 296v55M285 251v45M315 235v16M375 219v71M405 162v57M435 121v41M465 111v10M585 145v49M735 203v43M765 126v77M1065 667v35M1095 418v249M1125 191v226"
+                        />
+                    </g>
+                    <g stroke="#8c2233" stroke-opacity=".55" stroke-width="1.5">
+                        <path
+                            d="M45 569v66M75 615v92M345 216v80M495 92v96M525 145v60M555 166v37M615 126v48M645 134v90M675 185v81M705 227v50M795 95v66M825 127v65M855 144v105M885 201v82M915 251v44M945 274v76M975 314v175M1005 446v167M1035 561v159"
+                        />
+                        <path
+                            class="b"
+                            stroke-width="14"
+                            d="M45 589v33M75 623v59M345 235v54M495 111v54M525 165v17M555 182v12M615 145v11M645 156v56M675 212v34M705 246v5M795 126v22M825 147v27M855 174v58M885 232v39M915 271v17M945 289v44M975 333v139M1005 472v120M1035 592v110"
+                        />
+                    </g>
+                </svg>
+                <div class="cover step"></div>
+                <svg viewBox="0 0 1200 800" preserveAspectRatio="none">
+                    <path
+                        stroke="#5b86ad"
+                        stroke-opacity=".14"
+                        stroke-width="7"
+                        stroke-linejoin="round"
+                        d="M15 589L45 623L75 681L105 681L135 642L165 555L195 451L225 351L255 296L285 251L315 235L345 289L375 219L405 162L435 121L465 111L495 165L525 182L555 194L585 145L615 156L645 212L675 246L705 246L735 203L765 126L795 147L825 174L855 232L885 271L915 289L945 333L975 472L1005 592L1035 702L1065 667L1095 418L1125 191"
+                    />
+                    <path
+                        stroke="#5b86ad"
+                        stroke-opacity=".5"
+                        stroke-width="2"
+                        stroke-linejoin="round"
+                        d="M15 589L45 623L75 681L105 681L135 642L165 555L195 451L225 351L255 296L285 251L315 235L345 289L375 219L405 162L435 121L465 111L495 165L525 182L555 194L585 145L615 156L645 212L675 246L705 246L735 203L765 126L795 147L825 174L855 232L885 271L915 289L945 333L975 472L1005 592L1035 702L1065 667L1095 418L1125 191"
+                    />
                 </svg>
                 <div class="cover"></div>
                 <svg viewBox="0 0 1200 800" preserveAspectRatio="none">
-                    <path stroke="#3d5468" stroke-opacity=".2" d="M0 100H1200M0 200H1200M0 300H1200M0 400H1200M0 500H1200M0 600H1200M0 700H1200M100 0V800M200 0V800M300 0V800M400 0V800M500 0V800M600 0V800M700 0V800M800 0V800M900 0V800M1000 0V800M1100 0V800" />
-                    <g stroke="#0f7a55" stroke-opacity=".55" stroke-width="1.5">
-                        <path d="M10 565v40M30 562v39M110 632v34M130 615v53M150 587v50M170 588v44M190 578v59M210 578v50M250 572v64M270 549v61M290 548v24M310 541v34M350 519v70M370 511v37M390 470v65M410 440v62M430 432v39M450 404v70M470 400v63M490 411v26M510 371v61M550 361v53M630 411v47M690 412v58M730 428v66M830 440v63M870 464v65M890 455v55M910 451v55M930 422v70M950 384v73M970 350v68M990 341v45M1010 321v47M1050 330v20M1070 324v23M1090 302v43M1110 293v47M1150 288v55M1170 279v64M1190 274v53" />
-                        <path class="b" stroke-width="10" d="M10 589v4M30 582v6M110 641v8M130 626v15M150 611v15M170 611v4M190 609v4M210 592v17M250 585v23M270 561v23M290 560v4M310 551v9M350 539v27M370 527v12M390 485v42M410 459v26M430 454v5M450 431v23M470 419v12M490 418v4M510 381v37M550 381v15M630 426v15M690 443v10M730 452v13M830 465v12M870 495v4M890 481v14M910 476v5M930 442v33M950 398v45M970 361v37M990 355v6M1010 337v18M1050 338v5M1070 336v4M1090 331v4M1110 312v19M1150 316v4M1170 298v18M1190 285v13" />
-                    </g>
-                    <g stroke="#8c2233" stroke-opacity=".55" stroke-width="1.5">
-                        <path d="M50 574v57M70 591v48M90 600v71M230 572v41M330 532v57M530 350v60M570 350v59M590 362v66M610 396v51M650 407v54M670 419v55M710 416v68M750 422v46M770 448v30M790 450v35M810 446v43M850 442v73M1030 310v45M1130 283v42" />
-                        <path class="b" stroke-width="10" d="M50 582v24M70 606v18M90 625v24M230 592v16M330 551v15M530 381v15M570 381v11M590 392v24M610 416v24M650 426v18M670 444v9M710 443v22M750 452v4M770 454v5M790 459v17M810 476v4M850 465v33M1030 337v6M1130 312v5" />
-                    </g>
+                    <path
+                        stroke="#3d5468"
+                        stroke-opacity=".2"
+                        d="M0 100H1200M0 200H1200M0 300H1200M0 400H1200M0 500H1200M0 600H1200M0 700H1200M100 0V800M200 0V800M300 0V800M400 0V800M500 0V800M600 0V800M700 0V800M800 0V800M900 0V800M1000 0V800M1100 0V800"
+                    />
                 </svg>
+                <div class="pt"></div>
                 <div class="fade"></div>
             </div>
             <div class="wm"><span class="wm-charles">Charles</span><span class="wm-traders">Traders</span></div>

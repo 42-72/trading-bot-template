@@ -64,7 +64,15 @@ describe('Dashboard home', () => {
         expect(screen.getByText("I've gotta be one of the greats")).toBeInTheDocument();
         expect(screen.getByText('— Cench')).toBeInTheDocument();
         const { href } = document.getElementById('ct-motto-fonts') as HTMLLinkElement;
-        expect(href).toContain('family=Barlow+Condensed:ital,wght@1,800&family=Mr+Dafoe&display=swap');
+        expect(href).toContain('family=Barlow+Condensed:ital,wght@1,500&family=Mr+Dafoe&display=swap');
+    });
+
+    it('draws the still market backdrop, hidden from screen readers', async () => {
+        await setup();
+
+        const chart = document.querySelector('.dashboard-backdrop');
+        expect(chart).toHaveAttribute('aria-hidden', 'true');
+        expect(chart?.querySelector('animate, animateTransform')).toBeNull();
     });
 
     it('still feeds the saved bots to the store, which the Run button and Save read', async () => {

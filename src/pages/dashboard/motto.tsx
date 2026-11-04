@@ -8,7 +8,7 @@ const SIGNATURE = '— Cench';
 // KB). Added from here, not index.html: a stylesheet there would hold up the
 // loading screen. Until it arrives the fallback fonts show (display=swap).
 const FONTS_ID = 'ct-motto-fonts';
-const FONTS_URL = `https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@1,800&family=Mr+Dafoe&display=swap&text=${encodeURIComponent(
+const FONTS_URL = `https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@1,500&family=Mr+Dafoe&display=swap&text=${encodeURIComponent(
     QUOTE + SIGNATURE
 )}`;
 

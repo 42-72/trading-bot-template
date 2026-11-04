@@ -1,6 +1,5 @@
 // The landing page's market illustration: inline, still, decoration only. The
-// loading screen in index.html carries the same drawing, because it has to show
-// before any of this code loads: change them together.
+// loading screen in index.html has its own larger, animated drawing.
 const MarketChart = () => (
     <svg
         className='landing-page__chart'
