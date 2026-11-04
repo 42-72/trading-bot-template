@@ -59,10 +59,10 @@ export const isRunDrawerOpen = (fallback: boolean) => {
 /**
  * `ignore_run_drawer`: leave the run drawer out (the mobile AI panel when the
  * drawer is open - it covers the whole screen and would leave no room).
- * From 1280px the run panel never counts: the AI button keeps its spot at the
- * bottom right of the screen and floats over the panel when that is open, so
- * opening the panel can't move it (ai-scanner.scss). The AI panel doesn't use
- * these bounds at those widths.
+ * From 1280px the run panel never counts: the default spot keeps clear of it on
+ * its own (defaultRight), and a spot the trader dragged onto the panel stays
+ * there, so opening the panel can't move it. The AI panel doesn't use these
+ * bounds at those widths.
  */
 export const getSafeBounds = ({ ignore_run_drawer = false } = {}): TBounds => {
     const vw = window.innerWidth;
@@ -110,29 +110,64 @@ export const isWideScreen = () => window.innerWidth >= WIDE_MIN_WIDTH;
 
 /**
  * Bottom-right on every screen: on a desktop / laptop above the footer, on a
- * phone above the run bar - `bounds` already leaves those out. `bottom`:
- * end higher than that (openRunPanelBottom).
+ * phone above the run bar - `bounds` already leaves those out. `right`: end
+ * further left than the screen edge, at the same height (defaultRight).
  */
-export const defaultPosition = (size: number, bounds: TBounds, bottom = bounds.bottom): TPoint => ({
-    x: bounds.right - 2 * EDGE_GAP - size,
-    y: bottom - 2 * EDGE_GAP - size,
+export const defaultPosition = (size: number, bounds: TBounds, right = bounds.right): TPoint => ({
+    x: right - 2 * EDGE_GAP - size,
+    y: bounds.bottom - 2 * EDGE_GAP - size,
 });
 
+// Blockly's can, lid included. Not the element's rectangle: that is its whole
+// unclipped sprite, 96 x 124.
+const TRASH_CAN_WIDTH = 47;
+const TRASH_CAN_HEIGHT = 60;
+
 /**
- * From 1280px, with the run panel open: where the button's default spot has to
- * end so it leaves the panel's stats and Reset uncovered - the top of the
- * stats block, or of the Reset row on Journal, which has no stats. The whole
- * block, not just Total profit/loss: its label and No. of runs sit right above
- * that value. Null otherwise. Only for the default spot: a spot the trader
- * chose stays where they left it.
+ * The Bot Builder's trash can, or null when it isn't on screen. Read from its
+ * transform, which is where it ends up: the can takes 0.4s to get there
+ * (main.scss), so its rectangle would be somewhere along the way.
  */
-export const openRunPanelBottom = (): number | null => {
-    if (window.innerWidth < DESKTOP_LAYOUT_MIN_WIDTH || !isRunDrawerOpen(false)) return null;
-    const element =
-        document.querySelector('.run-panel__container .run-panel__stat') ??
-        document.querySelector('.run-panel__container .dc-drawer__footer');
-    const rect = element && visibleRect(element);
-    return rect ? rect.top : null;
+const trashCanRect = (): TBounds | null => {
+    const trash = document.querySelector('.bot-builder--active .blocklyTrash');
+    const workspace = trash?.closest('svg');
+    if (!trash || !workspace || !visibleRect(trash)) return null;
+    const translate = /translate\(\s*(-?[\d.]+)[\s,]+(-?[\d.]+)/.exec(trash.getAttribute('transform') ?? '');
+    if (!translate) return null;
+    const { left: origin_x, top: origin_y } = workspace.getBoundingClientRect();
+    const left = origin_x + Number(translate[1]);
+    const top = origin_y + Number(translate[2]);
+    return { left, top, right: left + TRASH_CAN_WIDTH, bottom: top + TRASH_CAN_HEIGHT };
+};
+
+/**
+ * From 1280px: where the right of the default spot has to be - the bounds'
+ * edge, or the edge the open run panel slides to, then the left of the trash
+ * can if the button would touch it there. Only ever a move to the left: the
+ * height stays. Null below 1280px. Takes the store's `is_run_panel_open`, not
+ * the page's: the toggle bar's --open class lands a render later, and the
+ * button has to set off with the panel. The panel's own rectangle only says
+ * whether it is on this tab (not on Tbots / DTrader) and how wide it is: its
+ * position is somewhere along the slide. Only for the default spot: a spot the
+ * trader chose stays where they left it.
+ */
+export const defaultRight = (size: number, bounds: TBounds, is_run_panel_open: boolean): number | null => {
+    if (window.innerWidth < DESKTOP_LAYOUT_MIN_WIDTH) return null;
+    const panel = is_run_panel_open && document.querySelector('.run-panel__container');
+    const panel_rect = panel && visibleRect(panel);
+    // Rounded: mid-slide the width differs by a hair, and any change of `left`,
+    // however small, starts the button's transition over.
+    const right = panel_rect ? Math.min(bounds.right, window.innerWidth - Math.round(panel_rect.width)) : bounds.right;
+
+    const can = trashCanRect();
+    if (!can) return right;
+    const { x, y } = defaultPosition(size, bounds, right);
+    const touches_can =
+        x < can.right + EDGE_GAP &&
+        x + size + EDGE_GAP > can.left &&
+        y < can.bottom + EDGE_GAP &&
+        y + size + EDGE_GAP > can.top;
+    return touches_can ? can.left : right;
 };
 
 // v2 for desktop / laptop: everyone gets the new bottom-right default once

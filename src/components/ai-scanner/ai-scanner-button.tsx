@@ -6,9 +6,9 @@ import { localize } from '@deriv-com/translations';
 import {
     clampToBounds,
     defaultPosition,
+    defaultRight,
     getSafeBounds,
     isWideScreen,
-    openRunPanelBottom,
     readStoredPosition,
     storePosition,
     TBounds,
@@ -28,8 +28,9 @@ type TAiScannerButton = {
  * The round, draggable "AI" button. Its remembered spot (per desktop-laptop / phone width)
  * is only ever displayed clamped into the live safe area (ai-scanner-layout.ts),
  * so it can't sit on the Run bar, the nav row or the mobile run bar - including
- * after a tab switch. On a laptop it floats over the run panel: a remembered
- * spot stays put, the default spot moves up clear of the open panel's stats.
+ * after a tab switch. On a laptop the default spot slides left along the bottom
+ * with the run panel, to just left of it and of Bot Builder's trash can; a
+ * remembered spot stays put, even over the panel.
  */
 const AiScannerButton = observer(({ is_desktop, onLayout }: TAiScannerButton) => {
     const { run_panel, dashboard } = useStore();
@@ -41,19 +42,20 @@ const AiScannerButton = observer(({ is_desktop, onLayout }: TAiScannerButton) =>
     const [stored, setStored] = useState<TPoint | null>(() => readStoredPosition(isWideScreen()));
     const [drag_position, setDragPosition] = useState<TPoint | null>(null);
     const [bounds, setBounds] = useState<TBounds>(() => getSafeBounds());
-    const [panel_bottom, setPanelBottom] = useState<number | null>(null);
+    const [default_right, setDefaultRight] = useState<number | null>(null);
 
     useEffect(() => setStored(readStoredPosition(is_wide)), [is_wide]);
 
-    // Re-measure on resize, tab switch, drawer toggle (after its 0.3s slide)
-    // and Run state, plus a slow poll for anything else that moves the run
-    // controls.
+    // Re-measure on resize, tab switch, drawer toggle (and again once the slide
+    // is nearly over) and Run state, plus a slow poll for anything else that
+    // moves the run controls.
     const { active_tab } = dashboard;
     const { active_index, is_drawer_open, is_running } = run_panel;
     useEffect(() => {
         const measure = () => {
-            setBounds(getSafeBounds());
-            setPanelBottom(openRunPanelBottom());
+            const safe_bounds = getSafeBounds();
+            setBounds(safe_bounds);
+            setDefaultRight(defaultRight(button_ref.current?.offsetWidth || 56, safe_bounds, is_drawer_open));
             setIsWide(isWideScreen());
         };
         measure();
@@ -69,7 +71,7 @@ const AiScannerButton = observer(({ is_desktop, onLayout }: TAiScannerButton) =>
 
     const size = button_ref.current?.offsetWidth || 56;
     const position = clampToBounds(
-        drag_position ?? stored ?? defaultPosition(size, bounds, panel_bottom ?? bounds.bottom),
+        drag_position ?? stored ?? defaultPosition(size, bounds, default_right ?? bounds.right),
         size,
         bounds
     );

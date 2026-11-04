@@ -45,6 +45,13 @@ $ai-scanner-panel-z: 998;
 
     @include desktop-screen {
         z-index: $ai-scanner-z-desktop;
+
+        // Slides with the run panel: same time and easing (dashboard.scss,
+        // .run-panel__container).
+        transition:
+            left 0.4s ease,
+            box-shadow 0.2s ease,
+            transform 0.2s ease;
     }
 
     &:hover {

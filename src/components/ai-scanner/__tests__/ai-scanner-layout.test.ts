@@ -1,8 +1,8 @@
 import {
     clampToBounds,
     defaultPosition,
+    defaultRight,
     getSafeBounds,
-    openRunPanelBottom,
     readStoredPosition,
     storePosition,
 } from '../ai-scanner-layout';
@@ -99,49 +99,113 @@ describe('AI button default spot on a desktop / laptop', () => {
         place('app-footer', { top: 732, bottom: 768, left: 0, right: 1366 });
     };
 
-    it.each([
-        ['open', true],
-        ['closed', false],
-    ])('bottom-right of the screen, above the footer, with the run panel %s', (_name, is_panel_open) => {
-        desktop(is_panel_open);
+    // The default spot as the button works it out, with the store's panel state.
+    const spot = (is_panel_open: boolean) => {
         const bounds = getSafeBounds();
-        expect(clampToBounds(defaultPosition(BUTTON, bounds), BUTTON, bounds)).toEqual({ x: 1294, y: 660 });
-    });
-
-    const placeInPanel = (className: string, rect: Parameters<typeof place>[1]) => {
-        place(className, rect);
-        const element = document.body.lastElementChild as HTMLElement;
-        document.querySelector('.run-panel__container')?.appendChild(element);
+        const right = defaultRight(BUTTON, bounds, is_panel_open) ?? bounds.right;
+        return clampToBounds(defaultPosition(BUTTON, bounds, right), BUTTON, bounds);
     };
 
-    it('panel open: the default spot ends above the stats, clear of Total profit/loss and Reset', () => {
-        desktop(true);
-        placeInPanel('run-panel__stat', { top: 554, bottom: 675, left: 959, right: 1366 });
-        placeInPanel('dc-drawer__footer', { top: 675, bottom: 732, left: 959, right: 1366 });
-        const bounds = getSafeBounds();
-        const spot = defaultPosition(BUTTON, bounds, openRunPanelBottom() ?? bounds.bottom);
-        expect(spot).toEqual({ x: 1294, y: 482 });
-        expect(spot.y + BUTTON).toBeLessThan(554);
-    });
+    // Bot Builder's workspace and can. The sprite's 96 x 124 rectangle, as
+    // measured: only the transform says where the can really is.
+    const placeTrashCan = (translate: string, is_shown = true) => {
+        const builder = document.createElement('div');
+        builder.className = 'bot-builder--active';
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.getBoundingClientRect = () => ({ left: 16, top: 122 }) as DOMRect;
+        const trash = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        trash.setAttribute('class', 'blocklyTrash');
+        trash.setAttribute('transform', translate);
+        trash.getBoundingClientRect = () =>
+            ({ left: 1282, right: 1378, top: 608, bottom: 732, width: is_shown ? 96 : 0, height: 124 }) as DOMRect;
+        svg.appendChild(trash);
+        builder.appendChild(svg);
+        document.body.appendChild(builder);
+    };
 
-    it('panel open on Journal (no stats): just above the Reset row', () => {
-        desktop(true);
-        placeInPanel('dc-drawer__footer', { top: 675, bottom: 732, left: 959, right: 1366 });
-        expect(openRunPanelBottom()).toBe(675);
-    });
-
-    it('panel closed: nothing to clear, however the panel measures', () => {
+    it('panel closed: bottom-right of the screen, above the footer', () => {
         desktop(false);
-        placeInPanel('dc-drawer__footer', { top: 675, bottom: 732, left: 1350, right: 1773 });
-        expect(openRunPanelBottom()).toBeNull();
+        expect(spot(false)).toEqual({ x: 1294, y: 660 });
     });
 
-    it('below 1280px: never lifted', () => {
+    it('panel open: same height, just left of the panel', () => {
+        desktop(true);
+        const open = spot(true);
+        expect(open).toEqual({ x: 871, y: 660 });
+        expect(open.x + BUTTON).toBeLessThan(943);
+    });
+
+    it('sets off with the panel: the end of the slide, wherever the panel is on the way', () => {
+        // Just starting to open: the store says open, the panel is still at the
+        // right edge and its toggle bar not yet --open.
+        desktop(false);
+        expect(spot(true).x).toBe(871);
+        // Just starting to close: the panel still measures open.
+        document.body.innerHTML = '';
+        desktop(true);
+        expect(spot(false).x).toBe(1294);
+    });
+
+    it("a hair's difference in the panel's width mid-slide keeps the same spot: no restarted slide", () => {
+        desktop(false);
+        setViewport(1280, 720);
+        const measured = (width: number) => {
+            document.querySelectorAll('.run-panel__container').forEach(element => element.remove());
+            place('run-panel__container', { top: 122, bottom: 684, left: 1280 - width, right: 1280 });
+            return spot(true).x;
+        };
+        expect(measured(396.796875)).toBe(measured(396.80001));
+    });
+
+    it('Tbots / DTrader: the store still says open, but no panel is there, so bottom-right', () => {
+        setViewport(1366, 768);
+        place('deriv-header', { top: 0, bottom: 56, left: 0, right: 1366 });
+        place('dc-tabs__list--main__tabs', { top: 72, bottom: 122, left: 16, right: 1350 });
+        place('app-footer', { top: 732, bottom: 768, left: 0, right: 1366 });
+        expect(spot(true)).toEqual({ x: 1294, y: 660 });
+    });
+
+    it('Bot Builder, panel closed: just left of the trash can, still at the bottom', () => {
+        desktop(false);
+        placeTrashCan('translate(1266, 518)');
+        expect(spot(false)).toEqual({ x: 1210, y: 660 });
+    });
+
+    it('Bot Builder, panel open: left of the can when it pokes out from the panel', () => {
+        desktop(true);
+        placeTrashCan('translate(906, 518)');
+        expect(spot(true)).toEqual({ x: 850, y: 660 });
+    });
+
+    it('Bot Builder, panel open: a can right behind the panel leaves the spot alone', () => {
+        desktop(true);
+        placeTrashCan('translate(1076, 518)');
+        expect(spot(true)).toEqual({ x: 871, y: 660 });
+    });
+
+    it("Bot Builder: the can is read from Blockly's own form of the transform too", () => {
+        desktop(false);
+        placeTrashCan('translate(1242,499)');
+        expect(spot(false).x).toBe(1186);
+    });
+
+    it('a can that is not on screen (the tour hides it) moves nothing', () => {
+        desktop(false);
+        placeTrashCan('translate(1266, 518)', false);
+        expect(spot(false).x).toBe(1294);
+    });
+
+    it('a can far from the bottom corner moves nothing', () => {
+        desktop(false);
+        placeTrashCan('translate(1266, 100)');
+        expect(spot(false).x).toBe(1294);
+    });
+
+    it('below 1280px: no slide, the default spot follows the bounds as before', () => {
         setViewport(1024, 768);
         place('dc-drawer__toggle dc-drawer__toggle--open', { top: 700, bottom: 736, left: 0, right: 1024 });
         place('run-panel__container', { top: 100, bottom: 700, left: 0, right: 1024 });
-        placeInPanel('run-panel__stat', { top: 500, bottom: 620, left: 0, right: 1024 });
-        expect(openRunPanelBottom()).toBeNull();
+        expect(defaultRight(BUTTON, getSafeBounds(), true)).toBeNull();
     });
 
     it("Tbots / DTrader, no Run bar: still can't be dragged onto the nav row", () => {

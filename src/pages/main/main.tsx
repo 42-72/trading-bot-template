@@ -316,8 +316,11 @@ const AppWrapper = observer(() => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [active_tab]);
 
-    React.useEffect(() => {
-        const trashcan_init_id = setTimeout(() => {
+    // At once, in a layout effect: the AI button works out its spot from the
+    // can's in its own effect, as the panel starts to slide. Again after 100ms
+    // for a workspace that is only just showing.
+    React.useLayoutEffect(() => {
+        const placeTrashcan = () => {
             if (active_tab === BOT_BUILDER && Blockly?.derivWorkspace?.trashcan) {
                 const trashcanY = window.innerHeight - 250;
                 let trashcanX;
@@ -328,7 +331,9 @@ const AppWrapper = observer(() => {
                 }
                 Blockly?.derivWorkspace?.trashcan?.setTrashcanPosition(trashcanX, trashcanY);
             }
-        }, 100);
+        };
+        placeTrashcan();
+        const trashcan_init_id = setTimeout(placeTrashcan, 100);
 
         return () => {
             clearTimeout(trashcan_init_id); // Clear the timeout on unmount
