@@ -4,6 +4,7 @@
  */
 import { api_base } from '@/external/bot-skeleton';
 import { useStore } from '@/hooks/useStore';
+import { CLOSED_AT_KEY, idle_logout, LAST_SEEN_KEY } from '@/utils/idle-logout';
 import { markOAuthExchangeSettled, OAUTH_EXCHANGE_WAIT_MS, resetOAuthStartForTests } from '@/utils/oauth-start';
 import { removeRetiredStorageKeys, RETIRED_STORAGE_KEYS } from '@/utils/page-start';
 import { act, render } from '@testing-library/react';
@@ -49,6 +50,18 @@ describe('first load', () => {
             expect(`${window.location.pathname}${window.location.search}`).toBe(url);
         }
     );
+
+    it('the store arrives after the first render: the idle check and the socket wait for it', async () => {
+        (useStore as jest.Mock).mockReturnValue(null);
+        const { rerender } = render(<AppRoot />);
+        await flush();
+        expect(api_base.init).not.toHaveBeenCalled();
+
+        (useStore as jest.Mock).mockReturnValue({ common: {} });
+        rerender(<AppRoot />);
+        await flush();
+        expect(api_base.init).toHaveBeenCalledTimes(1);
+    });
 
     it('prerendered from the address bar: the socket waits until the page is shown', async () => {
         setPrerendering(true);
@@ -124,5 +137,58 @@ describe('removeRetiredStorageKeys (start-up)', () => {
         RETIRED_STORAGE_KEYS.forEach(key => expect(localStorage.getItem(key)).toBeNull());
         expect(RETIRED_STORAGE_KEYS).toEqual(['ct_conn_log', 'ctdebug', 'ct_session_v2']);
         expect(localStorage.getItem('active_loginid')).toBe('VRTC1');
+    });
+});
+
+describe('idle logout at page start', () => {
+    const MIN = 60000;
+
+    beforeEach(() => {
+        localStorage.clear();
+        sessionStorage.clear();
+        (api_base.init as jest.Mock).mockClear();
+        idle_logout.stop();
+    });
+
+    afterEach(() => {
+        idle_logout.stop();
+        window.history.replaceState({}, '', '/');
+    });
+
+    it('closed too long: the logout finishes before the socket opens, on the page in the URL', async () => {
+        window.history.replaceState({}, '', '/#market_tool');
+        sessionStorage.setItem(
+            'auth_info',
+            JSON.stringify({ access_token: 't', expires_in: 3600, expires_at: Date.now() - 20 * MIN + 3600000 })
+        );
+        localStorage.setItem(LAST_SEEN_KEY, String(Date.now() - 6 * MIN));
+        sessionStorage.setItem(CLOSED_AT_KEY, String(Date.now() - 6 * MIN));
+
+        let finishLogout = () => {};
+        const logout = jest.fn(() => new Promise<void>(resolve => (finishLogout = resolve)));
+        (api_base as unknown as { onIdleLogout: () => void }).onIdleLogout = jest.fn();
+        (useStore as jest.Mock).mockReturnValue({ common: {}, client: { logout } });
+
+        render(<AppRoot />);
+        await flush();
+        expect(logout).toHaveBeenCalledTimes(1);
+        expect(api_base.init).not.toHaveBeenCalled();
+
+        finishLogout();
+        await flush();
+        expect(api_base.init).toHaveBeenCalledTimes(1);
+        expect(window.location.hash).toBe('#market_tool');
+    });
+
+    it('a new tab with no page in its URL opens on the one the trader left', async () => {
+        localStorage.setItem('active_loginid', 'CR1');
+        localStorage.setItem('active_tab', '6');
+        localStorage.setItem(LAST_SEEN_KEY, String(Date.now() - 6 * MIN));
+        const setActiveTab = jest.fn();
+        (useStore as jest.Mock).mockReturnValue({ common: {}, dashboard: { setActiveTab } });
+
+        render(<AppRoot />);
+        await flush();
+        expect(setActiveTab).toHaveBeenCalledWith(6);
     });
 });

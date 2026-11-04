@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react';
+import { session_status } from '@/utils/session-status';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import LandingPage from '..';
 
 let mock_api_base = { isAuthorizing: false, activeLoginid: '' };
@@ -18,6 +19,7 @@ describe('LandingPage', () => {
         sessionStorage.clear();
         mock_api_base = { isAuthorizing: false, activeLoginid: '' };
         mock_store = { client: { is_account_regenerating: false } };
+        session_status.setIdleLoggedOut(false);
         jest.clearAllMocks();
     });
 
@@ -33,6 +35,21 @@ describe('LandingPage', () => {
         mock_store = { client: { is_account_regenerating: true } };
         const { container } = render(<LandingPage />);
         expect(container).toBeEmptyDOMElement();
+    });
+
+    it('stays away after an idle logout, the moment it happens and after a reload', () => {
+        localStorage.setItem('active_loginid', 'CR1');
+        mock_api_base = { isAuthorizing: false, activeLoginid: 'CR1' };
+        const { container } = render(<LandingPage />);
+        expect(container).toBeEmptyDOMElement();
+
+        // client.logout's end state, with the flag set before it: no frame of landing page.
+        act(() => session_status.setIdleLoggedOut(true));
+        localStorage.clear();
+        mock_api_base = { isAuthorizing: false, activeLoginid: '' };
+        cleanup();
+        expect(render(<LandingPage />).container).toBeEmptyDOMElement();
+        expect(sessionStorage.getItem('ct_idle_logged_out')).toBe('1');
     });
 
     it('stays away for a logged-in trader', () => {

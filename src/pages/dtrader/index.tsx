@@ -18,6 +18,7 @@ import {
     TDTraderSession,
 } from '@/utils/dtrader-embed';
 import { scheduleDTraderWarmup } from '@/utils/dtrader-warmup';
+import { isLoginRequestAllowed } from '@/utils/idle-logout';
 import { isBotOrScannerRunning } from '@/utils/run-activity';
 import { Localize } from '@deriv-com/translations';
 import './dtrader.scss';
@@ -156,7 +157,7 @@ const DTraderPanel = observer(() => {
                 }
                 case 'ct:login-required':
                     // Log in happens here, never inside the frame (auth.deriv.com cannot be framed)
-                    if (!getDTraderSession()) {
+                    if (!getDTraderSession() && isLoginRequestAllowed()) {
                         const oauth_url = await generateOAuthURL();
                         if (oauth_url) window.location.replace(oauth_url);
                     }

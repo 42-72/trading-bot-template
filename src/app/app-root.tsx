@@ -6,8 +6,10 @@ import ChunkLoader from '@/components/loader/chunk-loader';
 import SessionNotice from '@/components/session-notice/session-notice';
 import { api_base } from '@/external/bot-skeleton';
 import { useStore } from '@/hooks/useStore';
+import { idle_logout } from '@/utils/idle-logout';
 import { isOAuthCallbackURL, whenOAuthExchangeSettled } from '@/utils/oauth-start';
 import { isPrerendering, whenPageActivated } from '@/utils/page-start';
+import { isBotOrScannerRunning } from '@/utils/run-activity';
 import { startLog } from '@/utils/start-log';
 import { localize } from '@deriv-com/translations';
 import './app-root.scss';
@@ -42,8 +44,10 @@ const AppRoot = () => {
     const api_base_initialized = useRef(false);
     const [is_api_initialized, setIsApiInitialized] = useState(false);
 
-    // Initialize API
+    // Initialize API. The store is created in the effect right after this one's first run.
+    const has_store = !!store;
     useEffect(() => {
+        if (!has_store) return undefined;
         let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
         const initializeApi = async () => {
@@ -52,6 +56,16 @@ const AppRoot = () => {
             // (sessionStorage) yet: opening the socket now would start it logged out.
             if (isPrerendering()) startLog('prerendered - waiting until the page is shown');
             await whenPageActivated();
+            // Before the socket: an expired login must not start a logged-in one.
+            await idle_logout.start({
+                isBusy: () => isBotOrScannerRunning(store) || api_base.is_running,
+                logout: () => store.client.logout(),
+                onLoggedOut: () => api_base.onIdleLogout(),
+                restorePage: () => {
+                    const last_tab = Number(localStorage.getItem('active_tab'));
+                    if (last_tab && !window.location.hash) store.dashboard.setActiveTab(last_tab);
+                },
+            });
             // Login return: the token exchange opens the logged-in socket itself.
             // A public socket opened meanwhile would be closed again by it, and
             // what waits on it would never be answered.
@@ -86,7 +100,8 @@ const AppRoot = () => {
 
         initializeApi();
         return () => clearTimeout(timeoutId);
-    }, []);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [has_store]);
 
     if (!store || !is_api_initialized) return <AppRootLoader />;
 

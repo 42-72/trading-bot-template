@@ -7,6 +7,7 @@ import { TAuthData } from '@/types/api-types';
 import { getAccountId, getAccountType, isDemoAccount, removeUrlParameter } from '@/utils/account-helpers';
 import { ct_perf } from '@/utils/ct-perf';
 import { handleBackendError, isBackendError } from '@/utils/error-handler';
+import { idle_logout } from '@/utils/idle-logout';
 import { session_status, SessionExpiredError } from '@/utils/session-status';
 import { keep_alive } from '@/utils/socket-keep-alive';
 import { startLog } from '@/utils/start-log';
@@ -607,6 +608,8 @@ class APIBase {
 
     /** Tab visible again, window focused, or back online: reconnect quietly if needed. */
     onResume = (reason: string) => {
+        // Away too long: logged out instead (onIdleLogout), whichever listener ran first.
+        if (idle_logout.check()) return;
         if (this.checkSessionExpiry()) return;
         const ready_state = this.api?.connection?.readyState;
         if (!this.api || ready_state === undefined || ready_state > 1) {
@@ -630,6 +633,21 @@ class APIBase {
     };
 
     onPageShow = () => this.onResume('pageshow');
+
+    /**
+     * The idle logout has finished (utils/idle-logout.ts). This page no longer
+     * has a session to lose, so nothing here may report one as expired, and a
+     * socket that died while the page was away is replaced by the public one.
+     */
+    onIdleLogout = () => {
+        this.had_session = false;
+        if (this.expiry_timer) clearTimeout(this.expiry_timer);
+        this.expiry_timer = null;
+        this.session_expires_at = null;
+        this.auth_error_check = null;
+        session_status.setReconnecting(false);
+        if (this.api) this.onResume('idle logout');
+    };
 
     private onSessionAuthorized(generation: number) {
         this.authorized_generation = generation;

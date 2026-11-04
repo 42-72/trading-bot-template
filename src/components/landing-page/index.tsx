@@ -4,6 +4,7 @@ import { useApiBase } from '@/hooks/useApiBase';
 import { useAuthActions } from '@/hooks/useAuthActions';
 import { useStore } from '@/hooks/useStore';
 import { hideBootSplash } from '@/utils/boot-splash';
+import { session_status } from '@/utils/session-status';
 import { Localize, localize } from '@deriv-com/translations';
 import DigitRain from './DigitRain';
 import './landing-page.scss';
@@ -106,7 +107,8 @@ const LandingPage = observer(() => {
     const hasStoredToken = hasStoredAuthToken();
     const isStillChecking = hasStoredToken && (isAuthorizing || is_switching_account);
     const isConfirmedLoggedIn = hasStoredToken && !isAuthorizing && Boolean(activeLoginid);
-    const is_hidden = isDismissed || isStillChecking || isConfirmedLoggedIn;
+    // Logged out for being away: the trader stays on the page they left.
+    const is_hidden = isDismissed || isStillChecking || isConfirmedLoggedIn || session_status.is_idle_logged_out;
 
     // This page is a full screen of its own: the start-up splash makes way for it.
     useEffect(() => {

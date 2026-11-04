@@ -243,7 +243,8 @@ export default class ClientStore {
      */
 
     logout = async () => {
-        if (localStorage.getItem('active_loginid')) {
+        // The login itself is per tab: another tab's logout may have cleared active_loginid already.
+        if (localStorage.getItem('active_loginid') || sessionStorage.getItem('auth_info')) {
             // Clear DerivAPI singleton instance and close WebSocket
             const { clearDerivApiInstance } = await import('@/external/bot-skeleton/services/api/appId');
             clearDerivApiInstance();
