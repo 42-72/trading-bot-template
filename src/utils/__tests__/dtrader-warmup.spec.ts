@@ -146,6 +146,103 @@ describe('scheduleDTraderWarmup', () => {
         expect(fetch_mock).not.toHaveBeenCalled();
     });
 
+    describe('on a phone', () => {
+        const laptop_width = window.innerWidth;
+        const setConnection = (value?: object) =>
+            Object.defineProperty(navigator, 'connection', { value, configurable: true });
+        const setWidth = (value: number) =>
+            Object.defineProperty(window, 'innerWidth', { value, configurable: true, writable: true });
+
+        beforeEach(() => setWidth(390));
+        afterEach(() => setWidth(laptop_width));
+
+        it.each(['wifi', 'ethernet'])('warms up on %s', async type => {
+            setConnection({ type, effectiveType: '4g' });
+            start();
+            tick(WARMUP_START_DELAY_MS);
+            await flush();
+            expect(fetch_mock).toHaveBeenCalledTimes(1);
+        });
+
+        it.each([
+            ['mobile data', { type: 'cellular', effectiveType: '4g' }],
+            ['an unknown connection', { type: 'unknown', effectiveType: '4g' }],
+            ['a browser that only knows the speed', { effectiveType: '4g' }],
+            ['a browser with no connection info (iPhone)', undefined],
+            ['Wi-Fi with Data Saver', { type: 'wifi', saveData: true }],
+            ['slow Wi-Fi (2G)', { type: 'wifi', effectiveType: '2g' }],
+        ])('downloads nothing on %s, not even the page', async (_name, connection) => {
+            setConnection(connection);
+            start();
+            tick(WARMUP_START_DELAY_MS);
+            await flush();
+            tick(120000);
+            await flush();
+            expect(fetch_mock).not.toHaveBeenCalled();
+            expect(prefetchLinks()).toHaveLength(0);
+        });
+
+        it('stops if the phone leaves Wi-Fi mid-way', async () => {
+            const connection = { type: 'wifi' };
+            setConnection(connection);
+            start();
+            tick(WARMUP_START_DELAY_MS);
+            await flush();
+            expect(prefetchLinks()).toHaveLength(1);
+
+            connection.type = 'cellular';
+            await finishCurrentPrefetch();
+            expect(prefetchLinks()).toHaveLength(0);
+            expect(sessionStorage.getItem('ct_dtrader_warmed')).toBeNull();
+        });
+
+        it('never during a run, on Wi-Fi too', async () => {
+            setConnection({ type: 'wifi' });
+            start({ isBusy: () => true });
+            tick(WARMUP_START_DELAY_MS);
+            await flush();
+            expect(fetch_mock).not.toHaveBeenCalled();
+        });
+
+        it('once per tab session, on Wi-Fi too', async () => {
+            setConnection({ type: 'wifi' });
+            start();
+            tick(WARMUP_START_DELAY_MS);
+            await runAll();
+            start();
+            tick(WARMUP_START_DELAY_MS);
+            await flush();
+            expect(fetch_mock).toHaveBeenCalledTimes(1);
+        });
+
+        it('767px is a phone, 768px is not', async () => {
+            setConnection({ type: 'cellular' });
+            setWidth(767);
+            start();
+            tick(WARMUP_START_DELAY_MS);
+            await flush();
+            expect(fetch_mock).not.toHaveBeenCalled();
+
+            setWidth(768);
+            start();
+            tick(WARMUP_START_DELAY_MS);
+            await flush();
+            expect(fetch_mock).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    it.each([
+        ['no connection info', undefined],
+        ['a connection type it cannot read', { effectiveType: '4g' }],
+        ['mobile data', { type: 'cellular', effectiveType: '4g' }],
+    ])('laptops are unchanged: warms up with %s', async (_name, connection) => {
+        Object.defineProperty(navigator, 'connection', { value: connection, configurable: true });
+        start();
+        tick(WARMUP_START_DELAY_MS);
+        await flush();
+        expect(fetch_mock).toHaveBeenCalledTimes(1);
+    });
+
     it('runs once per browser tab session', async () => {
         start();
         tick(WARMUP_START_DELAY_MS);

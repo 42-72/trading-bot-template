@@ -13,7 +13,11 @@ import { DTRADER_EMBED_URL, DTRADER_ORIGIN } from '@/utils/dtrader-embed';
  *   already on its way finishes); it resumes once the run has ended;
  * - one file at a time, as low-priority prefetches;
  * - skipped on Data Saver / 2G, and once DTrader has been opened (the frame
- *   loads the files itself), and once done in this browser tab session.
+ *   loads the files itself), and once done in this browser tab session;
+ * - on a phone (under 768px wide), only on Wi-Fi or another unmetered
+ *   connection: the trader's data is not spent on a tab they may never open.
+ *   Checked before every file too, so leaving Wi-Fi stops it. If the browser
+ *   can't tell (iPhones and Firefox never can), it counts as mobile data.
  *
  * Nothing runs: the files are only downloaded. Only DTrader's own HTML is
  * read (it allows any origin), to learn the current hashed file names.
@@ -31,10 +35,14 @@ type TWarmupOptions = {
     isOpened: () => boolean;
 };
 
-type TConnection = { saveData?: boolean; effectiveType?: string };
+type TConnection = { saveData?: boolean; effectiveType?: string; type?: string };
+
+const PHONE_MAX_WIDTH = 767;
+const UNMETERED_CONNECTIONS = ['wifi', 'ethernet'];
 
 const isConstrainedNetwork = () => {
     const connection = (navigator as Navigator & { connection?: TConnection }).connection;
+    if (window.innerWidth <= PHONE_MAX_WIDTH && !UNMETERED_CONNECTIONS.includes(connection?.type ?? '')) return true;
     if (!connection) return false;
     return !!connection.saveData || ['slow-2g', '2g'].includes(connection.effectiveType ?? '');
 };

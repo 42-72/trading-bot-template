@@ -143,7 +143,9 @@ const trashCanRect = (): TBounds | null => {
 /**
  * From 1280px: where the right of the default spot has to be - the bounds'
  * edge, or the edge the open run panel slides to, then the left of the trash
- * can if the button would touch it there. Only ever a move to the left: the
+ * can if the button would touch it there: the can sits just left of the open
+ * panel (trashcan-spot.js), so on Bot Builder that is where the button ends up,
+ * left of them both. Only ever a move to the left: the
  * height stays. Null below 1280px. Takes the store's `is_run_panel_open`, not
  * the page's: the toggle bar's --open class lands a render later, and the
  * button has to set off with the panel. The panel's own rectangle only says

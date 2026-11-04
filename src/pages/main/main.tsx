@@ -12,8 +12,8 @@ import TradeTypeConfirmationModal from '@/components/trade-type-confirmation-mod
 import TradingViewModal from '@/components/trading-view-chart/trading-view-modal';
 import { DBOT_TABS, TAB_IDS } from '@/constants/bot-contents';
 import { api_base, updateWorkspaceName } from '@/external/bot-skeleton';
+import { getTrashcanSpot } from '@/external/bot-skeleton/scratch/utils/trashcan-spot';
 import { CONNECTION_STATUS } from '@/external/bot-skeleton/services/api/observables/connection-status-stream';
-import { isDbotRTL } from '@/external/bot-skeleton/utils/workspace';
 import { useApiBase } from '@/hooks/useApiBase';
 import { useStore } from '@/hooks/useStore';
 import {
@@ -322,14 +322,8 @@ const AppWrapper = observer(() => {
     React.useLayoutEffect(() => {
         const placeTrashcan = () => {
             if (active_tab === BOT_BUILDER && Blockly?.derivWorkspace?.trashcan) {
-                const trashcanY = window.innerHeight - 250;
-                let trashcanX;
-                if (is_drawer_open) {
-                    trashcanX = isDbotRTL() ? 380 : window.innerWidth - 460;
-                } else {
-                    trashcanX = isDbotRTL() ? 20 : window.innerWidth - 100;
-                }
-                Blockly?.derivWorkspace?.trashcan?.setTrashcanPosition(trashcanX, trashcanY);
+                const { x, y } = getTrashcanSpot(is_drawer_open);
+                Blockly?.derivWorkspace?.trashcan?.setTrashcanPosition(x, y);
             }
         };
         placeTrashcan();
