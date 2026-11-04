@@ -27,11 +27,8 @@ type TTradeAnimation = {
 const TradeAnimation = observer(({ className, tooltip_alignment }: TTradeAnimation) => {
     const { dashboard, run_panel, blockly_store } = useStore();
     const { active_tab } = dashboard;
-    const { has_saved_bots } = blockly_store;
-    const { isDesktop, isMobile } = useDevice();
-    // The desktop bar never remounts, so it reads this fresh on every render
-    // (each tab change); below 1280px it stays as it was.
-    const has_active_bot = isDesktop ? blockly_store.hasWorkspaceBlocks() : blockly_store.has_active_bot;
+    const { has_active_bot, has_saved_bots } = blockly_store;
+    const { isMobile } = useDevice();
 
     const { contract_stage, is_stop_button_visible, is_stop_button_disabled, onRunButtonClick, onStopBotClick } =
         run_panel;

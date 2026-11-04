@@ -7,10 +7,11 @@ import { useStore } from '@/hooks/useStore';
 import { act, render, screen } from '@testing-library/react';
 import RunStrategy from '../run-strategy';
 
-// Desktop Run bar: one element, mounted once, outside the run panel, on every
-// tab with the panel open or closed. jsdom has no layout, so "same spot" is
-// checked as: same DOM node, never inside anything that moves, and one fixed
-// rule in the stylesheet that no tab or panel state can change.
+// Desktop Run bar: one element, outside the run panel, on every tab that has it
+// with the panel open or closed; Tbots and DTrader have neither. jsdom has no
+// layout, so "same spot" is checked as: same DOM node, never inside anything
+// that moves, and one fixed rule in the stylesheet that no tab or panel state
+// can change.
 
 jest.mock('@/hooks/useStore', () => ({ useStore: jest.fn() }));
 const mock_device = { isDesktop: true, isMobile: false };
@@ -27,15 +28,17 @@ jest.mock('@/components/journal', () => ({ __esModule: true, default: () => null
 jest.mock('@/components/summary', () => ({ __esModule: true, default: () => null }));
 jest.mock('@/components/transactions', () => ({ __esModule: true, default: () => null }));
 
-const ALL_TABS: [string, number][] = [
+const BAR_TABS: [string, number][] = [
     ['Dashboard', DBOT_TABS.DASHBOARD],
     ['Bot Builder', DBOT_TABS.BOT_BUILDER],
-    ['Tbots', DBOT_TABS.TBOTS],
     ['Market Tool', DBOT_TABS.MARKET_TOOL],
-    ['DTrader', DBOT_TABS.DTRADER],
     ['TradingView', DBOT_TABS.TRADINGVIEW],
     ['Charts', DBOT_TABS.CHART],
     ['Copy Trading', DBOT_TABS.COPY_TRADING],
+];
+const NO_BAR_TABS: [string, number][] = [
+    ['Tbots', DBOT_TABS.TBOTS],
+    ['DTrader', DBOT_TABS.DTRADER],
 ];
 
 const setup = (active_tab: number = DBOT_TABS.DASHBOARD) => {
@@ -108,7 +111,7 @@ describe('desktop Run bar', () => {
         mock_device.isMobile = false;
     });
 
-    it.each(ALL_TABS)('%s: exactly one, outside the panel, panel closed and open', (_name, tab) => {
+    it.each(BAR_TABS)('%s: exactly one, outside the panel, panel closed and open', (_name, tab) => {
         const { setDrawer } = setup(tab);
         setDrawer(false);
         theRunBar();
@@ -116,10 +119,10 @@ describe('desktop Run bar', () => {
         theRunBar();
     });
 
-    it('is the same element through every tab and panel state: never moved, never remounted', () => {
+    it('is the same element through those tabs and panel states: never moved, never remounted', () => {
         const { setDrawer, setTab } = setup(DBOT_TABS.DASHBOARD);
         const bar = theRunBar();
-        ALL_TABS.forEach(([, tab]) => {
+        BAR_TABS.forEach(([, tab]) => {
             setTab(tab);
             [false, true].forEach(is_open => {
                 setDrawer(is_open);
@@ -145,6 +148,27 @@ describe('desktop Run bar', () => {
         act(() => runInAction(() => (run_panel.is_running = true)));
         expect(run_panel.is_drawer_open).toBe(true);
         expect(theRunBar()).toBe(bar);
+    });
+
+    it.each(NO_BAR_TABS)('%s: no Run bar and no panel, panel state or not', (_name, tab) => {
+        const { setDrawer } = setup(tab);
+        [false, true].forEach(is_open => {
+            setDrawer(is_open);
+            expect(screen.queryAllByTestId('run-controls')).toHaveLength(0);
+            expect(document.querySelector('.run-strategy-bar')).toBeNull();
+            expect(document.querySelector('.run-panel__container')).toBeNull();
+        });
+    });
+
+    it.each(NO_BAR_TABS)('%s: a running bot shows no panel there, and one on the next tab', (_name, tab) => {
+        const { run_panel, setTab } = setup(tab);
+        act(() => runInAction(() => (run_panel.is_running = true)));
+        expect(document.querySelector('.run-panel__container')).toBeNull();
+        expect(screen.queryAllByTestId('run-controls')).toHaveLength(0);
+        setTab(DBOT_TABS.MARKET_TOOL);
+        expect(document.querySelector('.run-panel__container')).not.toBeNull();
+        expect(run_panel.is_drawer_open).toBe(true);
+        theRunBar();
     });
 
     it('the Bot Builder tour hides the panel: the bar stays', () => {
@@ -189,10 +213,12 @@ describe('desktop Run bar stylesheet', () => {
         expect(read('components/run-panel/run-panel.scss')).not.toMatch(/^[^/]*\.run-strategy-bar/m);
     });
 
-    it('reserves no full-width row: the only tabs moved down are the two with controls under the bar', () => {
+    it('reserves no full-width row: the only tab moved down is TradingView, with controls under the bar', () => {
         expect(read('pages/dashboard/dashboard.scss')).not.toMatch(/--run-strategy-bar/);
-        expect(read('pages/dtrader/dtrader.scss')).toMatch(/top: var\(--tab-below-run-bar\);/);
         expect(read('pages/tradingview/tradingview.scss')).toMatch(/top: var\(--tab-below-run-bar\);/);
+        expect(read('pages/dtrader/dtrader.scss')).toMatch(
+            /\.dtrader-panel \{\s+display: none;\s+position: absolute;\s+top: 6\.6rem;/
+        );
         expect(main_scss).toMatch(/\.bot-builder \{\s+position: absolute;\s+top: 6\.6rem;/);
     });
 

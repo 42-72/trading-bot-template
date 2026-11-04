@@ -519,9 +519,9 @@ const AppWrapper = observer(() => {
                 </div>
             </div>
             <DesktopWrapper>
-                {/* Desktop Run bar: floats in one fixed spot on every tab, run panel
-                    open or closed, at the height of the panel's top row. It takes
-                    no height - every tab starts directly below the nav row. */}
+                {/* Desktop Run bar: floats in one fixed spot, run panel open or closed,
+                    at the height of the panel's top row. It takes no height - tabs
+                    start directly below the nav row. Not on Tbots / DTrader. */}
                 <div className='main__run-strategy-wrapper'>
                     <RunStrategy />
                     <RunPanel />

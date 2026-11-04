@@ -1,4 +1,11 @@
-import { clampToBounds, defaultPosition, getSafeBounds, readStoredPosition, storePosition } from '../ai-scanner-layout';
+import {
+    clampToBounds,
+    defaultPosition,
+    getSafeBounds,
+    openRunPanelBottom,
+    readStoredPosition,
+    storePosition,
+} from '../ai-scanner-layout';
 
 const BUTTON = 56;
 
@@ -84,7 +91,7 @@ describe('AI button default spot on a desktop / laptop', () => {
         place('run-strategy-bar', { top: 130, bottom: 170, left: 967, right: 1358 });
         if (is_panel_open) {
             place('run-panel__container', { top: 122, bottom: 732, left: 943, right: 1366 });
-            place('dc-drawer__toggle', { top: 122, bottom: 732, left: 943, right: 959 });
+            place('dc-drawer__toggle dc-drawer__toggle--open', { top: 122, bottom: 732, left: 943, right: 959 });
         } else {
             place('run-panel__container', { top: 122, bottom: 732, left: 1350, right: 1773 });
             place('dc-drawer__toggle', { top: 122, bottom: 732, left: 1350, right: 1366 });
@@ -99,6 +106,51 @@ describe('AI button default spot on a desktop / laptop', () => {
         desktop(is_panel_open);
         const bounds = getSafeBounds();
         expect(clampToBounds(defaultPosition(BUTTON, bounds), BUTTON, bounds)).toEqual({ x: 1294, y: 660 });
+    });
+
+    const placeInPanel = (className: string, rect: Parameters<typeof place>[1]) => {
+        place(className, rect);
+        const element = document.body.lastElementChild as HTMLElement;
+        document.querySelector('.run-panel__container')?.appendChild(element);
+    };
+
+    it('panel open: the default spot ends above the stats, clear of Total profit/loss and Reset', () => {
+        desktop(true);
+        placeInPanel('run-panel__stat', { top: 554, bottom: 675, left: 959, right: 1366 });
+        placeInPanel('dc-drawer__footer', { top: 675, bottom: 732, left: 959, right: 1366 });
+        const bounds = getSafeBounds();
+        const spot = defaultPosition(BUTTON, bounds, openRunPanelBottom() ?? bounds.bottom);
+        expect(spot).toEqual({ x: 1294, y: 482 });
+        expect(spot.y + BUTTON).toBeLessThan(554);
+    });
+
+    it('panel open on Journal (no stats): just above the Reset row', () => {
+        desktop(true);
+        placeInPanel('dc-drawer__footer', { top: 675, bottom: 732, left: 959, right: 1366 });
+        expect(openRunPanelBottom()).toBe(675);
+    });
+
+    it('panel closed: nothing to clear, however the panel measures', () => {
+        desktop(false);
+        placeInPanel('dc-drawer__footer', { top: 675, bottom: 732, left: 1350, right: 1773 });
+        expect(openRunPanelBottom()).toBeNull();
+    });
+
+    it('below 1280px: never lifted', () => {
+        setViewport(1024, 768);
+        place('dc-drawer__toggle dc-drawer__toggle--open', { top: 700, bottom: 736, left: 0, right: 1024 });
+        place('run-panel__container', { top: 100, bottom: 700, left: 0, right: 1024 });
+        placeInPanel('run-panel__stat', { top: 500, bottom: 620, left: 0, right: 1024 });
+        expect(openRunPanelBottom()).toBeNull();
+    });
+
+    it("Tbots / DTrader, no Run bar: still can't be dragged onto the nav row", () => {
+        setViewport(1366, 768);
+        place('deriv-header', { top: 0, bottom: 56, left: 0, right: 1366 });
+        place('dc-tabs__list--main__tabs', { top: 72, bottom: 122, left: 16, right: 1350 });
+        const bounds = getSafeBounds();
+        expect(bounds.top).toBe(122);
+        expect(clampToBounds({ x: 600, y: 90 }, BUTTON, bounds).y).toBe(130);
     });
 
     it('opening the panel does not move a remembered spot at the right edge', () => {

@@ -420,8 +420,8 @@
     }
 }
 
-// Desktop Run bar (run-strategy.tsx): ONE fixed spot on every tab, run panel
-// open or closed. It floats, so it takes no height and every tab still starts
+// Desktop Run bar (run-strategy.tsx): ONE fixed spot on every tab that has it
+// (not Tbots / DTrader), run panel open or closed. It floats, so it takes no height and every tab still starts
 // directly below the nav row. position: absolute against .bot-dashboard, which
 // never scrolls, so tab content scrolling can't move it; it is not inside the
 // panel, so the panel's slide can't either.
@@ -431,8 +431,8 @@
 // .run-panel__run-bar-slot (run-panel.scss), which stays in the panel so
 // Summary / Transactions / Journal start below it. Physical right, like
 // .run-panel__container. Over the panel (6), under the account dropdown
-// (account-switcher.scss, 1000). The tabs whose own controls would sit under
-// it start at --tab-below-run-bar instead (app.scss).
+// (account-switcher.scss, 1000). TradingView, whose own controls would sit
+// under it, starts at --tab-below-run-bar instead (app.scss).
 .run-strategy-bar {
     position: absolute;
     top: 7.45rem;

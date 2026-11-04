@@ -8,11 +8,11 @@ jest.mock('@/external/bot-skeleton', () => ({
     onWorkspaceResize: jest.fn(),
 }));
 
-// The desktop Run bar stays mounted for the whole session, so what it reads
-// must not freeze at its first value: a cached value is what left Run disabled
-// on every tab after a bot had loaded. The workspace isn't observable; the bar
-// re-reads it whenever it renders, which it does on every tab change.
-describe('BlocklyStore.hasWorkspaceBlocks under a component that never unmounts', () => {
+// The Run bar stays mounted, so what it reads must not freeze at its first
+// value: a cached value is what left Run disabled with "no bot yet" after a bot
+// had loaded. The workspace isn't observable; the bar re-reads it whenever it
+// renders, which it does on every tab change.
+describe('BlocklyStore.has_active_bot under a component that never unmounts', () => {
     const blockly = window as unknown as { Blockly?: { derivWorkspace?: { getTopBlocks: () => unknown[] } } };
     afterEach(() => {
         delete blockly.Blockly;
@@ -23,7 +23,7 @@ describe('BlocklyStore.hasWorkspaceBlocks under a component that never unmounts'
         const dashboard = observable({ active_tab: 0 });
         const Bar = observer(() => (
             <div>
-                {dashboard.active_tab}:{store.hasWorkspaceBlocks() ? 'has bot' : 'no bot'}
+                {dashboard.active_tab}:{store.has_active_bot ? 'has bot' : 'no bot'}
             </div>
         ));
         render(<Bar />);
@@ -34,10 +34,15 @@ describe('BlocklyStore.hasWorkspaceBlocks under a component that never unmounts'
         expect(screen.getByText('3:has bot')).toBeInTheDocument();
     });
 
-    it('has_active_bot, which phones and tablets still read, gives the same answer when read fresh', () => {
+    it('notices a workspace finishing its load without any tab change', () => {
         const store = new BlocklyStore({} as never);
-        expect(store.has_active_bot).toBe(false);
+        const Bar = observer(() => <div>{store.has_active_bot ? 'has bot' : 'no bot'}</div>);
+        store.setLoading(true);
+        render(<Bar />);
+        expect(screen.getByText('no bot')).toBeInTheDocument();
+
         blockly.Blockly = { derivWorkspace: { getTopBlocks: () => [{}] } };
-        expect(store.has_active_bot).toBe(true);
+        act(() => store.setLoading(false));
+        expect(screen.getByText('has bot')).toBeInTheDocument();
     });
 });

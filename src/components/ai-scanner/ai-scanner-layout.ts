@@ -10,19 +10,21 @@ export type TPoint = { x: number; y: number };
 
 const EDGE_GAP = 8;
 
-// Header, desktop Run bar (run-strategy.tsx; it only exists from 1280px, so
-// phones and tablets keep their bounds), run panel column with its toggle
-// (run-panel.tsx; below 1280px only, see getSafeBounds), desktop footer, mobile
-// run bar (.controls__section), and the run drawer's toggle bar on its own:
-// below 1280px the closed drawer's container measures 0 tall while its
-// full-width ▲ toggle bar still shows, so the container alone missed it. The
-// toggle bar gets a 12px gap (clampToBounds adds EDGE_GAP, the rest is added
-// here). top_band: caps the top like a band across the screen, whatever its
-// width - the Run bar floats at the right end, and below it is the only place
-// that keeps the button clear of both it and the nav row above it.
+// Header, desktop nav tab row (from 1280px: phones and tablets keep their
+// bounds; Tbots and DTrader have no Run bar below it), desktop Run bar
+// (run-strategy.tsx), run panel column with its toggle (run-panel.tsx; below
+// 1280px only, see getSafeBounds), desktop footer, mobile run bar
+// (.controls__section), and the run drawer's toggle bar on its own: below
+// 1280px the closed drawer's container measures 0 tall while its full-width ▲
+// toggle bar still shows, so the container alone missed it. The toggle bar
+// gets a 12px gap (clampToBounds adds EDGE_GAP, the rest is added here).
+// top_band: caps the top like a band across the screen, whatever its width -
+// the Run bar floats at the right end, and below it is the only place that
+// keeps the button clear of both it and the nav row above it.
 const DESKTOP_LAYOUT_MIN_WIDTH = 1280;
-const BLOCKERS: { selector: string; gap: number; top_band?: boolean }[] = [
+const BLOCKERS: { selector: string; gap: number; top_band?: boolean; min_width?: number }[] = [
     { selector: '.deriv-header', gap: EDGE_GAP },
+    { selector: '.dc-tabs__list--main__tabs', gap: EDGE_GAP, min_width: DESKTOP_LAYOUT_MIN_WIDTH },
     { selector: '.run-strategy-bar', gap: EDGE_GAP, top_band: true },
     { selector: '.run-panel__container', gap: EDGE_GAP },
     { selector: '.dc-drawer__toggle', gap: 12 },
@@ -68,7 +70,8 @@ export const getSafeBounds = ({ ignore_run_drawer = false } = {}): TBounds => {
     const bounds: TBounds = { top: 0, left: 0, right: vw, bottom: vh };
     const skip_run_drawer = ignore_run_drawer || vw >= DESKTOP_LAYOUT_MIN_WIDTH;
 
-    BLOCKERS.forEach(({ selector, gap, top_band = false }) => {
+    BLOCKERS.forEach(({ selector, gap, top_band = false, min_width = 0 }) => {
+        if (vw < min_width) return;
         if (skip_run_drawer && (selector === '.run-panel__container' || selector === '.dc-drawer__toggle')) return;
         const extra = gap - EDGE_GAP;
         document.querySelectorAll(selector).forEach(element => {
@@ -107,12 +110,30 @@ export const isWideScreen = () => window.innerWidth >= WIDE_MIN_WIDTH;
 
 /**
  * Bottom-right on every screen: on a desktop / laptop above the footer, on a
- * phone above the run bar - `bounds` already leaves those out.
+ * phone above the run bar - `bounds` already leaves those out. `bottom`:
+ * end higher than that (openRunPanelBottom).
  */
-export const defaultPosition = (size: number, bounds: TBounds): TPoint => ({
+export const defaultPosition = (size: number, bounds: TBounds, bottom = bounds.bottom): TPoint => ({
     x: bounds.right - 2 * EDGE_GAP - size,
-    y: bounds.bottom - 2 * EDGE_GAP - size,
+    y: bottom - 2 * EDGE_GAP - size,
 });
+
+/**
+ * From 1280px, with the run panel open: where the button's default spot has to
+ * end so it leaves the panel's stats and Reset uncovered - the top of the
+ * stats block, or of the Reset row on Journal, which has no stats. The whole
+ * block, not just Total profit/loss: its label and No. of runs sit right above
+ * that value. Null otherwise. Only for the default spot: a spot the trader
+ * chose stays where they left it.
+ */
+export const openRunPanelBottom = (): number | null => {
+    if (window.innerWidth < DESKTOP_LAYOUT_MIN_WIDTH || !isRunDrawerOpen(false)) return null;
+    const element =
+        document.querySelector('.run-panel__container .run-panel__stat') ??
+        document.querySelector('.run-panel__container .dc-drawer__footer');
+    const rect = element && visibleRect(element);
+    return rect ? rect.top : null;
+};
 
 // v2 for desktop / laptop: everyone gets the new bottom-right default once
 // (the old desktop key, bottom-left default, is removed). Phones keep theirs.

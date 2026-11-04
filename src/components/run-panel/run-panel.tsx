@@ -340,9 +340,12 @@ const RunPanel = observer(() => {
         />
     );
 
-    // Desktop: mounts on every tab, see the effect above for default
-    // visibility (collapsed vs shown) - the Drawer's chevron stays reachable
-    // so a collapsed panel can still be opened manually.
+    // Desktop: mounts on every tab except RUN_BAR_HIDDEN_TABS (Tbots,
+    // DTrader), where neither the Run bar nor the panel is shown, even during
+    // a run. On the other tabs see the effect above for default visibility
+    // (collapsed vs shown) - the Drawer's chevron stays reachable so a
+    // collapsed panel can still be opened manually.
+    if (isDesktop && RUN_BAR_HIDDEN_TABS.includes(active_tab)) return null;
     if (active_tour === 'bot_builder') return null;
 
     // Phones, Tbots / DTrader: the drawer (and its handle) is hidden so the tab

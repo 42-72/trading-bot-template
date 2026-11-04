@@ -12,7 +12,6 @@ export default class BlocklyStore {
             is_loading: observable,
             active_tab: observable,
             _has_saved_bots: observable,
-            has_active_bot: computed,
             has_saved_bots: computed,
             setLoading: action,
             setActiveTab: action,
@@ -24,15 +23,12 @@ export default class BlocklyStore {
     is_loading = false;
     active_tab = tabs_title.WORKSPACE;
 
-    // Computed property to check if there's an active bot
+    // Plain getter, not computed: the workspace is not observable, so a computed
+    // stays cached for as long as something observes it - and the Run bar is
+    // mounted for as long as it is on screen. Reading is_loading makes an observer
+    // render again when a workspace has finished loading, not just on a tab change.
     get has_active_bot(): boolean {
-        return this.hasWorkspaceBlocks();
-    }
-
-    // The same check, read fresh. The workspace is not observable, so the
-    // computed above stays cached for as long as something observes it - which
-    // for the always-mounted desktop Run bar would be forever.
-    hasWorkspaceBlocks(): boolean {
+        void this.is_loading;
         // Check if there's an active bot in the workspace
         const workspace = window.Blockly?.derivWorkspace;
         if (!workspace) return false;
