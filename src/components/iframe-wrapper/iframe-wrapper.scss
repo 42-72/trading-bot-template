@@ -27,33 +27,6 @@
         background: transparent;
     }
 
-    &--fallback {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 0.8rem;
-        background: var(--general-main-1);
-        text-align: center;
-        padding: 1.6rem;
-    }
-
-    &__fallback-message {
-        margin: 0;
-        color: var(--text-general);
-        font-size: 1.4rem;
-    }
-
-    &__fallback-link {
-        color: var(--button-primary-default);
-        font-size: 1.3rem;
-        word-break: break-all;
-
-        &:hover {
-            text-decoration: underline;
-        }
-    }
-
     // Loading / failed state over the frame (patientLoad, index.tsx). Loading
     // lets clicks through: the frame underneath may already be usable.
     &__status {
@@ -75,8 +48,46 @@
             padding-bottom: calc(1.6rem + var(--run-panel-height, 6.2rem) + env(safe-area-inset-bottom, 0px));
         }
 
+        // Above a caller's own loading state, which lies over this whole box.
         &--failed {
+            z-index: 1;
             pointer-events: auto;
+        }
+    }
+
+    // Over a page that is taking long: small, so the frame stays usable.
+    &__slow {
+        position: absolute;
+        top: 0.8rem;
+        left: 50%;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        gap: 1.2rem;
+        box-sizing: border-box;
+        width: max-content;
+        max-width: calc(100% - 1.6rem);
+        padding: 0.6rem 1.4rem;
+        border: 1px solid var(--border-normal);
+        border-radius: 999px;
+        background: var(--general-section-1);
+        color: var(--text-general);
+        font-size: 1.3rem;
+        transform: translateX(-50%);
+    }
+
+    &__slow-reload {
+        padding: 0;
+        border: 0;
+        background: none;
+        color: var(--button-primary-default);
+        font: inherit;
+        font-weight: 700;
+        white-space: nowrap;
+        cursor: pointer;
+
+        &:hover {
+            text-decoration: underline;
         }
     }
 

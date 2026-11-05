@@ -20,7 +20,7 @@ import {
 import { scheduleDTraderWarmup } from '@/utils/dtrader-warmup';
 import { isLoginRequestAllowed } from '@/utils/idle-logout';
 import { isBotOrScannerRunning } from '@/utils/run-activity';
-import { Localize } from '@deriv-com/translations';
+import { Localize, localize } from '@deriv-com/translations';
 import './dtrader.scss';
 
 // How often the token is re-checked, so an expired session reaches the frame
@@ -50,6 +50,9 @@ const DTraderPanel = observer(() => {
     const [has_opened, setHasOpened] = useState(false);
     // Until the frame's page has started (ct:ready or its load event)
     const [is_frame_loading, setIsFrameLoading] = useState(true);
+    // Only ct:ready: a load event says the page arrived, not that DTrader runs.
+    // The frame says it again after reloading itself, so that needs nothing extra.
+    const [is_frame_ready, setIsFrameReady] = useState(false);
     // Opened at least once in this page load (the warm-up has nothing left to do)
     const was_opened_ref = useRef(false);
     const frame_ref = useRef<HTMLIFrameElement>(null);
@@ -65,6 +68,7 @@ const DTraderPanel = observer(() => {
         if (is_active && !has_opened) {
             was_opened_ref.current = true;
             setIsFrameLoading(true);
+            setIsFrameReady(false);
             setHasOpened(true);
         }
     }, [is_active, has_opened]);
@@ -95,6 +99,12 @@ const DTraderPanel = observer(() => {
     );
 
     const onFrameStarted = useCallback(() => setIsFrameLoading(false), []);
+
+    const onFrameRetry = useCallback(() => {
+        last_sent_ref.current = undefined; // a reloaded frame says ct:ready again
+        setIsFrameLoading(true);
+        setIsFrameReady(false);
+    }, []);
 
     const getFrameWindow = () => frame_ref.current?.contentWindow;
 
@@ -143,6 +153,7 @@ const DTraderPanel = observer(() => {
             switch (message.type) {
                 case 'ct:ready':
                     onFrameStarted();
+                    setIsFrameReady(true);
                     sendSession();
                     break;
                 case 'ct:token-invalid': {
@@ -196,8 +207,18 @@ const DTraderPanel = observer(() => {
                         className='dtrader-container'
                         frameRef={frame_ref}
                         sandbox={DTRADER_IFRAME_SANDBOX}
-                        fallbackMessage='DTrader is temporarily unavailable'
                         onLoad={onFrameStarted}
+                        patientLoad={{
+                            isVisible: is_active,
+                            failedText: localize('DTrader is temporarily unavailable'),
+                            retryText: localize('Try again'),
+                            readySignal: {
+                                isReady: is_frame_ready,
+                                slowText: localize('Still loading…'),
+                                reloadText: localize('Reload DTrader'),
+                            },
+                            onRetry: onFrameRetry,
+                        }}
                     />
                     {is_frame_loading && (
                         <div className='dtrader-panel__loading' role='status' aria-live='polite'>

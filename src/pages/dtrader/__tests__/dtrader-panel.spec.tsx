@@ -1,14 +1,16 @@
 import { observable, runInAction } from 'mobx';
+import { SLOW_LOAD_NOTICE_MS } from '@/components/iframe-wrapper';
 import { DBOT_TABS } from '@/constants/bot-contents';
 import { useStore } from '@/hooks/useStore';
 import { DTRADER_EMBED_URL, DTRADER_ORIGIN } from '@/utils/dtrader-embed';
-import { act, render } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import DTraderPanel from '..';
 
 jest.mock('@/hooks/useStore', () => ({ useStore: jest.fn() }));
 jest.mock('@/components/shared', () => ({ generateOAuthURL: jest.fn() }));
 jest.mock('@deriv-com/translations', () => ({
     Localize: ({ i18n_default_text }: { i18n_default_text: string }) => i18n_default_text,
+    localize: (text: string) => text,
 }));
 
 const renderPanel = (active_tab = DBOT_TABS.DTRADER) => {
@@ -261,6 +263,62 @@ describe('DTraderPanel - loading state', () => {
             getFrame(container).dispatchEvent(new Event('load'));
         });
         expect(container.querySelector('.dtrader-panel__loading')).toBeNull();
+    });
+
+    describe('a slow DTrader', () => {
+        const sayReady = (frame_window: Window) =>
+            act(() => {
+                window.dispatchEvent(
+                    new MessageEvent('message', {
+                        origin: DTRADER_ORIGIN,
+                        source: frame_window,
+                        data: { type: 'ct:ready' },
+                    })
+                );
+            });
+        const reload = () => screen.queryByRole('button', { name: 'Reload DTrader' });
+
+        beforeEach(() => jest.useFakeTimers());
+        afterEach(() => jest.useRealTimers());
+
+        it('keeps the frame past 15 s, offers Reload, and takes it away at ct:ready', () => {
+            const { container } = renderPanel();
+            const frame = getFrame(container);
+            const frame_window = frame.contentWindow as Window;
+            jest.spyOn(frame_window, 'postMessage').mockImplementation(() => undefined);
+
+            act(() => {
+                jest.advanceTimersByTime(SLOW_LOAD_NOTICE_MS);
+            });
+            expect(getFrame(container)).toBe(frame);
+            expect(screen.getByText('Still loading…')).toBeInTheDocument();
+            expect(reload()).toBeInTheDocument();
+
+            sayReady(frame_window);
+            expect(reload()).not.toBeInTheDocument();
+        });
+
+        it('the load event does not stop the bar: only ct:ready means DTrader runs', () => {
+            const { container } = renderPanel();
+            fireEvent.load(getFrame(container));
+            act(() => {
+                jest.advanceTimersByTime(SLOW_LOAD_NOTICE_MS);
+            });
+            expect(reload()).toBeInTheDocument();
+        });
+
+        it('Reload brings the loading state back, at the embedded address', () => {
+            const { container } = renderPanel();
+            fireEvent.load(getFrame(container));
+            act(() => {
+                jest.advanceTimersByTime(SLOW_LOAD_NOTICE_MS);
+            });
+            const first_frame = getFrame(container);
+            fireEvent.click(reload() as HTMLElement);
+            expect(getFrame(container)).not.toBe(first_frame);
+            expect(getFrame(container)).toHaveAttribute('src', DTRADER_EMBED_URL);
+            expect(container.querySelector('.dtrader-panel__loading')).toBeInTheDocument();
+        });
     });
 
     it("marks DTrader's bottom bar for the AI Scanner button", () => {
