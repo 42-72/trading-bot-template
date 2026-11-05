@@ -10,6 +10,11 @@ export default Engine =>
         observeOpenContract() {
             if (!api_base.api) return;
             const subscription = api_base.api.onMessage().subscribe(({ data }) => {
+                // A buy whose reply never told us it worked (Purchase.js).
+                if (this.pending_buy && data.msg_type === 'transaction' && data.transaction?.action === 'buy') {
+                    this.pending_buy.transactions.push(data.transaction);
+                }
+
                 if (data.msg_type === 'proposal_open_contract') {
                     const contract = data.proposal_open_contract;
 

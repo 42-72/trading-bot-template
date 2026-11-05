@@ -9,7 +9,7 @@ import AiScannerPanel, { shortMarketName } from '../ai-scanner-panel';
 jest.mock('../../../assets/ai-engine/bull-ai-overunder.xml', () => '');
 jest.mock('@/utils/load-bot-into-builder', () => ({ loadBotIntoBuilder: jest.fn() }));
 jest.mock('@/external/bot-skeleton/services/api/api-base', () => ({
-    api_base: { api: { send: jest.fn(() => new Promise(() => undefined)) } },
+    api_base: { ensureConnection: async () => true, api: { send: jest.fn(() => new Promise(() => undefined)) } },
 }));
 jest.mock('@/hooks/useStore', () => ({ useStore: jest.fn() }));
 // The shared translations mock returns texts with {{placeholders}} unfilled.

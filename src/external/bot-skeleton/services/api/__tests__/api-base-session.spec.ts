@@ -2,7 +2,13 @@ import { OAuthTokenExchangeService } from '@/services/oauth-token-exchange.servi
 import { session_status, SessionExpiredError } from '@/utils/session-status';
 import { keep_alive, KEEP_ALIVE_INTERVAL_MS } from '@/utils/socket-keep-alive';
 import { observer as globalObserver } from '../../../utils/observer';
-import { api_base, RECONNECT_BACKOFF_MS } from '../api-base';
+import {
+    api_base,
+    HEALTH_PING_TIMEOUT_MS,
+    RECONNECT_BACKOFF_MS,
+    RECONNECT_WAIT_MS,
+    SOCKET_FRESH_MS,
+} from '../api-base';
 import { generateDerivApiInstance } from '../appId';
 import ApiHelpers from '../api-helpers';
 
@@ -59,8 +65,16 @@ function makeApi(is_authenticated = true, balance: () => Promise<unknown> = bala
             connection.readyState = 3;
             listeners.close?.forEach(cb => cb({ code }));
         },
+        /** Any message from the server. */
+        receive() {
+            listeners.message?.forEach(cb => cb());
+        },
     };
 }
+
+/** Dead without closing: the browser still says open, and nothing comes back. */
+const dieSilently = (api: TFakeApi) => api.send.mockImplementation(() => new Promise(() => undefined));
+const pings = (api: TFakeApi) => api.send.mock.calls.filter(([request]) => request.ping);
 
 const mockGenerate = generateDerivApiInstance as jest.Mock;
 const mockGetAuthInfo = OAuthTokenExchangeService.getAuthInfo as jest.Mock;
@@ -311,6 +325,199 @@ describe('api_base session handling', () => {
             await flush();
             expect(emitted).toEqual(['session.connection_lost']);
             expect(client_store.logout).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('a socket that died without closing', () => {
+        const comeBack = () => document.dispatchEvent(new Event('visibilitychange'));
+        const idle = (base: typeof api_base) => {
+            base.initEventListeners();
+            return jest.advanceTimersByTimeAsync(SOCKET_FRESH_MS);
+        };
+
+        afterEach(() => {
+            keep_alive.setBusy('bot', false);
+            keep_alive.setBusy('ai_scanner', false);
+        });
+
+        it('coming back: a ping shows it is dead, and a new socket logs in before anything is pressed', async () => {
+            const api = makeApi();
+            const base = await loggedIn(api);
+            await idle(base);
+            dieSilently(api);
+            const next_api = makeApi();
+            mockGenerate.mockResolvedValueOnce(next_api);
+
+            comeBack();
+            await flush();
+            expect(pings(api)).toHaveLength(1);
+            await jest.advanceTimersByTimeAsync(HEALTH_PING_TIMEOUT_MS - 1);
+            expect(mockGenerate).toHaveBeenCalledTimes(1); // it still has its 2 s
+            await jest.advanceTimersByTimeAsync(10);
+
+            expect(mockGenerate).toHaveBeenCalledTimes(2);
+            next_api.open();
+            await flush();
+            expect(base.isFullyLoggedIn()).toBe(true);
+            expect(base.api).toBe(next_api);
+        });
+
+        it('quietly: no "Reconnecting…", no lost connection - not even when the old socket closes late', async () => {
+            const api = makeApi();
+            const base = await loggedIn(api);
+            await idle(base);
+            dieSilently(api);
+            const next_api = makeApi();
+            mockGenerate.mockResolvedValueOnce(next_api);
+            comeBack();
+            await jest.advanceTimersByTimeAsync(HEALTH_PING_TIMEOUT_MS);
+            expect(session_status.is_reconnecting).toBe(false);
+            next_api.open();
+            await flush();
+            api.close();
+            await flush();
+            expect(emitted).toEqual([]);
+            expect(session_status.notice).toBeNull();
+        });
+
+        it('coming back to a healthy socket: one ping, nothing else', async () => {
+            const api = makeApi();
+            const base = await loggedIn(api);
+            await idle(base);
+            comeBack();
+            await jest.advanceTimersByTimeAsync(HEALTH_PING_TIMEOUT_MS * 2);
+            expect(pings(api)).toHaveLength(1);
+            expect(mockGenerate).toHaveBeenCalledTimes(1);
+        });
+
+        it('focus and visible together share one check', async () => {
+            const api = makeApi();
+            const base = await loggedIn(api);
+            await idle(base);
+            dieSilently(api);
+            comeBack();
+            window.dispatchEvent(new Event('focus'));
+            await flush();
+            expect(pings(api)).toHaveLength(1);
+        });
+
+        it.each(['bot', 'ai_scanner'])('never during a run (%s): a slow ping must not stop it', async reason => {
+            const api = makeApi();
+            const base = await loggedIn(api);
+            await idle(base);
+            dieSilently(api);
+            keep_alive.setBusy(reason, true);
+            comeBack();
+            await jest.advanceTimersByTimeAsync(HEALTH_PING_TIMEOUT_MS * 2);
+            expect(pings(api)).toHaveLength(0);
+            expect(mockGenerate).toHaveBeenCalledTimes(1);
+        });
+
+        it('a run on a socket that really closes still stops, as ever', async () => {
+            const api = makeApi();
+            const base = await loggedIn(api);
+            keep_alive.setBusy('bot', true);
+            mockGenerate.mockResolvedValueOnce(makeApi());
+            api.close();
+            await flush();
+            expect(base).toBeTruthy();
+            expect(emitted).toEqual(['session.connection_lost']);
+        });
+
+        describe('before starting (ensureConnection)', () => {
+            it('something just arrived: true at once, no ping', async () => {
+                const api = makeApi();
+                const base = await loggedIn(api);
+                api.receive();
+                expect(base.isConnectionFresh()).toBe(true);
+                await expect(base.ensureConnection()).resolves.toBe(true);
+                expect(pings(api)).toHaveLength(0);
+            });
+
+            it('quiet but alive: a ping says so', async () => {
+                const api = makeApi();
+                const base = await loggedIn(api);
+                await jest.advanceTimersByTimeAsync(SOCKET_FRESH_MS);
+                expect(base.isConnectionFresh()).toBe(false);
+                await expect(base.ensureConnection()).resolves.toBe(true);
+                expect(pings(api)).toHaveLength(1);
+            });
+
+            it('dead: answers only once the new socket is logged in', async () => {
+                const api = makeApi();
+                const base = await loggedIn(api);
+                await jest.advanceTimersByTimeAsync(SOCKET_FRESH_MS);
+                dieSilently(api);
+                const next_api = makeApi();
+                mockGenerate.mockResolvedValueOnce(next_api);
+
+                const answer = jest.fn();
+                base.ensureConnection().then(answer);
+                await jest.advanceTimersByTimeAsync(HEALTH_PING_TIMEOUT_MS + 500);
+                expect(answer).not.toHaveBeenCalled();
+
+                next_api.open();
+                await jest.advanceTimersByTimeAsync(200);
+                expect(answer).toHaveBeenCalledWith(true);
+                expect(base.api).toBe(next_api);
+                expect(emitted).toEqual([]);
+            });
+
+            it('the socket closes during the check: still no lost connection, nothing has started', async () => {
+                const api = makeApi();
+                const base = await loggedIn(api);
+                await jest.advanceTimersByTimeAsync(SOCKET_FRESH_MS);
+                dieSilently(api);
+                const next_api = makeApi();
+                mockGenerate.mockResolvedValueOnce(next_api);
+                const answer = jest.fn();
+                base.ensureConnection().then(answer);
+                await flush();
+                api.close();
+                await jest.advanceTimersByTimeAsync(HEALTH_PING_TIMEOUT_MS);
+                next_api.open();
+                await jest.advanceTimersByTimeAsync(200);
+                expect(answer).toHaveBeenCalledWith(true);
+                expect(emitted).toEqual([]);
+                expect(mockGenerate).toHaveBeenCalledTimes(2); // the new socket is not thrown away
+                expect(base.api).toBe(next_api);
+            });
+
+            it('no connection to be had: false, in the end', async () => {
+                const api = makeApi();
+                const base = await loggedIn(api);
+                await jest.advanceTimersByTimeAsync(SOCKET_FRESH_MS);
+                dieSilently(api);
+                mockGenerate.mockRejectedValue(new Error('offline'));
+                const answer = jest.fn();
+                base.ensureConnection().then(answer);
+                await jest.advanceTimersByTimeAsync(HEALTH_PING_TIMEOUT_MS + RECONNECT_WAIT_MS + 200);
+                expect(answer).toHaveBeenCalledWith(false);
+            });
+
+            it('a ping refused with an error still proves the socket alive', async () => {
+                const api = makeApi();
+                const base = await loggedIn(api);
+                await jest.advanceTimersByTimeAsync(SOCKET_FRESH_MS);
+                api.send.mockImplementation(() => Promise.reject({ error: { code: 'RateLimit' } }));
+                await expect(base.ensureConnection()).resolves.toBe(true);
+                expect(mockGenerate).toHaveBeenCalledTimes(1);
+            });
+
+            it('never runs anything by itself', async () => {
+                const onReconnected = jest.fn();
+                globalObserver.register('bot.running', onReconnected);
+                const api = makeApi();
+                const base = await loggedIn(api);
+                await jest.advanceTimersByTimeAsync(SOCKET_FRESH_MS);
+                dieSilently(api);
+                mockGenerate.mockResolvedValueOnce(makeApi());
+                base.ensureConnection();
+                await jest.advanceTimersByTimeAsync(HEALTH_PING_TIMEOUT_MS + 500);
+                expect(onReconnected).not.toHaveBeenCalled();
+                expect(base.is_running).toBe(false);
+                globalObserver.unregisterAll('bot.running');
+            });
         });
     });
 

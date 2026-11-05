@@ -1,5 +1,6 @@
 import { isAiEngineStrategyId, isLibraryStrategyId } from '@/utils/library-strategies';
 import { keep_alive } from '@/utils/socket-keep-alive';
+import { getBotStoppedMessage } from '../services/tradeEngine/utils/error-recovery';
 import { save_types } from '../constants';
 import { config } from '../constants/config';
 import { api_base } from '../services/api/api-base';
@@ -63,7 +64,14 @@ class DBot {
             }
             if (this.is_bot_running) return;
             this.interpreter = Interpreter();
-            if (this.symbol) this.interpreter.bot.tradeEngine.watchTicks(this.symbol).catch?.(() => {});
+            // Bounded: the engine says "ready" when its ticks are in, and a Run waiting on this
+            // must start after that, or the run panel would read it as the bot being idle.
+            if (this.symbol) {
+                await Promise.race([
+                    this.interpreter.bot.tradeEngine.watchTicks(this.symbol).catch?.(() => {}),
+                    new Promise(resolve => setTimeout(resolve, 3000)),
+                ]);
+            }
         })().finally(() => {
             this.engine_refresh = null;
         });
@@ -376,14 +384,20 @@ class DBot {
 
     startInterpreter(code) {
         try {
-            this.interpreter.run(code).catch(error => {
-                globalObserver.emit('Error', error);
-                this.stopBot();
-            });
+            this.interpreter.run(code).catch(error => this.stopOnError(error));
         } catch (error) {
-            globalObserver.emit('Error', error);
-            if (this.interpreter) this.stopBot();
+            if (this.interpreter) this.stopOnError(error);
+            else globalObserver.emit('Error', error);
         }
+    }
+
+    /** The run is over: nothing more will be tried. Stops it and says why, in the Journal and on screen. */
+    stopOnError(error) {
+        const message = getBotStoppedMessage(error);
+        globalObserver.emit('bot.stopped_on_error', message);
+        globalObserver.emit('ui.log.error', message);
+        globalObserver.emit('Error', Object.assign(error, { is_final: true }));
+        this.stopBot();
     }
 
     /**

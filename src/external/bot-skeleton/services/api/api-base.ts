@@ -56,6 +56,14 @@ const whatToWaitFor = (): 'online' | 'visible' | null => {
     return null;
 };
 
+// Socket health (ensureConnection): anything received this recently proves the
+// socket alive; otherwise a ping gets this long to come back.
+export const SOCKET_FRESH_MS = 3000;
+export const HEALTH_PING_TIMEOUT_MS = 2000;
+// How long pressing Run or Scan waits for a dead socket to be replaced.
+export const RECONNECT_WAIT_MS = 15000;
+const DEAD_SOCKET_REASON = 'dead socket';
+
 type TApiBaseApi = {
     /** Set by appId.js: true for a socket opened with a one-time login code, false for the public one. */
     ct_is_authenticated?: boolean;
@@ -106,6 +114,8 @@ class APIBase {
     auth_error_check: { generation: number; confirm_until: number | null } | null = null;
     /** The first connection this page authorized: later ones are reconnects. */
     private first_authorized_generation = -1;
+    private last_message_at = 0;
+    private connection_check: Promise<boolean> | null = null;
     private retired_apis = new WeakSet<object>();
     private listened_apis = new WeakSet<object>();
     private are_session_listeners_on = false;
@@ -521,6 +531,9 @@ class APIBase {
             if (api === this.api) this.onsocketopen();
         });
         api.connection.addEventListener('close', () => this.onSessionSocketClose(api));
+        api.connection.addEventListener('message', () => {
+            if (api === this.api) this.last_message_at = Date.now();
+        });
     }
 
     /** True while there is a stored, unexpired access token. */
@@ -545,14 +558,87 @@ class APIBase {
         }
         setConnectionStatus(CONNECTION_STATUS.CLOSED);
         this.authorized_generation = -1;
-        // A running bot / AI Scanner must not carry on without a session.
-        if (api.ct_is_authenticated) globalObserver.emit('session.connection_lost');
+        // A running bot / AI Scanner must not carry on without a session. A check
+        // under way means nothing has started yet: it replaces the socket first.
+        if (api.ct_is_authenticated && !this.connection_check) globalObserver.emit('session.connection_lost');
         this.scheduleReconnect('socket closed');
+    }
+
+    /** Logged in, open, and something arrived a moment ago: no need to ask. */
+    isConnectionFresh() {
+        return (
+            this.isFullyLoggedIn() &&
+            this.api?.connection?.readyState === 1 &&
+            Date.now() - this.last_message_at < SOCKET_FRESH_MS
+        );
+    }
+
+    /**
+     * A socket can die without closing: after a long idle or a hidden tab the
+     * browser still says open, and only finds out once a request goes
+     * unanswered - by then a bot or AI Scanner would have started on it and be
+     * stopped by the close. So this proves the socket alive, or replaces it
+     * quietly. True once it is safe to start. Starts nothing itself.
+     */
+    ensureConnection(): Promise<boolean> {
+        if (!this.hasSession() || this.isConnectionFresh()) return Promise.resolve(true);
+        this.connection_check ??= this.checkConnection().finally(() => {
+            this.connection_check = null;
+        });
+        return this.connection_check;
+    }
+
+    private async checkConnection() {
+        const api = this.api;
+        if (api && this.isFullyLoggedIn(api) && (await this.isSocketAnswering(api))) return true;
+        if (api && api === this.api && this.isFullyLoggedIn(api)) {
+            // Its close, whenever that comes, is a swap and not a lost connection.
+            this.retired_apis.add(api);
+            this.authorized_generation = -1;
+            this.scheduleReconnect(DEAD_SOCKET_REASON, true);
+        } else if (!this.is_reconnecting_now && !this.reconnect_timer && !this.isSocketUsable()) {
+            this.scheduleReconnect(DEAD_SOCKET_REASON, true);
+        }
+        // Otherwise a new socket is already on its way: starting another would throw it away.
+        return this.waitUntilLoggedIn();
+    }
+
+    private isSocketUsable() {
+        const ready_state = this.api?.connection?.readyState;
+        return ready_state === 0 || ready_state === 1;
+    }
+
+    private async isSocketAnswering(api: TApiBaseApi) {
+        if (api.connection?.readyState !== 1) return false;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const no_reply = new Promise<'no reply'>(resolve => {
+            timer = setTimeout(() => resolve('no reply'), HEALTH_PING_TIMEOUT_MS);
+        });
+        try {
+            const reply = await Promise.race([api.send({ ping: 1 }), no_reply]);
+            return reply !== 'no reply';
+        } catch {
+            // An answer, even a refusal, came from a live socket; a lost one closes it.
+            return api.connection?.readyState === 1;
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+
+    private async waitUntilLoggedIn() {
+        const give_up_at = Date.now() + RECONNECT_WAIT_MS;
+        while (Date.now() < give_up_at && !this.is_session_expired) {
+            if (this.isFullyLoggedIn() && this.api?.connection?.readyState === 1) return true;
+            // eslint-disable-next-line no-await-in-loop
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        return false;
     }
 
     scheduleReconnect = (reason: string, immediate = false) => {
         if (this.is_session_expired && this.hasSession()) return;
-        if (this.hasSession()) session_status.setReconnecting(true);
+        // Replacing a dead socket is quiet: it says nothing unless a retry is needed.
+        if (this.hasSession() && reason !== DEAD_SOCKET_REASON) session_status.setReconnecting(true);
         if (this.is_reconnecting_now) {
             return;
         }
@@ -621,7 +707,12 @@ class APIBase {
         // log in on a fresh socket, as a page load would.
         if (!this.api.ct_is_authenticated && getAccountId() && this.hasSession() && !this.is_reconnecting_now) {
             this.scheduleReconnect('session found', true);
+            return;
         }
+        // "Open" proves nothing after time away. Never during a run: a slow ping must not
+        // stop one, and a socket that really died still closes and stops it, as ever.
+        const is_run_busy = keep_alive.isBusy('bot') || keep_alive.isBusy('ai_scanner');
+        if (this.isFullyLoggedIn() && !is_run_busy) this.ensureConnection();
     };
 
     onWindowOnline = () => this.onResume('online');

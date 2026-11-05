@@ -1,11 +1,12 @@
 import { isMultiplierContract } from '@/components/shared';
 import cloneThorough from '@/utils/clone';
 import JSInterpreter from '@deriv/js-interpreter';
-import { unrecoverable_errors } from '../../../constants/messages';
 import { observer as globalObserver } from '../../../utils/observer';
 import { api_base } from '../../api/api-base';
 import Interface from '../Interface';
+import { notify } from './broadcast';
 import { createScope } from './cliTools';
+import { createRetryBudget, getBotStoppedMessage, getRetryMessage, isRecoverableError } from './error-recovery';
 
 JSInterpreter.prototype.takeStateSnapshot = function () {
     const newStateStack = cloneThorough(this.stateStack, undefined, undefined, undefined, true);
@@ -20,8 +21,8 @@ JSInterpreter.prototype.restoreStateSnapshot = function (snapshot) {
 
 const botInitialized = bot => bot && bot.tradeEngine.options;
 const botStarted = bot => botInitialized(bot) && bot.tradeEngine.tradeOptions;
-const shouldRestartOnError = (bot, errorName = '') =>
-    !unrecoverable_errors.includes(errorName) && botInitialized(bot) && bot.tradeEngine.options.shouldRestartOnError;
+const shouldRetryOnError = (bot, errorName = '') =>
+    isRecoverableError(errorName) && botInitialized(bot) && bot.tradeEngine.options.shouldRestartOnError;
 
 const shouldStopOnError = (bot, errorName = '') => {
     const stopErrors = ['SellNotAvailableCustom', 'ContractCreationFailure', 'InvalidtoBuy', 'AiTradeMismatch'];
@@ -41,18 +42,16 @@ const Interpreter = () => {
     let bot = Interface($scope);
     let interpreter = {};
     let onFinish;
+    // A failed call stays paused in the strategy while it is tried again, so
+    // every variable (stake, martingale step, counters) is simply still there.
+    const retry_budget = createRetryBudget();
+    let failed_call = null;
+    let retrying_call = null;
+    let retry_timer = null;
 
     $scope.observer.register('REVERT', watchName =>
         revert(watchName === 'before' ? $scope.beforeState : $scope.duringState)
     );
-
-    function init() {
-        bound_api = api_base.api;
-        $scope = createScope();
-        bot = Interface($scope);
-        interpreter = {};
-        onFinish = () => {};
-    }
 
     function revert(state) {
         interpreter.restoreStateSnapshot(state);
@@ -63,6 +62,16 @@ const Interpreter = () => {
     function loop() {
         if ($scope.stopped || !interpreter.run()) {
             onFinish(interpreter.pseudoToNative(interpreter.value));
+        }
+    }
+
+    /** The failure being retried is over once its call works - or, for proposals, once they are back. */
+    function onCallDone(call) {
+        if (!retry_budget.tries) return;
+        const is_proposals_retry = !retrying_call && bot.tradeEngine.store.getState().proposalsReady;
+        if (call === retrying_call || is_proposals_retry) {
+            retry_budget.reset();
+            retrying_call = null;
         }
     }
 
@@ -78,15 +87,34 @@ const Interpreter = () => {
             const function_args = first_defined_arg_idx < 0 ? [] : reversed_args.slice(first_defined_arg_idx).reverse();
             // End of workaround
 
-            func(...function_args.map(arg => js_interpreter.pseudoToNative(arg)))
-                .then(rv => {
-                    callback(js_interpreter.nativeToPseudo(rv));
-                    loop();
-                })
-                .catch(e => {
-                    // e.error for errors get from API, e for code errors
-                    $scope.observer.emit('Error', e.error || e);
-                });
+            const native_args = function_args.map(arg => js_interpreter.pseudoToNative(arg));
+            const call = () => {
+                let result;
+                try {
+                    result = func(...native_args);
+                } catch (e) {
+                    result = Promise.reject(e);
+                }
+                result
+                    .then(
+                        rv => {
+                            onCallDone(call);
+                            callback(js_interpreter.nativeToPseudo(rv));
+                            loop();
+                        },
+                        e => {
+                            failed_call = call;
+                            // e.error for errors get from API, e for code errors
+                            $scope.observer.emit('Error', e.error || e);
+                        }
+                    )
+                    .catch(e => {
+                        // The strategy itself threw: nothing is paused to try again.
+                        failed_call = null;
+                        $scope.observer.emit('Error', e.error || e);
+                    });
+            };
+            call();
         };
 
         // TODO: This is a workaround, create issue on original repo, once fixed
@@ -122,9 +150,6 @@ const Interpreter = () => {
             'start',
             js_interpreter.nativeToPseudo((...args) => {
                 const { start } = bot_interface;
-                if (shouldRestartOnError(bot)) {
-                    $scope.startState = js_interpreter.takeStateSnapshot();
-                }
                 start(...args);
             })
         );
@@ -207,6 +232,7 @@ const Interpreter = () => {
             try {
                 $scope.stopped = true;
                 $scope.is_error_triggered = false;
+                clearTimeout(retry_timer);
                 globalObserver.emit('bot.stop');
                 const { ticksService } = $scope;
                 // Unsubscribe previous ticks_history subscription
@@ -247,28 +273,38 @@ const Interpreter = () => {
                     return;
                 }
                 if (shouldStopOnError(bot, e?.code)) {
-                    globalObserver.emit('ui.log.error', e.message);
+                    // The AI's own refusal already says what to do next.
+                    const message = e.code === 'AiTradeMismatch' ? e.message : getBotStoppedMessage(e);
+                    globalObserver.emit('bot.stopped_on_error', message);
+                    globalObserver.emit('ui.log.error', message);
                     globalObserver.emit('bot.click_stop');
                     return;
                 }
 
-                $scope.is_error_triggered = true;
-                if (!shouldRestartOnError(bot, e.code) || !botStarted(bot)) {
+                const call = failed_call;
+                failed_call = null;
+                // Proposals fail on their own, with the strategy waiting for them: asking again is the retry.
+                const can_retry = call || bot.tradeEngine.is_proposal_subscription_required;
+                const is_retryable = can_retry && shouldRetryOnError(bot, e.code) && botStarted(bot);
+                // A proposal failing while a retry is already on its way needs no second one.
+                if (is_retryable && !call && retry_timer) return;
+                const delay = is_retryable ? retry_budget.next(e.code) : null;
+                if (delay === null) {
+                    $scope.is_error_triggered = true;
                     reject(e);
                     return;
                 }
 
-                globalObserver.emit('Error', e);
-                const { initArgs, tradeOptions } = bot.tradeEngine;
-                terminateSession();
-                init();
-                $scope.observer.register('Error', onError);
-                bot.tradeEngine.init(...initArgs);
-                bot.tradeEngine.start(tradeOptions);
-                const canRestoreState = $scope.startState && interpreter?.restoreStateSnapshot instanceof Function;
-                if (canRestoreState) {
-                    revert($scope.startState);
-                }
+                notify('journal__text--warn', getRetryMessage(e, delay, retry_budget.tries));
+                clearTimeout(retry_timer);
+                retry_timer = setTimeout(() => {
+                    retry_timer = null;
+                    // Stopped, or on a new socket: bots never run on by themselves after a reconnect.
+                    if ($scope.stopped || !api_base.is_running || bound_api !== api_base.api) return;
+                    retrying_call = call;
+                    if (call) call();
+                    else bot.tradeEngine.renewProposalsOnPurchase();
+                }, delay);
             };
 
             $scope.observer.register('Error', onError);

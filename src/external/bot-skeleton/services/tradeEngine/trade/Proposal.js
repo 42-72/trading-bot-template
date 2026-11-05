@@ -1,7 +1,7 @@
 import { getLocalizedErrorMessage } from '@/constants/backend-error-messages';
 import { ct_perf } from '@/utils/ct-perf';
 import { api_base } from '../../api/api-base';
-import { doUntilDone, tradeOptionToProposal } from '../utils/helpers';
+import { doUntilDone, failOnMarketClosed, tradeOptionToProposal } from '../utils/helpers';
 import { clearProposals, proposalsReady } from './state/actions';
 
 export default Engine =>
@@ -69,41 +69,45 @@ export default Engine =>
 
             Promise.all(
                 this.proposal_templates.map(proposal => {
-                    doUntilDone(() => ct_perf.timeProposal(api_base.api.send(proposal))).catch(error => {
-                        // We intercept ContractBuyValidationError as user may have specified
-                        // e.g. a DIGITUNDER 0 or DIGITOVER 9, while one proposal may be invalid
-                        // the other is valid. We will error on Purchase rather than here.
+                    doUntilDone(() => failOnMarketClosed(ct_perf.timeProposal(api_base.api.send(proposal)))).catch(
+                        error => {
+                            // We intercept ContractBuyValidationError as user may have specified
+                            // e.g. a DIGITUNDER 0 or DIGITOVER 9, while one proposal may be invalid
+                            // the other is valid. We will error on Purchase rather than here.
 
-                        if (error?.error?.code === 'ContractBuyValidationError') {
-                            // Create localized error message for validation errors
-                            const localizedError = new Error(getLocalizedErrorMessage(error.error.code, error.error));
-                            localizedError.code = error.error.code;
-                            localizedError.details = error.error.details;
-                            localizedError.message_to_client = error.error.message_to_client;
+                            if (error?.error?.code === 'ContractBuyValidationError') {
+                                // Create localized error message for validation errors
+                                const localizedError = new Error(
+                                    getLocalizedErrorMessage(error.error.code, error.error)
+                                );
+                                localizedError.code = error.error.code;
+                                localizedError.details = error.error.details;
+                                localizedError.message_to_client = error.error.message_to_client;
 
-                            this.data.proposals.push({
-                                ...error.error.echo_req,
-                                ...error.echo_req.passthrough,
-                                error: localizedError,
-                            });
+                                this.data.proposals.push({
+                                    ...error.error.echo_req,
+                                    ...error.echo_req.passthrough,
+                                    error: localizedError,
+                                });
 
+                                return null;
+                            }
+                            if (!has_informed_error) {
+                                has_informed_error = true;
+                                // Use localized error message for general errors
+                                const localizedErrorMessage = error.error.code
+                                    ? getLocalizedErrorMessage(error.error.code, error.error)
+                                    : error.error.message || getLocalizedErrorMessage('GeneralError');
+
+                                const localizedError = {
+                                    ...error.error,
+                                    message: localizedErrorMessage,
+                                };
+                                this.$scope.observer.emit('Error', localizedError);
+                            }
                             return null;
                         }
-                        if (!has_informed_error) {
-                            has_informed_error = true;
-                            // Use localized error message for general errors
-                            const localizedErrorMessage = error.error.code
-                                ? getLocalizedErrorMessage(error.error.code, error.error)
-                                : error.error.message || getLocalizedErrorMessage('GeneralError');
-
-                            const localizedError = {
-                                ...error.error,
-                                message: localizedErrorMessage,
-                            };
-                            this.$scope.observer.emit('Error', localizedError);
-                        }
-                        return null;
-                    });
+                    );
                 })
             );
         }

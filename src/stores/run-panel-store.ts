@@ -6,6 +6,7 @@ import { contract_stages, TContractStage } from '@/constants/contract-stage';
 import { run_panel } from '@/constants/run-panel';
 import { ErrorTypes, MessageTypes, observer, unrecoverable_errors } from '@/external/bot-skeleton';
 import { getSelectedTradeType } from '@/external/bot-skeleton/scratch/utils';
+import { api_base } from '@/external/bot-skeleton/services/api/api-base';
 import { setExecutionMode as setEngineExecutionMode } from '@/external/bot-skeleton/services/tradeEngine/utils/execution-mode';
 import { handleBackendError, isBackendError } from '@/utils/error-handler';
 import {
@@ -126,6 +127,7 @@ export default class RunPanelStore {
     is_sell_requested = false;
     show_bot_stop_message = false;
     is_contract_buying_in_progress = false;
+    private is_checking_connection = false;
     execution_mode: TExecutionMode = readStoredExecutionMode();
 
     run_id = '';
@@ -220,6 +222,9 @@ export default class RunPanelStore {
          */
         if (is_ios || isSafari()) this.preloadAudio();
 
+        // A bot must not start on a socket that died while the page sat idle.
+        if (!api_base.isConnectionFresh() && !(await this.isConnectionReady())) return;
+
         this.registerBotListeners();
 
         if (!this.dbot.shouldRunBot()) {
@@ -250,6 +255,23 @@ export default class RunPanelStore {
             this.dbot.runBot();
         });
         this.setShowBotStopMessage(false);
+    };
+
+    private isConnectionReady = async () => {
+        if (this.is_checking_connection) return false; // Run pressed twice
+        this.is_checking_connection = true;
+        api_base.toggleRunButton(true);
+        const is_ready = await api_base.ensureConnection();
+        // After a reconnect the engine is moving to the new socket: Run starts once it is there.
+        if (is_ready) await this.dbot.refreshEngineForNewConnection?.();
+        this.is_checking_connection = false;
+        api_base.toggleRunButton(false);
+        if (!is_ready) {
+            const message = localize('Could not reach the server. Check your internet connection and press Run again.');
+            botNotification(message);
+            observer.emit('ui.log.error', message);
+        }
+        return is_ready;
     };
 
     onStopButtonClick = () => {
@@ -616,6 +638,9 @@ export default class RunPanelStore {
     };
 
     onBotReadyEvent = () => {
+        // The engine's ticks arriving says nothing about a bot that is already running:
+        // right after a reconnect they land just after Run.
+        if (api_base.is_running) return;
         this.setIsRunning(false);
         observer.unregisterAll('bot.bot_ready');
     };
@@ -679,7 +704,7 @@ export default class RunPanelStore {
     onError = (data: { error: any }) => {
         // data.error for API errors, data for code errors
         const error = data.error || data;
-        if (unrecoverable_errors.includes(error.code)) {
+        if (unrecoverable_errors.includes(error.code) || error.is_final) {
             this.root_store.summary_card.clear();
             this.error_type = ErrorTypes.UNRECOVERABLE_ERRORS;
         } else {
@@ -883,6 +908,7 @@ export default class RunPanelStore {
         observer.register('ui.log.error', deferUi(handleUiLogError));
         observer.register('ui.log.notify', deferUi(journal.onNotify));
         observer.register('ui.log.success', deferUi(journal.onLogSuccess));
+        observer.register('bot.stopped_on_error', (message: string) => botNotification(message));
         observer.register('client.invalid_token', this.handleInvalidToken);
     };
 
@@ -898,6 +924,7 @@ export default class RunPanelStore {
         }
 
         observer.unregisterAll('ui.log.error');
+        observer.unregisterAll('bot.stopped_on_error');
         observer.unregisterAll('ui.log.notify');
         observer.unregisterAll('ui.log.success');
         observer.unregisterAll('client.invalid_token');

@@ -197,10 +197,18 @@ export const updateErrorMessage = error => {
     }
 };
 
+/** A closed market doesn't open by waiting: on a buy or proposal it ends the retries here. */
+export const failOnMarketClosed = promise =>
+    promise.catch(error => {
+        if (error?.error?.code === 'MarketIsClosed') error.is_final = true;
+        throw error;
+    });
+
 export const shouldThrowError = (error, errors_to_ignore = []) => {
     if (!error.error) {
         return false;
     }
+    if (error.is_final) return true;
 
     const default_errors_to_ignore = [
         'CallError',

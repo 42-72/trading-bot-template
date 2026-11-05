@@ -12,6 +12,7 @@ export type TBotSkeleton = {
     addBeforeRunFunction: (func: () => void) => void;
     shouldRunBot: () => boolean;
     runBot: () => void;
+    refreshEngineForNewConnection?: () => Promise<void>;
     generateCode: (limitations?: Record<string, unknown>) => string;
     stopBot: () => void;
     terminateBot: () => void;

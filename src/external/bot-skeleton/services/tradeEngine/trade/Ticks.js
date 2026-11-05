@@ -1,6 +1,5 @@
 /* eslint-disable no-promise-executor-return */
 import debounce from 'lodash.debounce';
-import { getLocalizedErrorMessage } from '@/constants/backend-error-messages';
 import { localize } from '@deriv-com/translations';
 import { getLast } from '../../../utils/binary-utils';
 import { observer as globalObserver } from '../../../utils/observer';
@@ -70,16 +69,7 @@ export default Engine =>
                             reject(error);
                         }
                     })
-                    .catch(e => {
-                        if (e.code === 'MarketIsClosed') {
-                            const localizedError = {
-                                ...e,
-                                message: getLocalizedErrorMessage(e.code, e.details),
-                            };
-                            globalObserver.emit('Error', localizedError);
-                            resolve(e.code);
-                        }
-                    })
+                    .catch(reject)
             );
         }
 

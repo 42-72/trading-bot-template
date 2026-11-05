@@ -39,6 +39,7 @@ const socket = {
 };
 jest.mock('@/external/bot-skeleton/services/api/api-base', () => ({
     api_base: {
+        ensureConnection: async () => true,
         api: {
             send: jest.fn(async (request: Record<string, unknown>) => {
                 socket.requests.push(request);

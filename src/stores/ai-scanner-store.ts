@@ -105,6 +105,7 @@ const OLD_FORM_STORAGE_KEY = 'ai_scanner_form';
 const OLD_SWITCH_STORAGE_KEY = 'ct_ai_scanner';
 export const SCAN_STOPPED_MESSAGE = 'Scan stopped.';
 export const NO_MARKETS_OFFERED_MESSAGE = 'No markets offer this trade right now.';
+export const NO_CONNECTION_MESSAGE = 'Could not reach the server. Check your internet connection and scan again.';
 // No scanner feed with a live tick for this long (they tick about once a
 // second) means the streams stopped together - Deriv silently stops them now
 // and then, and re-subscribing brings them straight back: re-subscribe every
@@ -204,6 +205,8 @@ export default class AiScannerStore {
     // Set when the engine errors before its first contract settles; the stop
     // that follows ends the run with it (onBotStopped).
     private run_failure: string | null = null;
+    // Why the engine gave up on a run: the message the stopped panel shows.
+    private stop_reason: string | null = null;
     private stopRunErrorListeners: (() => void) | null = null;
     private scan_timer: ReturnType<typeof setTimeout> | null = null;
     // The all-feeds-silent watch (see ALL_SILENT_MS): each feed's re-subscribe,
@@ -454,6 +457,7 @@ export default class AiScannerStore {
         this.target = null;
         this.final_profit = null;
         this.run_failure = null;
+        this.stop_reason = null;
         this.clearArmed();
         this.scan_markets = [];
         this.feed_status = {};
@@ -472,8 +476,16 @@ export default class AiScannerStore {
 
     /** Fresh contracts_for for every market; scan only those offering this tab's trade. */
     private async checkOfferedMarkets(token: number) {
+        const { markets } = this; // the list Scan was pressed on
+        // A socket that died while the page sat idle is replaced before the scan leans on it.
+        const is_connected = await api_base.ensureConnection();
+        if (token !== this.run_token || this.stage !== 'checking') return;
+        if (!is_connected) {
+            runInAction(() => this.finish('idle', NO_CONNECTION_MESSAGE));
+            return;
+        }
         const tab = (this.locked as TAiScannerLocked).tab;
-        const offered = await filterOfferedMarkets(this.markets, AI_SCANNER_TAB_CONTRACT_TYPES[tab]);
+        const offered = await filterOfferedMarkets(markets, AI_SCANNER_TAB_CONTRACT_TYPES[tab]);
         if (token !== this.run_token || this.stage !== 'checking') return;
         runInAction(() => {
             if (offered.length === 0) {
@@ -981,8 +993,12 @@ export default class AiScannerStore {
      */
     private listenForRunErrors(winner: TAiScannerTarget) {
         this.stopRunErrorListeners?.();
+        const onStoppedOnError = (message: string) => {
+            this.stop_reason = message;
+        };
+        globalObserver.register('bot.stopped_on_error', onStoppedOnError);
         const onError = (data: unknown) => {
-            if (this.run_failure || !['starting', 'running'].includes(this.stage)) return;
+            if (this.run_failure || this.stop_reason || !['starting', 'running'].includes(this.stage)) return;
             // Transactions are updated after the engine (utils/ui-queue.ts): catch up before reading them.
             flushUi();
             const statistics = this.root_store.transactions.statistics as { number_of_runs?: number };
@@ -1011,6 +1027,9 @@ export default class AiScannerStore {
         this.stopRunErrorListeners = () => {
             if (!is_registered) return;
             is_registered = false;
+            if (globalObserver.isRegistered('bot.stopped_on_error')) {
+                globalObserver.unregister('bot.stopped_on_error', onStoppedOnError);
+            }
             events.forEach(event => {
                 try {
                     if (globalObserver.isRegistered(event)) globalObserver.unregister(event, onError);
@@ -1032,7 +1051,9 @@ export default class AiScannerStore {
         const { total_profit } = this.root_store.transactions.statistics;
         const locked = this.locked;
         let message = 'The bot stopped. See the Journal for why.';
-        if (locked && total_profit >= locked.take_profit) message = 'Take profit reached - the bot stopped itself.';
+        if (this.stop_reason) message = this.stop_reason;
+        else if (locked && total_profit >= locked.take_profit)
+            message = 'Take profit reached - the bot stopped itself.';
         else if (locked && total_profit <= -locked.stop_loss) message = 'Stop loss reached - the bot stopped itself.';
         else if (this.stage === 'stopping') message = 'Cancelled - the bot was stopped.';
         runInAction(() => {

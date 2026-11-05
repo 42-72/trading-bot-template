@@ -13,6 +13,7 @@ import { keep_alive } from '@/utils/socket-keep-alive';
 import AiScannerStore, {
     CONDITIONS_NOT_MET_MESSAGE,
     DEFAULT_FORM,
+    NO_CONNECTION_MESSAGE,
     NO_MARKETS_OFFERED_MESSAGE,
     SCAN_STOPPED_MESSAGE,
 } from '../ai-scanner-store';
@@ -45,6 +46,7 @@ const ALL_DIGITS = ['DIGITMATCH', 'DIGITDIFF', 'DIGITODD', 'DIGITEVEN', 'DIGITOV
 let offerings: Record<string, unknown[] | 'error'> = {};
 jest.mock('@/external/bot-skeleton/services/api/api-base', () => ({
     api_base: {
+        ensureConnection: jest.fn(async () => true),
         api: {
             send: jest.fn(async ({ contracts_for }: { contracts_for: string }) => {
                 const reply = offerings[contracts_for] ?? ALL_DIGITS;
@@ -1240,6 +1242,87 @@ describe('AiScannerStore', () => {
             expect(store.target).toBeNull();
             expect(loadBotIntoBuilder).not.toHaveBeenCalled();
             expect(root.run_panel.onRunButtonClick).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('a socket that may have died while the page sat idle', () => {
+        const ensure = api_base.ensureConnection as jest.Mock;
+
+        afterEach(() => ensure.mockResolvedValue(true));
+
+        it('nothing is asked or scanned until the connection is known to be good', async () => {
+            let finishCheck: (is_connected: boolean) => void = () => undefined;
+            ensure.mockReturnValueOnce(new Promise(resolve => (finishCheck = resolve)));
+            (api_base.api?.send as jest.Mock).mockClear();
+            const store = new AiScannerStore(makeRoot());
+            store.setMarkets(MARKETS);
+            fillForm(store);
+            store.start();
+            await flush();
+            expect(store.stage).toBe('checking');
+            expect(api_base.api?.send).not.toHaveBeenCalled();
+
+            finishCheck(true);
+            await flush();
+            expect(store.stage).toBe('scanning');
+        });
+
+        it('no connection to be had: says so and does not scan', async () => {
+            ensure.mockResolvedValueOnce(false);
+            const { store } = await startScan();
+            expect(store.stage).toBe('idle');
+            expect(store.message).toBe(NO_CONNECTION_MESSAGE);
+        });
+
+        it('Stop during the check: the late answer starts nothing', async () => {
+            let finishCheck: (is_connected: boolean) => void = () => undefined;
+            ensure.mockReturnValueOnce(new Promise(resolve => (finishCheck = resolve)));
+            const store = new AiScannerStore(makeRoot());
+            store.setMarkets(MARKETS);
+            fillForm(store);
+            store.start();
+            store.cancel();
+            finishCheck(true);
+            await flush();
+            expect(store.stage).toBe('idle');
+            expect(store.scan_markets).toEqual([]);
+        });
+    });
+
+    describe('the engine gives up on a run', () => {
+        const goRunning = async () => {
+            const started = await startScan('over', true);
+            started.store.onMarketTick('1HZ10V', entering, 1);
+            for (let i = 0; i < 10; i++) {
+                // eslint-disable-next-line no-await-in-loop
+                await flush();
+                // eslint-disable-next-line no-await-in-loop
+                await new Promise(resolve => setTimeout(resolve, 25));
+            }
+            expect(started.store.stage).toBe('running');
+            return started;
+        };
+
+        it('shows stopped, with the reason, whatever the trades so far', async () => {
+            const { root, store } = await goRunning();
+            runInAction(() => {
+                root.transactions.statistics = { total_profit: 3, number_of_runs: 4 } as never;
+            });
+            const message = 'Bot stopped: Your balance is too low. Press Run to start again.';
+            globalObserver.emit('bot.stopped_on_error', message);
+            runInAction(() => (root.run_panel.is_running = false));
+            expect(store.stage).toBe('stopped');
+            expect(store.message).toBe(message);
+            expect(store.final_profit).toBe(3);
+        });
+
+        it("a recoverable error is the engine's to retry: the run goes on", async () => {
+            const { root, store } = await goRunning();
+            expect(root.run_panel.onStopBotClick).not.toHaveBeenCalled();
+            globalObserver.emit('ui.log.notify', { message: 'Trade error. Trying again in 1s (try 1 of 3).' });
+            await flush();
+            expect(store.stage).toBe('running');
+            expect(root.run_panel.onStopBotClick).not.toHaveBeenCalled();
         });
     });
 
