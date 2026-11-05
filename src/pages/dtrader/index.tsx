@@ -224,7 +224,7 @@ const DTraderPanel = observer(() => {
                         <div className='dtrader-panel__loading' role='status' aria-live='polite'>
                             <span className='dtrader-panel__spinner' aria-hidden='true' />
                             <span className='dtrader-panel__loading-text'>
-                                <Localize i18n_default_text='Loading DTrader�' />
+                                <Localize i18n_default_text='Loading DTrader…' />
                             </span>
                         </div>
                     )}
