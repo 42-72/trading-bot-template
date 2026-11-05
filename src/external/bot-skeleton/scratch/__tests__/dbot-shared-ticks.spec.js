@@ -5,6 +5,7 @@
  * second ticks_history subscribe is refused with AlreadySubscribed), and
  * ticks only flow while some subscription for the symbol is open.
  */
+import { keep_alive } from '@/utils/socket-keep-alive';
 import { api_base } from '../../services/api/api-base';
 import { EXECUTION_MODES, setExecutionMode } from '../../services/tradeEngine/utils/execution-mode';
 import Interpreter from '../../services/tradeEngine/utils/interpreter';
@@ -284,6 +285,37 @@ describe('Bot ticks on a socket shared with the Market Tool', () => {
         await dbot.interpreter.unsubscribeFromTicksService();
         await new Promise(resolve => setTimeout(resolve, 0));
         expect(socket.streamId('R_100')).toBeUndefined();
+    });
+
+    describe('the Bot Builder market changes while no bot runs', () => {
+        const forgetAlls = () => api_base.api.forgetAll.mock.calls;
+
+        afterEach(() => keep_alive.setBusy('ai_scanner', false));
+
+        it('AI Scanner busy -> no forget_all: other streams live on, the engine moves', async () => {
+            const socket = makeDerivSocket();
+            const scanner_stream = await openMarketTool(socket);
+            await loadPage(socket);
+            keep_alive.setBusy('ai_scanner', true);
+
+            await dbot.moveIdleEngineToSymbol('R_50');
+
+            expect(forgetAlls()).toHaveLength(0);
+            expect(socket.streamId('R_100')).toBe(scanner_stream);
+            expect(dbot.interpreter.bot.tradeEngine.symbol).toBe('R_50');
+            expect(socket.streamId('R_50')).toBeTruthy();
+        });
+
+        it('no AI Scanner -> the engine releases its stream first, as before', async () => {
+            const socket = makeDerivSocket();
+            await loadPage(socket);
+
+            await dbot.moveIdleEngineToSymbol('R_50');
+
+            expect(forgetAlls()).toEqual([['ticks'], ['candles']]);
+            expect(socket.streamId('R_100')).toBeUndefined();
+            expect(socket.streamId('R_50')).toBeTruthy();
+        });
     });
 
     it('nobody else streaming the symbol -> the bot owns its stream, as before', async () => {

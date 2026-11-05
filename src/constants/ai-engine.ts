@@ -75,11 +75,18 @@ export const AI_SCANNER_ARM_SECONDS = 180;
 export const AI_SCANNER_CURRENCY = 'USD';
 export const AI_SCANNER_MIN_STAKE = 0.35;
 
-// (1s) Volatility indices and Jump indices only - no plain R_ indices.
+// Markets the AI never touches, for any trade type: not checked, scanned,
+// suggested or run. Add a symbol here to exclude it too. Everything else in the
+// app (manual bots, Bot Builder, Market Tool, DTrader, Charts) keeps them.
+// JD100: Deriv prices it very low - an Even/Odd win pays 0.11 per 1 staked,
+// against 0.95 on Jump 10 to 75.
 // 1HZ150V / 1HZ250V are already dropped by getSymbolsForBot
-// (config QUICK_STRATEGY.DISABLED.SYMBOLS); filtered again here so this list
-// never depends on that.
-export const AI_SCANNER_BLOCKED_SYMBOLS = ['1HZ150V', '1HZ250V'];
+// (config QUICK_STRATEGY.DISABLED.SYMBOLS); listed here so this never depends on that.
+export const AI_SCANNER_EXCLUDED_SYMBOLS: readonly string[] = ['1HZ150V', '1HZ250V', 'JD100'];
+export const isAiExcludedSymbol = (symbol?: string) => !!symbol && AI_SCANNER_EXCLUDED_SYMBOLS.includes(symbol);
+export const AI_EXCLUDED_MARKET_MESSAGE = 'The AI no longer trades this market. Please scan again.';
+
+// (1s) Volatility indices and Jump indices only - no plain R_ indices.
 export const isAiScannerSymbol = (symbol: string, submarket: string) =>
-    !AI_SCANNER_BLOCKED_SYMBOLS.includes(symbol) &&
+    !isAiExcludedSymbol(symbol) &&
     ((submarket === 'random_index' && symbol.startsWith('1HZ')) || submarket === 'jump_index');

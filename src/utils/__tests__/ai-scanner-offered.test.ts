@@ -59,17 +59,17 @@ describe('offersTrade', () => {
 describe('filterOfferedMarkets', () => {
     afterEach(() => jest.useRealTimers());
 
-    it('all 13 offered -> all 13 scanned, one contracts_for each', async () => {
+    it('all 12 allowed markets offered -> all 12 scanned, one contracts_for each, none for Jump 100', async () => {
         answer({});
-        expect(await filterOfferedMarkets(MARKETS, OVER_UNDER)).toEqual(MARKETS);
-        expect(send).toHaveBeenCalledTimes(13);
-        expect(send).toHaveBeenCalledWith({ contracts_for: 'JD100' });
+        const allowed = MARKETS.filter(market => market.symbol !== 'JD100');
+        expect(await filterOfferedMarkets(MARKETS, OVER_UNDER)).toEqual(allowed);
+        expect(send).toHaveBeenCalledTimes(12);
+        expect(send).not.toHaveBeenCalledWith({ contracts_for: 'JD100' });
     });
 
-    it('skips a market without DIGITOVER (Jump 100 today) - 12 scanned', async () => {
-        answer({ JD100: NO_DIGITS, JD50: digits(['DIGITUNDER', 'DIGITEVEN', 'DIGITODD']) });
+    it('skips a market without DIGITOVER - 11 scanned', async () => {
+        answer({ JD50: digits(['DIGITUNDER', 'DIGITEVEN', 'DIGITODD']) });
         const offered = await filterOfferedMarkets(MARKETS, OVER_UNDER);
-        expect(offered.map(market => market.symbol)).not.toContain('JD100');
         expect(offered.map(market => market.symbol)).not.toContain('JD50');
         expect(offered).toHaveLength(11);
         // The Even/Odd tab only needs EVEN and ODD.
@@ -79,7 +79,7 @@ describe('filterOfferedMarkets', () => {
     it('skips a market whose contracts_for errors', async () => {
         answer({ '1HZ30V': new Error('internal server error') });
         const offered = await filterOfferedMarkets(MARKETS, OVER_UNDER);
-        expect(offered).toHaveLength(12);
+        expect(offered).toHaveLength(11);
         expect(offered.map(market => market.symbol)).not.toContain('1HZ30V');
     });
 
@@ -94,7 +94,7 @@ describe('filterOfferedMarkets', () => {
         const pending = filterOfferedMarkets(MARKETS, OVER_UNDER);
         await jest.advanceTimersByTimeAsync(10000);
         const offered = await pending;
-        expect(offered).toHaveLength(12);
+        expect(offered).toHaveLength(11);
         expect(offered.map(market => market.symbol)).not.toContain('JD10');
     });
 

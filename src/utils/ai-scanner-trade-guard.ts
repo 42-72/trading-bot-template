@@ -1,3 +1,4 @@
+import { AI_EXCLUDED_MARKET_MESSAGE, isAiExcludedSymbol } from '@/constants/ai-engine';
 import { observer as globalObserver } from '@/external/bot-skeleton/utils/observer';
 import { describeTrade, isAiEngineRun } from './trade-log';
 
@@ -29,6 +30,9 @@ type TBuy = {
 /** Why `buy` is not the scanner's locked trade, or null when it is (or no check applies). */
 export const checkAiScannerBuy = (buy: TBuy): string | null => {
     if (!isAiEngineRun()) return null;
+    // Whatever put it there: an AI engine left in Bot Builder can be moved to
+    // an excluded market, and Run then has no locked trade to compare with.
+    if (isAiExcludedSymbol(buy.parameters?.underlying_symbol)) return AI_EXCLUDED_MARKET_MESSAGE;
     const expected = getAiScannerTrade();
     if (!expected) return null;
     const p = buy.parameters ?? {};

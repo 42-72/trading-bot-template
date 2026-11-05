@@ -89,6 +89,10 @@ class SocketKeepAlive {
         else this.releaseLock();
     }
 
+    isBusy(reason: string) {
+        return this.busy.has(reason);
+    }
+
     private holdLock() {
         if (this.release_lock) return;
         const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;

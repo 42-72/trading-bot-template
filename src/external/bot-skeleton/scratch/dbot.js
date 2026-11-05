@@ -1,4 +1,5 @@
 import { isAiEngineStrategyId, isLibraryStrategyId } from '@/utils/library-strategies';
+import { keep_alive } from '@/utils/socket-keep-alive';
 import { save_types } from '../constants';
 import { config } from '../constants/config';
 import { api_base } from '../services/api/api-base';
@@ -70,6 +71,17 @@ class DBot {
     }
 
     /**
+     * The market block changed while no bot runs: the engine follows it. Its
+     * forget_all ends every tick stream on the shared socket, so never while
+     * the AI Scanner is busy: the engine then just moves, and its old stream
+     * goes when a bot next stops.
+     */
+    async moveIdleEngineToSymbol(symbol) {
+        if (!keep_alive.isBusy('ai_scanner')) await this.interpreter.unsubscribeFromTicksService();
+        await this.interpreter?.bot.tradeEngine.watchTicks(symbol);
+    }
+
+    /**
      * Initialises the workspace and mounts it to a container element (app_contents).
      */
     async initWorkspace(public_path, store, api_helpers_store, is_mobile, is_dark_mode) {
@@ -131,9 +143,7 @@ class DBot {
                             const run_button = document.querySelector('#db-animation__run-button');
                             if (run_button) run_button.disabled = true;
 
-                            that.interpreter.unsubscribeFromTicksService().then(async () => {
-                                await that.interpreter?.bot.tradeEngine.watchTicks(symbol);
-                            });
+                            that.moveIdleEngineToSymbol(symbol);
                         }
                     } else if (is_trade_type_cat_list_change && event.blockId === this.id) {
                         contracts_for

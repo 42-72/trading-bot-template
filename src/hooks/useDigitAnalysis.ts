@@ -9,8 +9,8 @@ import { countDigits, createEmptyCounts, getLastDigit } from '@/utils/digit-stat
 // swap, etc.) even though nothing told us so - re-subscribing is cheaper
 // and safer than waiting indefinitely for a tick that will never come.
 // 3s: the bot engine's own forget_all 'ticks' (sent when Bot Builder's
-// market changes and on every bot stop / restart) silently ends every tick
-// stream on the shared socket, Market Tool's and the AI Scanner's alike, and
+// market changes, unless the AI Scanner is busy, and on every bot stop /
+// restart) silently ends every tick stream on the shared socket, Market Tool's and the AI Scanner's alike, and
 // this is how they come back. (1s) and Jump indices tick every second, the
 // plain Volatility indices about every 2s.
 const WATCHDOG_TIMEOUT_MS = 3000;

@@ -1,6 +1,8 @@
 import fs from 'fs';
 import { observable, runInAction } from 'mobx';
 import path from 'path';
+import { AI_EXCLUDED_MARKET_MESSAGE } from '@/constants/ai-engine';
+import { api_base } from '@/external/bot-skeleton/services/api/api-base';
 import { observer as globalObserver } from '@/external/bot-skeleton/utils/observer';
 import { readEngineValues } from '@/utils/ai-engine-xml';
 import { setTestStrategy } from '@/utils/ai-strategies/__mocks__/test-strategy';
@@ -1190,6 +1192,54 @@ describe('AiScannerStore', () => {
             await flush();
             expect(store.stage).toBe('idle');
             expect(store.scan_markets).toEqual([]);
+        });
+    });
+
+    describe.each(['over_under', 'even_odd'] as const)('Jump 100 on the %s tab', tab => {
+        const JD100 = { symbol: 'JD100', text: 'Jump 100 Index', submarket: 'jump_index' };
+
+        const startWithJd100 = async () => {
+            (api_base.api?.send as jest.Mock).mockClear();
+            const root = makeRoot();
+            const store = new AiScannerStore(root);
+            store.setMarkets([...MARKETS, JD100]);
+            store.setActiveTab(tab);
+            fillForm(store);
+            setTestStrategy(true);
+            store.start();
+            await flush();
+            return { root, store };
+        };
+
+        it('is never checked or scanned, even if it reaches the market list', async () => {
+            const { store } = await startWithJd100();
+            expect(store.stage).toBe('scanning');
+            expect(store.scan_markets.map(market => market.symbol)).toEqual(['1HZ10V', 'JD25']);
+            expect(api_base.api?.send).not.toHaveBeenCalledWith({ contracts_for: 'JD100' });
+        });
+
+        it('is never suggested: its ticks arm nothing and enter nothing', async () => {
+            const { root, store } = await startWithJd100();
+            store.onMarketTick('JD100', entering, 1);
+            await flush();
+            expect(store.stage).toBe('scanning');
+            expect(store.armed).toEqual([]);
+            expect(store.target).toBeNull();
+            expect(root.run_panel.onRunButtonClick).not.toHaveBeenCalled();
+        });
+
+        it('an old suggestion pointing at it cannot run: nothing loads, the message says to scan again', async () => {
+            const { root, store } = await startWithJd100();
+            const run = store as unknown as {
+                run_token: number;
+                pressRun: (winner: typeof JD100 & { reason: string }, token: number) => Promise<void>;
+            };
+            await run.pressRun({ ...JD100, reason: 'old' }, run.run_token);
+            expect(store.stage).toBe('idle');
+            expect(store.message).toBe(AI_EXCLUDED_MARKET_MESSAGE);
+            expect(store.target).toBeNull();
+            expect(loadBotIntoBuilder).not.toHaveBeenCalled();
+            expect(root.run_panel.onRunButtonClick).not.toHaveBeenCalled();
         });
     });
 

@@ -4,11 +4,13 @@ import {
     AI_ENGINE_EVEN_ODD_BOT_NAME,
     AI_ENGINE_EVEN_ODD_XML,
     AI_ENGINE_OVER_UNDER_XML,
+    AI_EXCLUDED_MARKET_MESSAGE,
     AI_SCANNER_ARM_SECONDS,
     AI_SCANNER_CURRENCY,
     AI_SCANNER_MIN_STAKE,
     AI_SCANNER_SCAN_LIMIT_SECONDS,
     AI_SCANNER_TAB_CONTRACT_TYPES,
+    isAiExcludedSymbol,
     OVER_UNDER_SETUPS,
     TOverUnderStrategyId,
 } from '@/constants/ai-engine';
@@ -36,9 +38,8 @@ import RootStore from './root-store';
 //                      armed even if the condition stops holding; the first
 //                      armed market whose entry() is true on a live tick wins.
 //                      An armed market reaching 3:00 is disarmed and can arm
-//                      again later. Nothing is loaded while scanning: loading
-//                      the engine makes the bot engine send forget_all 'ticks',
-//                      silencing every feed.
+//                      again later. Nothing is loaded while scanning: the
+//                      workspace stays the trader's until there is a winner.
 //        -> starting   first entry wins: feeds closed, THEN the engine loaded
 //                      with the winner's values and read back, stats cleared, Run
 //        -> running    the bot trades until its own TP / SL (an error before
@@ -894,12 +895,15 @@ export default class AiScannerStore {
     /**
      * The first entry wins: close every feed, THEN load the engine with the
      * winner's values, check them from the workspace, and press Run through
-     * the Run button's own path. In that order because loading the engine
-     * makes the bot engine send forget_all 'ticks' - nothing of the scan may
-     * still be listening when it does.
+     * the Run button's own path. In that order so that nothing of the scan
+     * is still streaming once the bot starts.
      */
     private async pressRun(winner: TAiScannerTarget, token: number) {
         if (this.stage !== 'scanning' || token !== this.run_token) return;
+        if (isAiExcludedSymbol(winner.symbol)) {
+            this.finish('idle', AI_EXCLUDED_MARKET_MESSAGE);
+            return;
+        }
         const { run_panel, dashboard } = this.root_store;
         if (run_panel.is_stop_button_visible) {
             this.finish('idle', 'Cancelled: a bot is already running.');

@@ -1,3 +1,4 @@
+import { isAiExcludedSymbol } from '@/constants/ai-engine';
 import { api_base } from '@/external/bot-skeleton/services/api/api-base';
 
 // Which markets the AI Scanner may scan: only those whose live contracts_for
@@ -5,7 +6,7 @@ import { api_base } from '@/external/bot-skeleton/services/api/api-base';
 // Asked fresh on every Scan & Run (not the app's contracts_for cache): Deriv
 // switches offerings off and on - Jump 100 had no digit contracts at all,
 // and a scan that picked it ended in "Trading is not offered for this
-// duration." Nothing is hard-coded; the check decides.
+// duration." Beyond the AI's excluded list nothing is hard-coded; the check decides.
 
 export type TAvailableContract = {
     contract_type?: string;
@@ -57,14 +58,16 @@ export const fetchAvailableContracts = async (symbol: string): Promise<TAvailabl
 
 /**
  * The markets that offer the trade right now, in their original order. A
- * market whose contracts_for fails or times out is left out of this scan.
+ * market whose contracts_for fails or times out is left out of this scan, and
+ * an excluded market isn't even asked about.
  */
 export const filterOfferedMarkets = async <T extends TMarket>(
     markets: T[],
     contract_types: readonly string[]
 ): Promise<T[]> => {
-    const results = await Promise.allSettled(markets.map(market => fetchAvailableContracts(market.symbol)));
-    return markets.filter((_, index) => {
+    const allowed = markets.filter(market => !isAiExcludedSymbol(market.symbol));
+    const results = await Promise.allSettled(allowed.map(market => fetchAvailableContracts(market.symbol)));
+    return allowed.filter((_, index) => {
         const result = results[index];
         return result.status === 'fulfilled' && offersTrade(result.value, contract_types);
     });
