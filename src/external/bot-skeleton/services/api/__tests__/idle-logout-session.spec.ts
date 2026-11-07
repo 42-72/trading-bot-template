@@ -60,7 +60,6 @@ const startPage = (logout: () => Promise<void>) =>
         isBusy: () => false,
         logout,
         onLoggedOut: () => api_base.onIdleLogout(),
-        restorePage: jest.fn(),
     });
 
 /** What client.logout does to the login. */

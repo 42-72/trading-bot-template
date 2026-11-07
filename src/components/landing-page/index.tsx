@@ -108,8 +108,9 @@ const LandingPage = observer(() => {
     const hasStoredToken = hasStoredAuthToken();
     const isStillChecking = hasStoredToken && (isAuthorizing || is_switching_account);
     const isConfirmedLoggedIn = hasStoredToken && !isAuthorizing && Boolean(activeLoginid);
-    // Logged out for being away: the trader stays on the page they left.
-    const is_hidden = isDismissed || isStillChecking || isConfirmedLoggedIn || session_status.is_idle_logged_out;
+    // Logged out for being away with the site left open: the trader stays on their page.
+    const stays_on_page = session_status.is_idle_logged_out && !session_status.is_fresh_start;
+    const is_hidden = isDismissed || isStillChecking || isConfirmedLoggedIn || stays_on_page;
 
     // This page is a full screen of its own: the start-up splash makes way for it.
     useEffect(() => {

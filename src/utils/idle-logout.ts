@@ -9,9 +9,13 @@ import { startLog } from './start-log';
  *
  *   Tab closed:  back within IDLE_LOGOUT_MINUTES.tab_closed - nothing changes.
  *   Tab hidden:  back within IDLE_LOGOUT_MINUTES.tab_hidden - nothing changes.
- *   Later than that: logged out (client.logout, as the Log out button), on the
- *   same page. The landing page stays away (session_status.is_idle_logged_out)
- *   and nothing logs back in by itself.
+ *   Later than that: logged out (client.logout, as the Log out button), and
+ *   nothing logs back in by itself (session_status.is_idle_logged_out).
+ *     Site left open: on the same page, the landing page stays away.
+ *     Tab closed: the next visit is a fresh start, the landing page shows
+ *     (session_status.is_fresh_start). A new tab counts as one too: phones don't
+ *     reliably tell a closed tab from one left in the background, so it can't
+ *     know what became of the old tab, and it has no page of its own to keep.
  *   On screen, or a bot / the AI Scanner running: the minutes don't count.
  *
  * Phones freeze background pages, so nothing here waits on a timer. Timestamps
@@ -20,7 +24,7 @@ import { startLog } from './start-log';
  * every other tab see that, because the timestamp is shared.
  *
  * Login stays per tab (sessionStorage). A tab with no login of its own has
- * nothing to log out and only keeps the trader on their page.
+ * nothing to log out.
  */
 
 /** Change the limits here. */
@@ -43,8 +47,6 @@ type TIdleLogoutDeps = {
     isBusy: () => boolean;
     logout: () => Promise<void>;
     onLoggedOut: () => void;
-    /** A new tab has no page in its URL: back to the one the trader was on. */
-    restorePage: () => void;
 };
 
 type TAwayTimes = {
@@ -106,6 +108,8 @@ const isOnScreen = () => document.visibilityState === 'visible' || document.hasF
 class IdleLogout {
     private deps: TIdleLogoutDeps | null = null;
     private is_logging_out = false;
+    /** This very page went through pagehide and came back (back button): it was never closed. */
+    private has_left_page = false;
     private logged_out: Promise<void> = Promise.resolve();
     private beat: ReturnType<typeof setInterval> | null = null;
     private disposeBusyWatch: (() => void) | null = null;
@@ -145,6 +149,7 @@ class IdleLogout {
         this.disposeBusyWatch = null;
         this.deps = null;
         this.is_logging_out = false;
+        this.has_left_page = false;
         this.logged_out = Promise.resolve();
     }
 
@@ -167,8 +172,9 @@ class IdleLogout {
             const closed_at = readTime(sessionStorage, CLOSED_AT_KEY);
             const logged_out_at = readTime(localStorage, LOGGED_OUT_AT_KEY);
             const was_logged_out_elsewhere = logged_out_at !== null && logged_out_at > login_at;
-            if (was_logged_out_elsewhere || isAwayTooLong({ now, last_seen, closed_at, login_at })) {
-                this.logOut(now);
+            const is_away_too_long = isAwayTooLong({ now, last_seen, closed_at, login_at });
+            if (was_logged_out_elsewhere || is_away_too_long) {
+                this.logOut(now, is_away_too_long && closed_at !== null && !this.has_left_page);
                 return true;
             }
             session_status.setIdleLoggedOut(false);
@@ -179,26 +185,30 @@ class IdleLogout {
     };
 
     private onNoLoginInThisTab(now: number, last_seen: number | null, is_page_load: boolean) {
+        // Logged out on its page, then closed and reopened. A reload is back at once.
+        const closed_at = readTime(sessionStorage, CLOSED_AT_KEY);
+        if (is_page_load && session_status.is_idle_logged_out && closed_at !== null) {
+            if (now - closed_at > TAB_CLOSED_LIMIT_MS) session_status.setIdleLoggedOut(true, true);
+        }
         if (last_seen === null) return;
         const away_ms = now - last_seen;
         // This tab is about to record "on screen": a hidden tab past its limit must still go.
         if (away_ms > TAB_HIDDEN_LIMIT_MS) writeTime(localStorage, LOGGED_OUT_AT_KEY, now);
-        if (is_page_load && hadLogin() && away_ms > TAB_CLOSED_LIMIT_MS) {
-            startLog('away too long - logged-out page, same page');
-            session_status.setIdleLoggedOut(true);
-            this.deps?.restorePage();
+        if (is_page_load && !session_status.is_idle_logged_out && hadLogin() && away_ms > TAB_CLOSED_LIMIT_MS) {
+            startLog('away too long - a new visit, normal logged-out start');
+            session_status.setIdleLoggedOut(true, true);
         }
     }
 
-    private logOut(now: number) {
+    private logOut(now: number, is_fresh_start: boolean) {
         this.is_logging_out = true;
-        startLog('away too long - logging out');
+        startLog(`away too long - logging out${is_fresh_start ? ', tab was closed' : ''}`);
         writeTime(localStorage, LOGGED_OUT_AT_KEY, now);
-        session_status.setIdleLoggedOut(true);
-        this.logged_out = this.runLogout();
+        session_status.setIdleLoggedOut(true, is_fresh_start);
+        this.logged_out = this.runLogout(is_fresh_start);
     }
 
-    private async runLogout() {
+    private async runLogout(is_fresh_start: boolean) {
         try {
             await this.deps?.logout();
         } catch (error) {
@@ -208,7 +218,7 @@ class IdleLogout {
         sessionStorage.removeItem('auth_info');
         sessionStorage.removeItem('deriv_accounts');
         sessionStorage.removeItem(CLOSED_AT_KEY);
-        session_status.setIdleLoggedOut(true); // client.logout clears sessionStorage, its copy included
+        session_status.setIdleLoggedOut(true, is_fresh_start); // client.logout clears sessionStorage, its copy included
         if (isOnScreen()) this.stampLastSeen();
         this.is_logging_out = false;
         this.deps?.onLoggedOut();
@@ -236,6 +246,7 @@ class IdleLogout {
 
     /** Closing, reloading or leaving the site. A tab that was already hidden keeps its older last-seen time. */
     private onPageHide = () => {
+        this.has_left_page = true;
         writeTime(sessionStorage, CLOSED_AT_KEY, Date.now());
         if (isOnScreen() || this.deps?.isBusy()) this.stampLastSeen();
     };

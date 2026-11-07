@@ -30,9 +30,8 @@ const logout = jest.fn(async () => {
     localStorage.removeItem('active_loginid');
 });
 const onLoggedOut = jest.fn();
-const restorePage = jest.fn();
 
-const startPage = () => idle_logout.start({ isBusy: () => busy.get(), logout, onLoggedOut, restorePage });
+const startPage = () => idle_logout.start({ isBusy: () => busy.get(), logout, onLoggedOut });
 
 const logIn = (at = Date.now()) => {
     sessionStorage.setItem(
@@ -122,14 +121,36 @@ describe('idle logout', () => {
             expect(sessionStorage.getItem(CLOSED_AT_KEY)).toBeNull();
         });
 
-        it('reopened after more than 5 minutes: logged out before the page goes on, on the same page', async () => {
+        it('reopened after more than 5 minutes: logged out before the page goes on, a fresh start', async () => {
             closeTab();
             wait(5 * MIN + 1);
             await reopenTab();
             expect(logout).toHaveBeenCalledTimes(1);
             expect(isLoggedIn()).toBe(false);
             expect(session_status.is_idle_logged_out).toBe(true);
-            expect(window.location.hash).toBe('#market_tool');
+            expect(session_status.is_fresh_start).toBe(true);
+            expect(sessionStorage.getItem('ct_idle_logged_out')).toBe('fresh_start');
+        });
+
+        it('hidden over 10 minutes, then closed: reopened, a fresh start too', async () => {
+            leaveTab();
+            wait(9 * MIN);
+            window.dispatchEvent(new Event('pagehide'));
+            idle_logout.stop();
+            wait(2 * MIN);
+            await reopenTab();
+            expect(logout).toHaveBeenCalledTimes(1);
+            expect(session_status.is_fresh_start).toBe(true);
+        });
+
+        it('back through the back button after leaving the site: the page was never closed, it stays', async () => {
+            window.dispatchEvent(new Event('pagehide'));
+            wait(6 * MIN);
+            window.dispatchEvent(new Event('pageshow'));
+            await flush();
+            expect(logout).toHaveBeenCalledTimes(1);
+            expect(session_status.is_idle_logged_out).toBe(true);
+            expect(session_status.is_fresh_start).toBe(false);
         });
 
         it('a reload is not a close', async () => {
@@ -169,6 +190,7 @@ describe('idle logout', () => {
             wait(4 * MIN); // closed for 6 by now
             await comeBack();
             expect(logout).toHaveBeenCalledTimes(1);
+            expect(session_status.is_fresh_start).toBe(true);
         });
     });
 
@@ -278,6 +300,39 @@ describe('idle logout', () => {
             wait(11 * MIN);
             await comeBack();
             expect(sessionStorage.getItem('ct_idle_logged_out')).toBe('1');
+            expect(session_status.is_fresh_start).toBe(false);
+        });
+
+        it('killed in the background, no close recorded: reloads on the same page', async () => {
+            leaveTab();
+            idle_logout.stop(); // no pagehide: the system ended it, the trader did not
+            wait(11 * MIN);
+            await reopenTab();
+            expect(logout).toHaveBeenCalledTimes(1);
+            expect(session_status.is_idle_logged_out).toBe(true);
+            expect(session_status.is_fresh_start).toBe(false);
+        });
+
+        it('logged out on the page, reloaded: still the same page', async () => {
+            leaveTab();
+            wait(11 * MIN);
+            await comeBack();
+            closeTab();
+            wait(1000);
+            await reopenTab();
+            expect(session_status.is_idle_logged_out).toBe(true);
+            expect(session_status.is_fresh_start).toBe(false);
+        });
+
+        it('logged out on the page, then closed for more than 5 minutes: a fresh start', async () => {
+            leaveTab();
+            wait(11 * MIN);
+            await comeBack();
+            closeTab();
+            wait(6 * MIN);
+            await reopenTab();
+            expect(session_status.is_idle_logged_out).toBe(true);
+            expect(session_status.is_fresh_start).toBe(true);
         });
     });
 
@@ -434,11 +489,11 @@ describe('idle logout', () => {
             localStorage.setItem(LAST_SEEN_KEY, String(Date.now() - ms));
         };
 
-        it('more than 5 minutes: same page and no landing page, nothing shared is touched', async () => {
+        it('more than 5 minutes: a fresh start, nothing shared is touched', async () => {
             leftAgo(6 * MIN);
             await startPage();
             expect(session_status.is_idle_logged_out).toBe(true);
-            expect(restorePage).toHaveBeenCalledTimes(1);
+            expect(session_status.is_fresh_start).toBe(true);
             expect(logout).not.toHaveBeenCalled();
             expect(localStorage.getItem('active_loginid')).toBe('CR1');
             expect(localStorage.getItem(LOGGED_OUT_AT_KEY)).toBeNull();
@@ -454,7 +509,24 @@ describe('idle logout', () => {
             leftAgo(4 * MIN);
             await startPage();
             expect(session_status.is_idle_logged_out).toBe(false);
-            expect(restorePage).not.toHaveBeenCalled();
+            expect(session_status.is_fresh_start).toBe(false);
+        });
+
+        it("DTrader's own login request stays refused on a fresh start", async () => {
+            leftAgo(6 * MIN);
+            await startPage();
+            Object.defineProperty(navigator, 'userActivation', { configurable: true, value: { isActive: false } });
+            expect(isLoginRequestAllowed()).toBe(false);
+        });
+
+        it('logging in clears the fresh start', async () => {
+            leftAgo(6 * MIN);
+            await startPage();
+            logIn();
+            idle_logout.check();
+            expect(session_status.is_idle_logged_out).toBe(false);
+            expect(session_status.is_fresh_start).toBe(false);
+            expect(sessionStorage.getItem('ct_idle_logged_out')).toBeNull();
         });
 
         it('a visitor who never logged in keeps the normal start', async () => {

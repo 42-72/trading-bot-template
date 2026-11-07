@@ -7,6 +7,7 @@ import { useStore } from '@/hooks/useStore';
 import { CLOSED_AT_KEY, idle_logout, LAST_SEEN_KEY } from '@/utils/idle-logout';
 import { markOAuthExchangeSettled, OAUTH_EXCHANGE_WAIT_MS, resetOAuthStartForTests } from '@/utils/oauth-start';
 import { removeRetiredStorageKeys, RETIRED_STORAGE_KEYS } from '@/utils/page-start';
+import { session_status } from '@/utils/session-status';
 import { act, render } from '@testing-library/react';
 import AppRoot from '../app-root';
 
@@ -180,7 +181,7 @@ describe('idle logout at page start', () => {
         expect(window.location.hash).toBe('#market_tool');
     });
 
-    it('a new tab with no page in its URL opens on the one the trader left', async () => {
+    it('a new tab after the limit starts fresh: not on the page the trader left', async () => {
         localStorage.setItem('active_loginid', 'CR1');
         localStorage.setItem('active_tab', '6');
         localStorage.setItem(LAST_SEEN_KEY, String(Date.now() - 6 * MIN));
@@ -189,6 +190,8 @@ describe('idle logout at page start', () => {
 
         render(<AppRoot />);
         await flush();
-        expect(setActiveTab).toHaveBeenCalledWith(6);
+        expect(setActiveTab).not.toHaveBeenCalled();
+        expect(session_status.is_fresh_start).toBe(true);
+        session_status.setIdleLoggedOut(false);
     });
 });

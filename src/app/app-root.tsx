@@ -61,10 +61,6 @@ const AppRoot = () => {
                 isBusy: () => isBotOrScannerRunning(store) || api_base.is_running,
                 logout: () => store.client.logout(),
                 onLoggedOut: () => api_base.onIdleLogout(),
-                restorePage: () => {
-                    const last_tab = Number(localStorage.getItem('active_tab'));
-                    if (last_tab && !window.location.hash) store.dashboard.setActiveTab(last_tab);
-                },
             });
             // Login return: the token exchange opens the logged-in socket itself.
             // A public socket opened meanwhile would be closed again by it, and

@@ -90,6 +90,24 @@ describe('LandingPage', () => {
         expect(sessionStorage.getItem('ct_idle_logged_out')).toBe('1');
     });
 
+    it('rule A: shows after a tab closed too long', () => {
+        const { hideBootSplash } = require('@/utils/boot-splash');
+        localStorage.setItem('active_loginid', 'CR1'); // a new tab: the old login's id is still there
+        mock_api_base = { isAuthorizing: false, activeLoginid: '' };
+        act(() => session_status.setIdleLoggedOut(true, true));
+        expect(render(<LandingPage />).container).not.toBeEmptyDOMElement();
+        expect(session_status.is_landing_shown).toBe(true);
+        expect(hideBootSplash).toHaveBeenCalledWith('landing page');
+        expect(sessionStorage.getItem('ct_idle_logged_out')).toBe('fresh_start');
+    });
+
+    it('rule A: Continue without an account still leads in', () => {
+        act(() => session_status.setIdleLoggedOut(true, true));
+        const { container } = render(<LandingPage />);
+        fireEvent.click(screen.getByRole('button', { name: 'Continue without an account' }));
+        expect(container).toBeEmptyDOMElement();
+    });
+
     it('stays away for a logged-in trader', () => {
         localStorage.setItem('active_loginid', 'CR1');
         mock_api_base = { isAuthorizing: false, activeLoginid: 'CR1' };

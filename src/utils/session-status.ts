@@ -3,12 +3,14 @@ import { action, makeObservable, observable } from 'mobx';
 export type TSessionNotice = 'connection_lost' | 'session_expired' | null;
 
 const IDLE_LOGGED_OUT_KEY = 'ct_idle_logged_out';
+const SAME_PAGE = '1';
+const FRESH_START = 'fresh_start';
 
-const readIdleLoggedOut = () => {
+const readIdleLogout = () => {
     try {
-        return sessionStorage.getItem(IDLE_LOGGED_OUT_KEY) === '1';
+        return sessionStorage.getItem(IDLE_LOGGED_OUT_KEY);
     } catch {
-        return false;
+        return null;
     }
 };
 
@@ -19,14 +21,17 @@ const readIdleLoggedOut = () => {
  *   notice          - connection_lost: a running bot / AI Scanner was stopped.
  *                     session_expired: persistent until the trader logs in.
  *   is_idle_logged_out - this tab was logged out for being away (utils/idle-logout.ts):
- *                     it stays on its page, not the landing page, until the next login.
+ *                     only the trader's own press logs in again.
+ *   is_fresh_start  - and it is a new visit, not a page left open: the landing page shows
+ *                     as for any logged-out visitor. Without this the tab stays on its page.
  *   is_landing_shown - the landing page is on screen: the visitor isn't in the app yet,
  *                     so the app's own loaders keep out of sight.
  */
 class SessionStatus {
     is_reconnecting = false;
     notice: TSessionNotice = null;
-    is_idle_logged_out = readIdleLoggedOut();
+    is_idle_logged_out = [SAME_PAGE, FRESH_START].includes(readIdleLogout() ?? '');
+    is_fresh_start = readIdleLogout() === FRESH_START;
     is_landing_shown = false;
 
     constructor() {
@@ -34,6 +39,7 @@ class SessionStatus {
             is_reconnecting: observable,
             notice: observable,
             is_idle_logged_out: observable,
+            is_fresh_start: observable,
             is_landing_shown: observable,
             setReconnecting: action,
             setLandingShown: action,
@@ -51,11 +57,13 @@ class SessionStatus {
         this.is_landing_shown = is_landing_shown;
     };
 
-    /** Kept in sessionStorage too: a reload must not bring the landing page back. */
-    setIdleLoggedOut = (is_idle_logged_out: boolean) => {
+    /** Kept in sessionStorage too: a reload must not change what this tab shows. */
+    setIdleLoggedOut = (is_idle_logged_out: boolean, is_fresh_start = false) => {
         this.is_idle_logged_out = is_idle_logged_out;
+        this.is_fresh_start = is_idle_logged_out && is_fresh_start;
         try {
-            if (is_idle_logged_out) sessionStorage.setItem(IDLE_LOGGED_OUT_KEY, '1');
+            if (is_idle_logged_out)
+                sessionStorage.setItem(IDLE_LOGGED_OUT_KEY, is_fresh_start ? FRESH_START : SAME_PAGE);
             else sessionStorage.removeItem(IDLE_LOGGED_OUT_KEY);
         } catch {
             // Blocked storage: this page still knows.
